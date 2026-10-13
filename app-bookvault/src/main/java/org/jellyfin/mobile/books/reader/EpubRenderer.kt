@@ -12,10 +12,21 @@ import java.util.zip.ZipFile
 /** One entry in an EPUB's table of contents — a human-readable [title] and the spine chapter it opens. */
 data class EpubTocEntry(val title: String, val spineIndex: Int)
 
+/**
+ * The title for the spine item at [spineIndex]: the closest table-of-contents entry at or before it,
+ * since items like a part's title page or a chapter's continuation files have no entry of their own.
+ * Null before the first entry (a cover, say).
+ */
+internal fun chapterTitleAt(toc: List<EpubTocEntry>, spineIndex: Int): String? =
+    toc.filter { it.spineIndex <= spineIndex }.maxByOrNull { it.spineIndex }?.title
+
 class EpubRenderer(private val context: Context) : Closeable {
 
     private var spineFiles: List<File> = emptyList()
     private var tocEntries: List<EpubTocEntry> = emptyList()
+
+    /** The book's own table of contents, without [fallbackToc]'s made-up "Chapter N" names. */
+    private var bookToc: List<EpubTocEntry> = emptyList()
     private val tocParser = EpubTocParser()
 
     val chapterCount: Int get() = spineFiles.size
@@ -29,7 +40,8 @@ class EpubRenderer(private val context: Context) : Closeable {
             extractEpub(epubFile, dir)
         }
         spineFiles = parseSpine(dir)
-        tocEntries = buildTableOfContents(dir).takeIf { it.isNotEmpty() } ?: fallbackToc()
+        bookToc = buildTableOfContents(dir)
+        tocEntries = bookToc.takeIf { it.isNotEmpty() } ?: fallbackToc()
         Timber.d("EPUB opened: ${spineFiles.size} chapters, ${tocEntries.size} TOC entries")
     }
 
@@ -37,6 +49,9 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     /** Real chapter titles from the EPUB's own table of contents, or [fallbackToc] if none is found. */
     fun getTableOfContents(): List<EpubTocEntry> = tocEntries
+
+    /** The chapter's name from the book's own table of contents, or null if it doesn't have one. */
+    fun chapterTitleAt(spineIndex: Int): String? = chapterTitleAt(bookToc, spineIndex)
 
     private fun fallbackToc(): List<EpubTocEntry> =
         spineFiles.indices.map { index -> EpubTocEntry("Chapter ${index + 1}", index) }
@@ -122,5 +137,6 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     override fun close() {
         spineFiles = emptyList()
+        bookToc = emptyList()
     }
 }

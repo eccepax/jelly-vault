@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Looper
 import android.view.View
 import android.widget.EditText
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.Toolbar
 import androidx.core.graphics.Insets
@@ -91,6 +92,53 @@ class BookReaderFragmentTest {
         }
 
         verify { readerViewModel.reportPlaybackStopped() }
+    }
+
+    @Test
+    fun `the chapter bar shows the chapter's name and position`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.totalPages } returns MutableStateFlow(19)
+        every { readerViewModel.getChapterTitle(6) } returns "Introduction"
+        currentPageFlow.value = 6
+
+        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val root = fragment.requireView()
+                root.findViewById<TextView>(R.id.chapter_title).text.toString() shouldBe "Introduction"
+                root.findViewById<TextView>(R.id.chapter_position).text.toString() shouldBe "Chapter 7 of 19"
+                root.findViewById<View>(R.id.btn_prev_chapter).isEnabled shouldBe true
+                root.findViewById<View>(R.id.btn_next_chapter).isEnabled shouldBe true
+            }
+        }
+    }
+
+    @Test
+    fun `on the first chapter there's no title to show and the back arrow is disabled`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.totalPages } returns MutableStateFlow(19)
+        every { readerViewModel.getChapterTitle(0) } returns null
+
+        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val root = fragment.requireView()
+                root.findViewById<View>(R.id.chapter_title).visibility shouldBe View.GONE
+                root.findViewById<TextView>(R.id.chapter_position).text.toString() shouldBe "Chapter 1 of 19"
+                root.findViewById<View>(R.id.btn_prev_chapter).isEnabled shouldBe false
+            }
+        }
+    }
+
+    @Test
+    fun `on the last chapter the forward arrow is disabled`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.totalPages } returns MutableStateFlow(19)
+        currentPageFlow.value = 18
+
+        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                fragment.requireView().findViewById<View>(R.id.btn_next_chapter).isEnabled shouldBe false
+            }
+        }
     }
 
     @Test

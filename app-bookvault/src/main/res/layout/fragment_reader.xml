@@ -25,33 +25,65 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Chapter nav shown in EPUB scroll mode only -->
+    <!-- Chapter bar, shown in EPUB scroll mode only: previous/next arrows around the chapter's name and position -->
     <LinearLayout
         android:id="@+id/chapter_nav_bar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:background="@drawable/chapter_bar_background"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
         android:orientation="horizontal"
+        android:paddingHorizontal="4dp"
         android:visibility="gone"
-        android:elevation="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_prev_chapter"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/chapter_prev" />
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chapter_prev"
+            android:src="@drawable/ic_chevron_left"
+            app:tint="@color/chapter_arrow_tint" />
 
-        <Button
-            android:id="@+id/btn_next_chapter"
-            style="@style/Widget.Material3.Button.TextButton"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/chapter_next" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingVertical="6dp">
+
+            <TextView
+                android:id="@+id/chapter_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#EEFFFFFF"
+                android:textSize="15sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/chapter_position"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:textColor="#99FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btn_next_chapter"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/chapter_next"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="@color/chapter_arrow_tint" />
 
     </LinearLayout>
 

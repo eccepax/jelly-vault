@@ -130,6 +130,8 @@ class BookReaderViewModel(
     /** Real chapter titles for the currently-loaded EPUB, or empty for PDF/before loading. */
     fun getTableOfContents(): List<EpubTocEntry> = epubRenderer.getTableOfContents()
 
+    fun getChapterTitle(chapterIndex: Int): String? = epubRenderer.chapterTitleAt(chapterIndex)
+
     fun setPage(pageIndex: Int) {
         val total = _totalPages.value
         val clampedIndex = if (total > 0) pageIndex.coerceIn(0, total - 1) else pageIndex

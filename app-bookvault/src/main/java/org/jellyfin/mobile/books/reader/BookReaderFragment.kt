@@ -14,6 +14,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.books.R
@@ -147,6 +149,7 @@ class BookReaderFragment : Fragment() {
                 launch { observeLoading() }
                 launch { observeError() }
                 launch { observeCurrentPage() }
+                launch { observeChapterBar() }
             }
         }
     }
@@ -161,6 +164,22 @@ class BookReaderFragment : Fragment() {
      */
     private suspend fun observeCurrentPage() {
         viewModel.currentPage.collect { page -> syncDisplayedPage(page) }
+    }
+
+    private suspend fun observeChapterBar() {
+        combine(viewModel.currentPage, viewModel.totalPages, ::Pair).collect { (chapter, chapterCount) ->
+            updateChapterBar(chapter, chapterCount)
+        }
+    }
+
+    /** The EPUB chapter bar: the chapter's name and position, with arrows only where there's somewhere to go. */
+    private fun updateChapterBar(chapter: Int, chapterCount: Int) {
+        val title = if (viewModel.bookType.value == BookType.EPUB) viewModel.getChapterTitle(chapter) else null
+        binding.chapterTitle.text = title
+        binding.chapterTitle.isVisible = title != null
+        binding.chapterPosition.text = getString(R.string.chapter_position, chapter + 1, chapterCount)
+        binding.btnPrevChapter.isEnabled = chapter > 0
+        binding.btnNextChapter.isEnabled = chapter < chapterCount - 1
     }
 
     private fun syncDisplayedPage(page: Int) {
