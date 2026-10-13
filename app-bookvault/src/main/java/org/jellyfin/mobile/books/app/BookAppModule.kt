@@ -8,6 +8,7 @@ import org.jellyfin.mobile.books.downloads.BookDownloadManager
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
 import org.jellyfin.mobile.books.reader.BookReaderViewModel
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
@@ -30,7 +31,8 @@ val bookAppModule = module {
     single { BookDownloadManager(androidApplication(), get(), get(), get<DownloadRecordDao>()) }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
+    single { SignOut(get(), get<ApiClientController>()::logoutUser) }
+    viewModel { MainViewModel(get(), get(), get()) }
     viewModel { (libraryId: String?) ->
         BookLibraryViewModel(get(), get(), get<BookProgressDao>(), get(), get<DownloadRecordDao>(), libraryId)
     }

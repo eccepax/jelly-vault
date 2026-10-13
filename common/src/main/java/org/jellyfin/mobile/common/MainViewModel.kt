@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.data.entity.ServerEntity
 
 class MainViewModel(
     app: Application,
     private val apiClientController: ApiClientController,
+    private val signOut: SignOut,
 ) : AndroidViewModel(app) {
     private val _serverState: MutableStateFlow<ServerState> = MutableStateFlow(ServerState.Pending)
     val serverState: StateFlow<ServerState> get() = _serverState
@@ -38,7 +40,7 @@ class MainViewModel(
     }
 
     suspend fun logout() {
-        apiClientController.logoutUser()
+        signOut()
         refreshState()
     }
 }

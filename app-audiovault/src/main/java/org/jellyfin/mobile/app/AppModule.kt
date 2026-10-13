@@ -25,6 +25,7 @@ import coil3.ImageLoader
 import kotlinx.coroutines.channels.Channel
 import okhttp3.OkHttpClient
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.setup.ConnectionHelper
@@ -69,7 +70,8 @@ val applicationModule = module {
     single { ActivityEventHandler() }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
+    single { SignOut(get(), get<ApiClientController>()::logoutUser) }
+    viewModel { MainViewModel(get(), get(), get()) }
     viewModel { DownloadsViewModel() }
     viewModel { LibraryViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { AudiobookPlayerViewModel(get()) }

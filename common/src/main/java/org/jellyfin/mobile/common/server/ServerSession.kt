@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.catalog
+package org.jellyfin.mobile.common.server
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

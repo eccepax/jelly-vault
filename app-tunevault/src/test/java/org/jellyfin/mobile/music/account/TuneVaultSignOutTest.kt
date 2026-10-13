@@ -2,14 +2,14 @@ package org.jellyfin.mobile.music.account
 
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.jellyfin.mobile.common.account.SignOut
+import org.jellyfin.mobile.common.server.ServerSession
 import org.jellyfin.mobile.music.catalog.FakeFavoritesStore
 import org.jellyfin.mobile.music.catalog.FavoritesRepository
-import org.jellyfin.mobile.music.catalog.ServerSession
 import org.jellyfin.mobile.music.domain.PlayQueue
 import org.jellyfin.mobile.music.domain.track
 import org.jellyfin.mobile.music.playback.FakePlaybackController
@@ -17,10 +17,10 @@ import org.jellyfin.mobile.music.playback.FakePlaybackReporter
 import org.jellyfin.mobile.music.playback.PlaybackReportingTracker
 import org.jellyfin.mobile.music.playback.PlaybackState
 import org.junit.jupiter.api.Test
-import java.io.IOException
 
+/** TuneVault's own sign-out steps; the shared sequence is covered by common's SignOutTest. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SignOutTest {
+class TuneVaultSignOutTest {
 
     private val events = mutableListOf<String>()
     private val playback = FakePlaybackController()
@@ -31,7 +31,7 @@ class SignOutTest {
     private fun TestScope.signOut(): SignOut {
         val tracker = PlaybackReportingTracker(playback, reporter, backgroundScope).also { it.start() }
         runCurrent()
-        return SignOut(
+        return tuneVaultSignOut(
             playback,
             tracker,
             favorites,
@@ -70,25 +70,5 @@ class SignOutTest {
         signOut()
 
         favorites.isFavorite("a", serverValue = false) shouldBe false
-    }
-
-    @Test
-    fun `still logs out when the server can't end the session`() = runTest {
-        val signOut = signOut()
-        session = ServerSession { throw IOException("offline") }
-
-        signOut()
-
-        events shouldBe listOf("clear account data", "logout")
-    }
-
-    @Test
-    fun `still logs out, after a while, when the server never answers`() = runTest {
-        val signOut = signOut()
-        session = ServerSession { awaitCancellation() }
-
-        signOut()
-
-        events shouldBe listOf("clear account data", "logout")
     }
 }

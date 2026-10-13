@@ -1,5 +1,7 @@
 package org.jellyfin.mobile.common.app
 
+import org.jellyfin.mobile.common.server.JellyfinServerSession
+import org.jellyfin.mobile.common.server.ServerSession
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -14,4 +16,5 @@ fun apiModule(clientInfo: ClientInfo) = module {
         }
     }
     single { get<Jellyfin>().createApi() }
+    single<ServerSession> { JellyfinServerSession(get()) }
 }
