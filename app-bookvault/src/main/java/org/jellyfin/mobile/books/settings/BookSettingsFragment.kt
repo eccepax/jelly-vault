@@ -24,6 +24,8 @@ import org.jellyfin.mobile.books.reader.formatFontFamilyLabel
 import org.jellyfin.mobile.books.reader.formatFontScaleLabel
 import org.jellyfin.mobile.books.reader.formatLineSpacingLabel
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.ui.utils.padForNavigationBar
+import org.jellyfin.mobile.common.ui.utils.padForStatusBar
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 
@@ -42,6 +44,8 @@ class BookSettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        binding.toolbar.padForStatusBar()
+        binding.root.padForNavigationBar()
         binding.toolbar.setTitle(R.string.settings)
         binding.toolbar.setNavigationOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())

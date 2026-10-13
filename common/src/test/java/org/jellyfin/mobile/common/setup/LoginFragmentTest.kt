@@ -4,9 +4,13 @@ import android.app.Application
 import android.os.Looper
 import android.widget.Button
 import android.widget.EditText
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -114,7 +118,27 @@ class LoginFragmentTest {
         withTimeout(SIGNAL_TIMEOUT_MS) { signal.await() }
     }
 
+    @Test
+    fun `the login screen keeps its content clear of the status and navigation bars`() {
+        val scenario = launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme)
+        scenario.onFragment { fragment ->
+            val root = fragment.requireView()
+            val basePadding = root.paddingTop
+            val bars = WindowInsetsCompat.Builder()
+                .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, STATUS_BAR_PX, 0, 0))
+                .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, NAV_BAR_PX))
+                .build()
+
+            ViewCompat.dispatchApplyWindowInsets(root, bars)
+
+            root.paddingTop shouldBe basePadding + STATUS_BAR_PX
+            root.paddingBottom shouldBe basePadding + NAV_BAR_PX
+        }
+    }
+
     private companion object {
+        const val STATUS_BAR_PX = 63
+        const val NAV_BAR_PX = 42
         const val API_CLIENT_EXTENSIONS = "org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt"
         const val SIGNAL_TIMEOUT_MS = 5_000L
         const val POLL_INTERVAL_MS = 10L

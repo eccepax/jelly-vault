@@ -8,10 +8,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -25,6 +22,8 @@ import org.jellyfin.mobile.books.app.LibraryViewMode
 import org.jellyfin.mobile.books.databinding.FragmentLibraryBinding
 import org.jellyfin.mobile.books.reader.BookReaderFragment
 import org.jellyfin.mobile.books.settings.BookSettingsFragment
+import org.jellyfin.mobile.common.ui.utils.padForNavigationBar
+import org.jellyfin.mobile.common.ui.utils.padForStatusBar
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -63,10 +62,8 @@ class BookLibraryFragment : Fragment() {
     }
 
     private fun setupToolbar() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.toolbar) { v, insets ->
-            v.updatePadding(top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top)
-            insets
-        }
+        binding.toolbar.padForStatusBar()
+        binding.root.padForNavigationBar()
 
         binding.toolbar.setTitle(R.string.library)
         binding.toolbar.inflateMenu(R.menu.menu_library)

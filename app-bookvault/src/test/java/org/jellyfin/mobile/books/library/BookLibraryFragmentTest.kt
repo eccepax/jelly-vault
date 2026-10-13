@@ -2,9 +2,15 @@ package org.jellyfin.mobile.books.library
 
 import android.app.Application
 import android.content.DialogInterface
+import android.os.Looper
+import android.view.View
 import androidx.appcompat.app.AlertDialog
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.test.core.app.ApplicationProvider
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -24,6 +30,7 @@ import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
@@ -75,6 +82,24 @@ class BookLibraryFragmentTest {
 
     private fun string(resId: Int): String =
         ApplicationProvider.getApplicationContext<Application>().getString(resId)
+
+    @Test
+    fun `the book list ends above the system navigation bar`() {
+        val navBarPx = 126
+        launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val bars = WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navBarPx))
+                    .build()
+                ViewCompat.dispatchApplyWindowInsets(fragment.requireView(), bars)
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+            scenario.onFragment { fragment ->
+                val root = fragment.requireView()
+                root.findViewById<View>(R.id.recycler_view_list).bottom shouldBeLessThanOrEqual root.height - navBarPx
+            }
+        }
+    }
 
     @Test
     fun `long-press on a not-yet-downloaded book starts the download directly, no dialog`() {

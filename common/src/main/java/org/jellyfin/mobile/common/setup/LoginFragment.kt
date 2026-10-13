@@ -1,10 +1,14 @@
 package org.jellyfin.mobile.common.setup
 
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
@@ -44,6 +48,19 @@ class LoginFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // The apps draw edge-to-edge, so keep the form clear of the system bars and the keyboard
+        val basePadding = Rect(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            v.updatePadding(
+                left = basePadding.left + bars.left,
+                top = basePadding.top + bars.top,
+                right = basePadding.right + bars.right,
+                bottom = basePadding.bottom + bars.bottom,
+            )
+            insets
+        }
 
         binding.buttonChangeServer.setOnClickListener {
             mainViewModel.resetServer()

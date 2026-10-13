@@ -60,6 +60,8 @@ fun TuneVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences) 
             showExternalConnectionError = false,
             logoRes = R.drawable.tune_logo,
         )
+        // LoginFragment pads itself for the system bars, but Compose doesn't pass window insets down to
+        // the fragment's views here, so the padding has to come from this side.
         RootScreen.Login -> AndroidFragment<LoginFragment>(Modifier.fillMaxSize().systemBarsPadding())
         RootScreen.Library -> SignedIn()
     }

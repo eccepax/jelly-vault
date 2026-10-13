@@ -4,13 +4,18 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Looper
+import android.view.View
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.Toolbar
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.coEvery
@@ -86,6 +91,32 @@ class BookReaderFragmentTest {
         }
 
         verify { readerViewModel.reportPlaybackStopped() }
+    }
+
+    @Test
+    fun `the EPUB chapter buttons stay above the system navigation bar`() {
+        // The app draws edge-to-edge; with 3-button navigation the bar would otherwise cover the
+        // Previous/Next chapter buttons, leaving no way past a chapter with nothing to scroll.
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.totalPages } returns MutableStateFlow(5)
+        val navBarPx = 126
+
+        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val root = fragment.requireView()
+                val bars = WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navBarPx))
+                    .build()
+                ViewCompat.dispatchApplyWindowInsets(root, bars)
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+            scenario.onFragment { fragment ->
+                val root = fragment.requireView()
+                val chapterNav = root.findViewById<View>(R.id.chapter_nav_bar)
+                chapterNav.visibility shouldBe View.VISIBLE
+                chapterNav.bottom shouldBeLessThanOrEqual root.height - navBarPx
+            }
+        }
     }
 
     @Test

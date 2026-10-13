@@ -14,9 +14,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -31,6 +28,8 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.databinding.FragmentReaderBinding
+import org.jellyfin.mobile.common.ui.utils.padForNavigationBar
+import org.jellyfin.mobile.common.ui.utils.padForStatusBar
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.io.File
@@ -71,6 +70,7 @@ class BookReaderFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        binding.root.padForNavigationBar()
         setupToolbar()
         setupPdfScrollMode()
         setupPdfPageFlipMode()
@@ -84,10 +84,7 @@ class BookReaderFragment : Fragment() {
     }
 
     private fun setupToolbar() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.toolbar) { v, insets ->
-            v.updatePadding(top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top)
-            insets
-        }
+        binding.toolbar.padForStatusBar()
 
         binding.toolbar.setNavigationOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         binding.toolbar.inflateMenu(R.menu.menu_reader)
