@@ -17,7 +17,13 @@ AudioVault comes in two variants, signed with the same key so you can switch bet
 - `AudioVault-<version>-libre.apk` — no Google Play services. Pick this one if unsure.
 - `AudioVault-<version>-chromecast.apk` — adds Chromecast support; requires Google Play services.
 
-Each APK has a `.sha256` checksum next to it, and each release lists its signing certificate's fingerprint.
+Each APK has a `.sha256` checksum next to it. To check an APK really comes from this project, compare its signing certificate (`apksigner verify --print-certs <apk>`, or what Obtainium/AppVerifier show) against:
+
+| App | Signing certificate SHA-256 |
+|---|---|
+| AudioVault | `78:28:54:EB:BE:2A:16:8C:E3:D4:B4:82:82:6A:72:AA:B1:A7:E0:3C:EC:25:CA:BD:E4:21:55:7A:8E:56:69:B7` |
+| BookVault | `40:26:AB:9A:92:47:E4:0C:53:02:2E:8A:8E:A4:FB:27:84:1A:51:CF:4F:29:71:52:7D:27:DA:06:99:0D:3B:17` |
+| TuneVault | `DB:4A:AC:7E:A1:1E:A4:4A:E3:9F:AA:92:AE:32:6B:A7:DA:07:A8:ED:98:3A:6D:D4:3C:2E:C4:BE:CC:32:C5:1D` |
 
 To get updates automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium).
 
