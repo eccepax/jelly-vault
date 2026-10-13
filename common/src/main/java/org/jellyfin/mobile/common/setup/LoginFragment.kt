@@ -134,7 +134,9 @@ class LoginFragment : Fragment() {
             } catch (e: ApiClientException) {
                 Timber.e(e, "Login failed")
                 setError(e.message ?: getString(R.string.login_error_failed))
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Login failed (unexpected)")
                 setError(getString(R.string.login_error_failed))
             } finally {
