@@ -12,10 +12,7 @@ All three are forks of [jellyfin-android](https://github.com/jellyfin/jellyfin-a
 
 Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the three apps install side by side.
 
-AudioVault comes in two variants, signed with the same key so you can switch between them:
-
-- `AudioVault-<version>-libre.apk` — no Google Play services. Pick this one if unsure.
-- `AudioVault-<version>-chromecast.apk` — adds Chromecast support; requires Google Play services.
+None of the apps need Google Play services. Chromecast isn't supported yet.
 
 Each APK has a `.sha256` checksum next to it. To check an APK really comes from this project, compare its signing certificate (`apksigner verify --print-certs <apk>`, or what Obtainium/AppVerifier show) against:
 
@@ -61,9 +58,8 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 Requires Android Studio or the Android command-line tools and a JDK.
 
 ```bash
-# AudioVault
+# AudioVault (the proprietary flavor adds Google Play services for future Chromecast work; casting doesn't work yet)
 ./gradlew :app-audiovault:assembleLibreDebug
-./gradlew :app-audiovault:assembleProprietaryDebug
 
 # BookVault
 ./gradlew :app-bookvault:assembleDebug
@@ -90,7 +86,7 @@ Each app is signed with its own key, kept outside the repo:
 
 ```bash
 scripts/create-signing-keys.sh   # once: creates the keys in ../vault-keys and wires each app to its key
-./gradlew :app-audiovault:assembleLibreRelease :app-audiovault:assembleProprietaryRelease           :app-bookvault:assembleRelease :app-tunevault:assembleRelease
+./gradlew :app-audiovault:assembleLibreRelease :app-bookvault:assembleRelease :app-tunevault:assembleRelease
 scripts/package-release.sh       # collects signed APKs + checksums into build/release/
 ```
 
