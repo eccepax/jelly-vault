@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.home.HomeScreenTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi

@@ -1,14 +1,15 @@
 package org.jellyfin.mobile.music.e2e
 
+import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.music.playback.VolumeLevellingSetting
 import org.jellyfin.mobile.music.playback.levelFor
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 private const val PLAYBACK_TIMEOUT_MS = 30_000L
 

@@ -211,6 +211,7 @@ dependencies {
     // into the debug variant, which is what unit tests actually run against.
     debugImplementation(libs.androidx.fragment.testing.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
+    androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
     // RecyclerViewActions (e.g. clicking a library item at a given adapter position).
     androidTestImplementation(libs.androidx.test.espresso.contrib) {

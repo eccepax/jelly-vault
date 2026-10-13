@@ -192,6 +192,7 @@ dependencies {
     testImplementation(libs.androidx.media3.test.utils.robolectric)
     testRuntimeOnly(libs.junit.vintage.engine)
     debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.compose.ui.test.junit4)

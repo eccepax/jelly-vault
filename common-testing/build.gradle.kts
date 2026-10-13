@@ -37,9 +37,20 @@ android {
 }
 
 dependencies {
+    // Only for common's resource ids (sign-in screens); the app under test supplies them at runtime.
+    compileOnly(project(":common"))
     implementation(libs.bundles.coroutines)
     api(libs.jellyfin.sdk)
-    implementation(libs.junit.api)
+
+    // Contract tests (JUnit 5, on the JVM): the apps' unit tests bring it; it can't be dexed into e2e APKs.
+    compileOnly(libs.junit.api)
+
+    // e2e tests (JUnit 4, instrumented)
+    api(libs.junit4)
+    api(libs.bundles.androidx.test)
+    api(libs.androidx.test.rules)
+    api(libs.compose.ui.test.junit4)
+    implementation(libs.bundles.koin)
 
     detektPlugins(libs.detekt.formatting)
 }

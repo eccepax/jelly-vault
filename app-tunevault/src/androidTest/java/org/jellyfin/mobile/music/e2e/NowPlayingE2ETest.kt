@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.nowplaying.MiniPlayerTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
