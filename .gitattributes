@@ -1,0 +1,5 @@
+* text=auto
+# Shell scripts must keep LF endings or bash fails on them, even on Windows checkouts
+*.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf

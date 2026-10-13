@@ -22,12 +22,19 @@ object SigningHelper {
         return Config(storeFile, storePassword, keyAlias, keyPassword)
     }
 
+    /**
+     * Reads the app module's own keystore.properties (each app has its own key), falling back to one
+     * at the repo root. A relative storeFile resolves against the directory holding the properties file.
+     */
     private fun loadFromProperties(project: Project): Config? {
-        val propsFile = project.rootProject.file("keystore.properties")
-        if (!propsFile.exists()) return null
+        val propsFile = listOf(project.file("keystore.properties"), project.rootProject.file("keystore.properties"))
+            .firstOrNull(File::exists) ?: return null
         val props = Properties().apply { propsFile.inputStream().use(::load) }
-        val storeFile = project.rootProject.file(props.getProperty("storeFile") ?: return null)
-        if (!storeFile.exists()) return null
+        val storeFile = propsFile.parentFile.resolve(props.getProperty("storeFile") ?: return null)
+        if (!storeFile.exists()) {
+            project.logger.warn("Release signing skipped: keystore not found at $storeFile")
+            return null
+        }
         return Config(
             storeFile,
             props.getProperty("storePassword") ?: return null,

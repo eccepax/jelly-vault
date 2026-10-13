@@ -10,12 +10,14 @@ All three are forks of [jellyfin-android](https://github.com/jellyfin/jellyfin-a
 
 ## Download
 
-Signed APKs for each app are attached to [Releases](../../releases). Install the APK for the app you want; the three apps install side by side.
+Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the three apps install side by side.
 
-AudioVault comes in two variants:
+AudioVault comes in two variants, signed with the same key so you can switch between them:
 
-- `libre` — no Google Play services. Pick this one if unsure.
-- `proprietary` — adds Chromecast support; requires Google Play services.
+- `AudioVault-<version>-libre.apk` — no Google Play services. Pick this one if unsure.
+- `AudioVault-<version>-chromecast.apk` — adds Chromecast support; requires Google Play services.
+
+Each APK has a `.sha256` checksum next to it, and each release lists its signing certificate's fingerprint.
 
 To get updates automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium).
 
@@ -75,6 +77,18 @@ e2e.hostname=http://10.0.2.2:8096
 e2e.username=...
 e2e.password=...
 ```
+
+### Release builds
+
+Each app is signed with its own key, kept outside the repo:
+
+```bash
+scripts/create-signing-keys.sh   # once: creates the keys in ../vault-keys and wires each app to its key
+./gradlew :app-audiovault:assembleLibreRelease :app-audiovault:assembleProprietaryRelease           :app-bookvault:assembleRelease :app-tunevault:assembleRelease
+scripts/package-release.sh       # collects signed APKs + checksums into build/release/
+```
+
+Bump `app.version` in the app's `gradle.properties` before each release.
 
 ## Requirements
 
