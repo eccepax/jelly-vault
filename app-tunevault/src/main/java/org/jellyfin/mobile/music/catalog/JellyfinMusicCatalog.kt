@@ -3,11 +3,11 @@ package org.jellyfin.mobile.music.catalog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.domain.Track
-import org.jellyfin.mobile.music.downloads.withAccessToken
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.universalAudioApi

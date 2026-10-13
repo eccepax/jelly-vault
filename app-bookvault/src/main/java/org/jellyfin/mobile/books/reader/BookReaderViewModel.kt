@@ -18,6 +18,7 @@ import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.jellyfin.mobile.books.downloads.BookDownloadManager
+import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.PlaybackStopInfo
@@ -223,9 +224,8 @@ class BookReaderViewModel(
     }
 
     private suspend fun downloadBook(bookItemId: String, destination: File) = withContext(Dispatchers.IO) {
-        val baseUrl = requireNotNull(apiClient.baseUrl) { "No base URL" }.trimEnd('/')
-        val token = apiClient.accessToken ?: ""
-        val url = "$baseUrl/Items/$bookItemId/Download?api_key=$token"
+        val baseUrl = requireNotNull(apiClient.baseUrl) { "No base URL" }
+        val url = itemDownloadUrl(baseUrl, bookItemId.toUUID(), apiClient.accessToken)
         val request = Request.Builder().url(url).build()
         val client = httpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)

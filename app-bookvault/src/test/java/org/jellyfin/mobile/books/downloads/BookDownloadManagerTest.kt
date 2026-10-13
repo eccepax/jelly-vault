@@ -86,18 +86,18 @@ class BookDownloadManagerTest {
 
         manager.downloadBook(book(id = itemId))
 
-        server.takeRequest().path shouldBe "/Items/$itemId/Download?api_key=test-token"
+        server.takeRequest().path shouldBe "/Items/${itemId.toString().replace("-", "")}/Download?api_key=test-token"
     }
 
     @Test
-    fun `a null access token produces an empty api_key rather than the literal string null`() = runTest {
+    fun `a null access token sends no api_key rather than the literal string null`() = runTest {
         every { apiClient.accessToken } returns null
         val itemId = UUID.randomUUID()
         server.enqueue(MockResponse().setResponseCode(200).setBody("x"))
 
         manager.downloadBook(book(id = itemId))
 
-        server.takeRequest().path shouldBe "/Items/$itemId/Download?api_key="
+        server.takeRequest().path shouldBe "/Items/${itemId.toString().replace("-", "")}/Download"
     }
 
     @Test

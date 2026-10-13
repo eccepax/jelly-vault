@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
 import org.jellyfin.mobile.common.data.entity.DownloadRecord
+import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.BaseItemDto
 import timber.log.Timber
@@ -27,9 +28,8 @@ class BookDownloadManager(
         val itemId = book.id?.toString() ?: return@withContext
         val file = File(getDownloadDir(), itemId)
         if (!file.exists()) {
-            val baseUrl = requireNotNull(apiClient.baseUrl) { "No base URL" }.trimEnd('/')
-            val token = apiClient.accessToken ?: ""
-            val url = "$baseUrl/Items/$itemId/Download?api_key=$token"
+            val baseUrl = requireNotNull(apiClient.baseUrl) { "No base URL" }
+            val url = itemDownloadUrl(baseUrl, requireNotNull(book.id), apiClient.accessToken)
             val request = Request.Builder().url(url).build()
             httpClient.newCall(request).execute().use { response ->
                 check(response.isSuccessful) { "Download failed: ${response.code}" }

@@ -20,8 +20,8 @@ import coil3.request.fallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.mobile.databinding.FragmentLibraryBinding
-import org.jellyfin.mobile.downloads.buildDownloadUrl
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.events.DownloadFileSpec
@@ -367,7 +367,7 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
     private fun requestDownloadForTracks(title: String, trackIds: List<UUID>) {
         val baseUrl = apiClient.baseUrl ?: return
         val files = trackIds.map { trackId ->
-            val url = buildDownloadUrl(baseUrl, apiClient.accessToken, trackId).toUri()
+            val url = itemDownloadUrl(baseUrl, trackId, apiClient.accessToken).toUri()
             DownloadFileSpec(url, title)
         }
         activityEventHandler.emit(ActivityEvent.DownloadFiles(files))

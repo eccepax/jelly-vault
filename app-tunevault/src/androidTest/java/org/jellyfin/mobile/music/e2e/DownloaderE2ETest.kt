@@ -14,7 +14,7 @@ import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
 import org.jellyfin.mobile.music.downloads.TrackDownload
 import org.jellyfin.mobile.music.downloads.TrackDownloader
-import org.jellyfin.mobile.music.downloads.withAccessToken
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.After
