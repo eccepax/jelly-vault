@@ -124,6 +124,25 @@ class LibraryViewModelTest {
         }
     }
 
+    /**
+     * Waits for [LibraryViewModel.items] to show [expected]. That list is derived through `combine`,
+     * which can still be catching up on the IO thread when [awaitSettled] returns or right after a
+     * re-sort, so `items.value` may briefly lag behind.
+     */
+    private suspend fun LibraryViewModel.itemNamesShouldBecome(expected: List<String>) {
+        var names: List<String>? = null
+        try {
+            items.test {
+                names = awaitItem().map { it.displayName }
+                while (names != expected) names = awaitItem().map { it.displayName }
+                cancelAndIgnoreRemainingEvents()
+            }
+        } catch (e: AssertionError) {
+            names shouldBe expected // fails with the last list seen rather than a bare timeout
+            throw e
+        }
+    }
+
     private fun queryResult(items: List<BaseItemDto>) =
         Response(BaseItemDtoQueryResult(items, items.size, 0), 200, emptyMap())
 
@@ -183,7 +202,7 @@ class LibraryViewModelTest {
         val viewModel = createViewModel()
         viewModel.awaitSettled()
 
-        viewModel.items.value.map { it.displayName } shouldBe listOf("Alpha Books", "Zeta Books")
+        viewModel.itemNamesShouldBecome(listOf("Alpha Books", "Zeta Books"))
     }
 
     @Test
@@ -195,7 +214,7 @@ class LibraryViewModelTest {
         val viewModel = createViewModel()
         viewModel.awaitSettled()
 
-        viewModel.items.value.map { it.displayName } shouldBe listOf("Movies")
+        viewModel.itemNamesShouldBecome(listOf("Movies"))
     }
 
     @Test
@@ -235,7 +254,7 @@ class LibraryViewModelTest {
         val viewModel = createViewModel()
         viewModel.awaitSettled()
 
-        viewModel.items.value.map { it.displayName } shouldBe listOf("Solo Book")
+        viewModel.itemNamesShouldBecome(listOf("Solo Book"))
         coVerify { audiobookEntryDao.clearForServer(1L) }
         coVerify { audiobookEntryDao.insertAll(any()) }
     }
@@ -387,7 +406,7 @@ class LibraryViewModelTest {
         // Only the one userViews call from init's loadGlobalFlat — re-sorting the cache triggers
         // no additional server round trip.
         coVerify(exactly = 1) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
-        viewModel.items.value.map { it.displayName } shouldBe listOf("Alpha", "Bravo")
+        viewModel.itemNamesShouldBecome(listOf("Alpha", "Bravo"))
     }
 
     // --- hidden items ------------------------------------------------------------------------------
