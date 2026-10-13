@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.catalog
+package org.jellyfin.mobile.testing
 
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.sdk.api.client.ApiClient
@@ -16,6 +16,9 @@ import java.net.URI
 /**
  * A logged-in [ApiClient] for the real local Vault, built straight from the SDK's JVM
  * [OkHttpFactory] (the `Jellyfin` entry point needs an Android Context; this doesn't).
+ *
+ * Configured through the `contract.*` system properties; a module's Gradle build sets them with
+ * `useVaultContractServer` (buildSrc).
  */
 object VaultTestServer {
     val hostname: String = System.getProperty("contract.hostname").orEmpty()
@@ -28,12 +31,12 @@ object VaultTestServer {
      * A client signed in as its own device. The server keys sessions by device, so a test that ends
      * a session must use its own [deviceId], never [apiClient]'s, or it signs every other test out.
      */
-    fun newSignedInClient(deviceId: String = "tunevault-contract-tests"): ApiClient {
+    fun newSignedInClient(deviceId: String = "vault-contract-tests"): ApiClient {
         val factory = OkHttpFactory()
         return factory.create(
             baseUrl = hostname,
             accessToken = null,
-            clientInfo = ClientInfo("TuneVault contract tests", "test"),
+            clientInfo = ClientInfo("Vault contract tests", "test"),
             deviceInfo = DeviceInfo(deviceId, "JVM"),
             httpClientOptions = HttpClientOptions(),
             socketConnectionFactory = factory,
@@ -54,8 +57,10 @@ object VaultTestServer {
 
     private fun reachabilityError(): String? = runCatching {
         val connection = URI("$hostname/System/Info/Public").toURL().openConnection() as HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 10_000
-        connection.responseCode.takeIf { it != 200 }?.let { "HTTP $it" }
+        connection.connectTimeout = REACHABLE_TIMEOUT_MS
+        connection.readTimeout = REACHABLE_TIMEOUT_MS
+        connection.responseCode.takeIf { it != HttpURLConnection.HTTP_OK }?.let { "HTTP $it" }
     }.getOrElse { it.toString() }
 }
+
+private const val REACHABLE_TIMEOUT_MS = 10_000

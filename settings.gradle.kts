@@ -1,4 +1,5 @@
 include(":common")
+include(":common-testing")
 include(":app-audiovault")
 include(":app-bookvault")
 include(":app-tunevault")

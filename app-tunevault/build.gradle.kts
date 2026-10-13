@@ -174,6 +174,7 @@ dependencies {
     debugImplementation(libs.leakcanary)
 
     // Testing
+    testImplementation(project(":common-testing"))
     testImplementation(libs.junit.api)
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)
@@ -213,12 +214,7 @@ tasks {
 
     withType<Test> {
         useJUnitPlatform()
-        // MusicCatalog contract tests run on the JVM against the real Vault (skipped if it's
-        // unreachable or the credentials are missing). The host is localhost here, not the
-        // emulator's 10.0.2.2 alias that e2e.hostname defaults to.
-        systemProperty("contract.hostname", localProperties.getProperty("contract.hostname", "http://localhost:8096"))
-        systemProperty("contract.username", localProperties.getProperty("e2e.username", ""))
-        systemProperty("contract.password", localProperties.getProperty("e2e.password", ""))
+        useVaultContractServer(localProperties)
         testLogging {
             outputs.upToDateWhen { false }
             showStandardStreams = true

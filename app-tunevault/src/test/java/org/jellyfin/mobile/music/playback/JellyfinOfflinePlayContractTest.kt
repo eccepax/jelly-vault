@@ -5,8 +5,8 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
-import org.jellyfin.mobile.music.catalog.VaultTestServer
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
