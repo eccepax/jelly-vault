@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.navigation
+package org.jellyfin.mobile.common.ui
 
 import io.kotest.matchers.shouldBe
 import io.mockk.mockk
@@ -28,7 +28,7 @@ class RootScreenTest {
     }
 
     @Test
-    fun `server with a signed-in user shows the library`() {
-        resolveRootScreen(ServerState.Available(mockk()), currentUserId = 1L) shouldBe RootScreen.Library
+    fun `server with a signed-in user shows the signed-in app`() {
+        resolveRootScreen(ServerState.Available(mockk()), currentUserId = 1L) shouldBe RootScreen.SignedIn
     }
 }

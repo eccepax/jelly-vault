@@ -1,12 +1,8 @@
 package org.jellyfin.mobile.music.ui
 
-import android.app.Activity
-import android.content.Intent
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -14,12 +10,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.fragment.compose.AndroidFragment
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.setup.LoginFragment
-import org.jellyfin.mobile.common.ui.screens.connect.ConnectScreen
+import org.jellyfin.mobile.common.ui.VaultRoot
+import org.jellyfin.mobile.common.ui.startOver
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.account.SettingsRoute
 import org.jellyfin.mobile.music.downloads.DownloadRepository
@@ -36,8 +30,6 @@ import org.jellyfin.mobile.music.navigation.LibraryNavigation
 import org.jellyfin.mobile.music.navigation.MainBottomBar
 import org.jellyfin.mobile.music.navigation.MainTab
 import org.jellyfin.mobile.music.navigation.MainTabs
-import org.jellyfin.mobile.music.navigation.RootScreen
-import org.jellyfin.mobile.music.navigation.resolveRootScreen
 import org.jellyfin.mobile.music.nowplaying.PlayerShell
 import org.jellyfin.mobile.music.offline.OfflineBanner
 import org.jellyfin.mobile.music.offline.ServerConnectivity
@@ -50,21 +42,7 @@ import org.koin.compose.koinInject
 
 @Composable
 fun TuneVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences) {
-    val serverState by mainViewModel.serverState.collectAsState()
-    // Re-resolved on every serverState emission: LoginFragment persists the user, then calls
-    // MainViewModel.refreshState(), which emits a fresh ServerState.Available.
-    when (resolveRootScreen(serverState, appPreferences.currentUserId)) {
-        RootScreen.Splash -> Unit
-        RootScreen.Connect -> ConnectScreen(
-            mainViewModel = mainViewModel,
-            showExternalConnectionError = false,
-            logoRes = R.drawable.tune_logo,
-        )
-        // LoginFragment pads itself for the system bars, but Compose doesn't pass window insets down to
-        // the fragment's views here, so the padding has to come from this side.
-        RootScreen.Login -> AndroidFragment<LoginFragment>(Modifier.fillMaxSize().systemBarsPadding())
-        RootScreen.Library -> SignedIn()
-    }
+    VaultRoot(mainViewModel, appPreferences, logoRes = R.drawable.tune_logo) { SignedIn() }
 }
 
 /** The signed-in app: Home, Library and Search tabs over the player, each tab with its own back stack. */
@@ -145,16 +123,6 @@ private fun BrowseNavigation(home: @Composable (browse: Browse) -> Unit) {
         },
         playlistDetail = { playlistId, onBack -> PlaylistDetailRoute(playlistId = playlistId, onBack = onBack) },
         settings = { onBack -> SettingsRoute(onBack = onBack, onSignedOut = { activity?.startOver() }) },
-    )
-}
-
-/**
- * Starts the app over in a fresh task after signing out. Finishing this activity clears every
- * ViewModel, so nothing the last account loaded survives into the next one's session.
- */
-private fun Activity.startOver() {
-    startActivity(
-        Intent(this, this::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
     )
 }
 
