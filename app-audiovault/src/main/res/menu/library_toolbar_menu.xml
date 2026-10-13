@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/search_hint"
+        android:icon="@drawable/ic_search_white_24dp"
+        app:showAsAction="ifRoom|collapseActionView"
+        app:actionViewClass="androidx.appcompat.widget.SearchView" />
+
+    <item
+        android:id="@+id/action_settings"
+        android:title="@string/activity_name_settings"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_filter_downloaded"
+        android:title="@string/filter_downloaded_only"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_show_hidden"
+        android:title="@string/show_hidden_items"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_sort"
+        android:title="@string/library_sort_by"
+        app:showAsAction="never">
+        <menu>
+            <group android:checkableBehavior="single">
+                <item
+                    android:id="@+id/sort_title"
+                    android:title="@string/library_sort_title" />
+                <item
+                    android:id="@+id/sort_author"
+                    android:title="@string/library_sort_author" />
+                <item
+                    android:id="@+id/sort_date_added"
+                    android:title="@string/library_sort_date_added" />
+                <item
+                    android:id="@+id/sort_last_played"
+                    android:title="@string/library_sort_last_played" />
+            </group>
+        </menu>
+    </item>
+
+</menu>

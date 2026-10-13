@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/theme_background"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Hidden PlayerView - still needed for ExoPlayer internals, not visible for audio-only -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        app:use_controller="false" />
+
+    <!-- Main content: toolbar → cover art → title → controls -->
+    <LinearLayout
+        android:id="@+id/main_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Top toolbar: back button + overflow menu -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:theme="@style/ThemeOverlay.App.BackButton"
+            app:titleTextColor="@android:color/white"
+            app:subtitleTextColor="@android:color/white"
+            app:contentInsetStartWithNavigation="0dp"
+            app:navigationIcon="?attr/homeAsUpIndicator" />
+
+        <!-- Cover area: fills all space above title + controls -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/album_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter"
+                android:contentDescription="@string/album_cover"
+                tools:srcCompat="@drawable/ic_local_movies_white_64" />
+
+            <ProgressBar
+                android:id="@+id/loading_indicator"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- Now playing title - between cover and controls -->
+        <TextView
+            android:id="@+id/now_playing_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp"
+            android:text="@string/now_playing_title"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:scrollHorizontally="true"
+            tools:text="A People's History of the United States" />
+
+        <!-- Player controls panel - solid dark, at bottom -->
+        <include
+            android:id="@+id/player_controls"
+            layout="@layout/exo_player_control_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- Overlay layer - passthrough, items hidden by default -->
+    <FrameLayout
+        android:id="@+id/player_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/playback_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|top"
+            android:layout_marginStart="@dimen/exo_player_controls_display_padding"
+            android:layout_marginTop="48dp"
+            android:layout_marginEnd="@dimen/exo_player_controls_display_padding"
+            android:layout_marginBottom="96dp"
+            android:background="@drawable/playback_info_background"
+            android:clickable="true"
+            android:padding="16dp"
+            android:visibility="gone"
+            tools:ignore="KeyboardInaccessibleWidget"
+            tools:visibility="visible" />
+
+        <Button
+            android:id="@+id/skip_segment_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/skip_media_segment"
+            android:layout_marginStart="@dimen/exo_player_controls_display_padding"
+            android:layout_marginEnd="@dimen/exo_player_controls_display_padding"
+            android:layout_marginBottom="96dp"
+            android:layout_gravity="end|bottom"
+            android:visibility="gone"
+            android:background="@drawable/skip_media_segment_background"
+            android:textColor="@color/skip_media_segment_text"
+            android:textSize="18sp"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+</FrameLayout>

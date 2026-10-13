@@ -1,0 +1,16 @@
+package org.jellyfin.mobile.music.domain
+
+data class Track(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val albumId: String,
+    val albumTitle: String,
+    val durationMs: Long,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+    val coverUrl: String? = null,
+    val isFavorite: Boolean = false,
+    /** The server's measured adjustment to a common loudness, in dB; null if not measured. */
+    val normalizationGainDb: Float? = null,
+)

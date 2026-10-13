@@ -1,0 +1,134 @@
+package org.jellyfin.mobile.player
+
+import androidx.media3.common.C
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import org.jellyfin.mobile.player.source.ExternalSubtitleStream
+import org.jellyfin.mobile.player.source.JellyfinMediaSource
+import org.jellyfin.mobile.utils.clearSelectionAndDisableRendererByType
+import org.jellyfin.mobile.utils.selectTrackByTypeAndGroup
+import org.jellyfin.sdk.model.api.MediaStream
+import org.jellyfin.sdk.model.api.MediaStreamType
+import org.jellyfin.sdk.model.api.PlayMethod
+import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
+
+class TrackSelectionHelper(
+    private val viewModel: PlayerHost,
+    private val trackSelector: DefaultTrackSelector,
+) {
+    private val mediaSourceOrNull: JellyfinMediaSource?
+        get() = viewModel.mediaSourceOrNull
+
+    fun selectInitialTracks() {
+        val mediaSource = mediaSourceOrNull ?: return
+
+        mediaSource.selectedAudioStream?.let { stream ->
+            selectPlayerAudioTrack(mediaSource, stream, initial = true)
+        }
+        selectSubtitleTrack(mediaSource, mediaSource.selectedSubtitleStream, initial = true)
+    }
+
+    /**
+     * Select an audio track in the media source and apply changes to the current player, if necessary and possible.
+     *
+     * @param mediaStreamIndex the [MediaStream.index] that should be selected
+     * @return true if the audio track was changed
+     */
+    suspend fun selectAudioTrack(mediaStreamIndex: Int): Boolean {
+        val mediaSource = mediaSourceOrNull ?: return false
+        val selectedMediaStream = mediaSource.mediaStreams[mediaStreamIndex]
+        require(selectedMediaStream.type == MediaStreamType.AUDIO)
+
+        // For transcoding and external streams, we need to restart playback
+        if (mediaSource.playMethod == PlayMethod.TRANSCODE || selectedMediaStream.isExternal) {
+            return viewModel.queueManager.selectAudioStreamAndRestartPlayback(selectedMediaStream)
+        }
+
+        return selectPlayerAudioTrack(mediaSource, selectedMediaStream, initial = false).also { success ->
+            if (success) viewModel.logTracks()
+        }
+    }
+
+    /**
+     * Select the audio track in the player.
+     *
+     * @param initial whether this is an initial selection and checks for re-selection should be skipped.
+     * @see selectPlayerAudioTrack
+     */
+    @Suppress("ReturnCount")
+    private fun selectPlayerAudioTrack(
+        mediaSource: JellyfinMediaSource,
+        audioStream: MediaStream,
+        initial: Boolean,
+    ): Boolean {
+        if (mediaSource.playMethod == PlayMethod.TRANSCODE) {
+            // Transcoding does not require explicit audio selection
+            return true
+        }
+
+        when {
+            // Fast-pass: Skip execution on subsequent calls with the correct selection or if only one track exists
+            mediaSource.audioStreams.size == 1 || !initial && audioStream === mediaSource.selectedAudioStream -> return true
+            // Apply selection in media source, abort on failure
+            !mediaSource.selectAudioStream(audioStream) -> return false
+        }
+
+        val player = viewModel.playerOrNull ?: return false
+        val embeddedStreamIndex = mediaSource.getEmbeddedStreamIndex(audioStream)
+        val sortedTrackGroups = player.currentTracks.groups.sortedBy { group ->
+            val formatId = group.mediaTrackGroup.getFormat(0).id
+
+            // Sort by format ID, but pad number string with zeroes to ensure proper sorting
+            formatId?.toIntOrNull()?.let { id -> "%05d".format(id) } ?: formatId
+        }
+        val audioGroup = sortedTrackGroups.getOrNull(embeddedStreamIndex) ?: return false
+
+        return trackSelector.selectTrackByTypeAndGroup(C.TRACK_TYPE_AUDIO, audioGroup.mediaTrackGroup)
+    }
+
+    @Suppress("ReturnCount")
+    private fun selectSubtitleTrack(
+        mediaSource: JellyfinMediaSource,
+        subtitleStream: MediaStream?,
+        initial: Boolean,
+    ): Boolean {
+        when {
+            // Fast-pass: Skip execution on subsequent calls with the same selection
+            !initial && subtitleStream === mediaSource.selectedSubtitleStream -> return true
+            // Apply selection in media source, abort on failure
+            !mediaSource.selectSubtitleStream(subtitleStream) -> return false
+        }
+
+        // Apply selection in player
+        if (subtitleStream == null) {
+            // If no subtitle is selected, simply clear the selection and disable the subtitle renderer
+            trackSelector.clearSelectionAndDisableRendererByType(C.TRACK_TYPE_TEXT)
+            return true
+        }
+
+        val player = viewModel.playerOrNull ?: return false
+        when (subtitleStream.deliveryMethod) {
+            SubtitleDeliveryMethod.ENCODE -> {
+                // Normally handled in selectSubtitleTrack(int) by restarting playback,
+                // initial selection is always considered successful
+                return true
+            }
+            SubtitleDeliveryMethod.EMBED -> {
+                // For embedded subtitles, we can match by the index of this stream in all embedded streams.
+                val embeddedStreamIndex = mediaSource.getEmbeddedStreamIndex(subtitleStream)
+                val subtitleGroup = player.currentTracks.groups.getOrNull(embeddedStreamIndex) ?: return false
+
+                return trackSelector.selectTrackByTypeAndGroup(C.TRACK_TYPE_TEXT, subtitleGroup.mediaTrackGroup)
+            }
+            SubtitleDeliveryMethod.EXTERNAL -> {
+                // For external subtitles, we can simply match the ID that we set when creating the player media source.
+                for (group in player.currentTracks.groups) {
+                    if (group.getTrackFormat(0).id == "${ExternalSubtitleStream.ID_PREFIX}${subtitleStream.index}") {
+                        return trackSelector.selectTrackByTypeAndGroup(C.TRACK_TYPE_TEXT, group.mediaTrackGroup)
+                    }
+                }
+                return false
+            }
+            else -> return false
+        }
+    }
+}

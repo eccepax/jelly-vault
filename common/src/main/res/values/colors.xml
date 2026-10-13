@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand and base colors -->
+    <color name="jellyfin_primary">#202020</color>
+    <color name="jellyfin_primary_dark">#101010</color>
+    <!-- Secondary -->
+    <color name="jellyfin_accent">#00a4dc</color>
+
+    <!-- App colors -->
+    <color name="theme_background">#101010</color>
+</resources>

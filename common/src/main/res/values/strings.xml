@@ -1,0 +1,27 @@
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- Connect screen -->
+    <string name="connect_to_server_title">Connect to Server</string>
+    <string name="host_input_hint">Host</string>
+    <string name="connection_error_cannot_connect">Connection cannot be established.\nPlease check the hostname and your network connection.</string>
+    <plurals name="connection_error_prefix">
+        <item quantity="one">Tried %d candidate for input, without success.</item>
+        <item quantity="other">Tried %d candidates for input, without success.</item>
+    </plurals>
+    <string name="connection_error_unable_to_reach_sever">Unable to reach server</string>
+    <string name="connection_error_unsupported_version_or_product">Unsupported version or product</string>
+    <string name="connect_button_text">Connect</string>
+    <string name="choose_server_button_text">Choose server</string>
+    <string name="available_servers_title">Available servers</string>
+
+    <!-- Login screen -->
+    <string name="login_title">Sign in</string>
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_button">Sign in</string>
+    <string name="login_change_server">Change server</string>
+    <string name="login_error_missing_username">Please enter a username</string>
+    <string name="login_error_missing_server">No server selected</string>
+    <string name="login_error_invalid_response">Login failed (invalid server response)</string>
+    <string name="login_error_failed">Login failed</string>
+    <string name="login_error_timeout">Connection timed out — check your server address and try again</string>
+</resources>

@@ -1,0 +1,48 @@
+name: Bug report
+description: Something isn't working
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - AudioVault
+        - BookVault
+        - TuneVault
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Settings → About, or the release you installed.
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: Jellyfin server version
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: Pixel 8, Android 15
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Optional. Remove server addresses, usernames, and tokens before pasting.
+      render: shell

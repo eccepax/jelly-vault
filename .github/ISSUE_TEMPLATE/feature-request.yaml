@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      multiple: true
+      options:
+        - AudioVault
+        - BookVault
+        - TuneVault
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
