@@ -24,8 +24,6 @@ import androidx.media3.extractor.ts.TsExtractor
 import coil3.ImageLoader
 import kotlinx.coroutines.channels.Channel
 import okhttp3.OkHttpClient
-import org.jellyfin.mobile.common.account.SignOut
-import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.events.ActivityEventHandler
@@ -67,7 +65,6 @@ val applicationModule = module {
     single { ActivityEventHandler() }
 
     // ViewModels
-    single { SignOut(get(), get<ApiClientController>()::logoutUser) }
     viewModel { DownloadsViewModel() }
     viewModel { LibraryViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { AudiobookPlayerViewModel(get()) }

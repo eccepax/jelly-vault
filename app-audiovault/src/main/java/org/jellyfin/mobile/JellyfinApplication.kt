@@ -3,6 +3,7 @@ package org.jellyfin.mobile
 import android.app.Application
 import org.jellyfin.mobile.app.applicationModule
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.app.plainSignOutModule
 import org.jellyfin.mobile.data.databaseModule
 import org.jellyfin.mobile.utils.JellyTree
 import org.jellyfin.sdk.model.ClientInfo
@@ -27,6 +28,7 @@ class JellyfinApplication : Application() {
                 applicationModule,
                 apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME)),
                 databaseModule,
+                plainSignOutModule,
             )
         }
     }
