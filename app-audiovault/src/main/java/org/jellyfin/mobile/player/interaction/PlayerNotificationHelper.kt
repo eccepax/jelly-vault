@@ -44,6 +44,7 @@ import org.koin.core.component.get
 import org.koin.core.component.inject
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 import kotlin.time.Duration
 
 private const val MINUTES_PER_HOUR = 60L
@@ -100,8 +101,11 @@ class PlayerNotificationHelper(private val viewModel: PlayerHost) : KoinComponen
                 setStyle(style)
                 setSmallIcon(R.drawable.ic_notification)
                 if (!AndroidVersion.isAtLeastQ) {
+                    // The notification travels to AudioPlaybackService in an Intent: a full-size
+                    // cover overflows Binder's 1 MB limit and the service never goes foreground
+                    val iconPx = context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_height)
                     val mediaIcon: Bitmap? = withContext(Dispatchers.IO) {
-                        loadImage(currentMediaSource)
+                        loadImage(currentMediaSource)?.scaledToFit(iconPx)
                     }
                     if (mediaIcon != null) {
                         setLargeIcon(mediaIcon)
@@ -224,4 +228,11 @@ class PlayerNotificationHelper(private val viewModel: PlayerHost) : KoinComponen
             else -> "<1m"
         }
     }
+}
+
+/** This bitmap shrunk to fit within [maxPx] on both sides, keeping its aspect ratio; itself if it already fits. */
+internal fun Bitmap.scaledToFit(maxPx: Int): Bitmap {
+    if (width <= maxPx && height <= maxPx) return this
+    val scale = maxPx.toFloat() / maxOf(width, height)
+    return Bitmap.createScaledBitmap(this, (width * scale).roundToInt(), (height * scale).roundToInt(), true)
 }
