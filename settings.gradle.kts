@@ -4,6 +4,7 @@ include(":app-audiovault")
 include(":app-bookvault")
 include(":app-tunevault")
 include(":test-support")
+include(":app-livevault")
 
 pluginManagement {
     repositories {
