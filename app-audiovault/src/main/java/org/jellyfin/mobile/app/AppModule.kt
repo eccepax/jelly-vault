@@ -77,7 +77,7 @@ val applicationModule = module {
 
     // Media player helpers
     single { MediaSourceResolver(get()) }
-    single { DeviceProfileBuilder() }
+    single { DeviceProfileBuilder(Constants.APP_INFO_NAME, includeVideo = false) }
     single { MediaSegmentRepository() }
 
     // ExoPlayer factories

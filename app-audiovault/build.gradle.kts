@@ -103,6 +103,7 @@ dependencies {
 
     // Common module
     implementation(project(":common"))
+    implementation(project(":common-media"))
 
     // Room
     implementation(libs.bundles.androidx.room)
