@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -22,6 +23,9 @@ import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.databinding.FragmentLoginBinding
+import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
+import org.jellyfin.mobile.common.setup.quickconnect.QuickConnectState
+import org.jellyfin.mobile.common.setup.quickconnect.quickConnectSignIn
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.extensions.authenticateUserByName
@@ -37,6 +41,8 @@ class LoginFragment : Fragment() {
     private val apiClient: ApiClient by inject()
     private val apiClientController: ApiClientController by inject()
     private val appPreferences: AppPreferences by inject()
+    private val quickConnect: QuickConnect by inject()
+    private var quickConnectJob: Job? = null
 
     private var _binding: FragmentLoginBinding? = null
     private val binding get() = _binding!!
@@ -69,12 +75,17 @@ class LoginFragment : Fragment() {
         binding.buttonLogin.setOnClickListener {
             doLogin()
         }
+
+        binding.buttonQuickConnect.setOnClickListener {
+            startQuickConnect()
+        }
     }
 
     private fun setLoading(loading: Boolean) {
         binding.progressBar.isVisible = loading
         binding.buttonLogin.isEnabled = !loading
         binding.buttonChangeServer.isEnabled = !loading
+        binding.buttonQuickConnect.isEnabled = !loading
         binding.editUsername.isEnabled = !loading
         binding.editPassword.isEnabled = !loading
     }
@@ -143,6 +154,39 @@ class LoginFragment : Fragment() {
                 // Leaving the screen cancels the login after the view is gone; there's nothing left to update
                 if (_binding != null) setLoading(false)
             }
+        }
+    }
+
+    /** Shows a code to approve from a signed-in device, then signs in once it's approved. */
+    private fun startQuickConnect() {
+        val serverId = appPreferences.currentServerId
+        if (serverId == null) {
+            setError(getString(R.string.login_error_missing_server))
+            return
+        }
+        setError(null)
+        quickConnectJob?.cancel()
+        quickConnectJob = viewLifecycleOwner.lifecycleScope.launch {
+            quickConnectSignIn(quickConnect).collect { state -> showQuickConnect(state, serverId) }
+        }
+    }
+
+    private suspend fun showQuickConnect(state: QuickConnectState, serverId: Long) {
+        val waiting = state is QuickConnectState.WaitingForApproval
+        binding.textQuickConnectCode.isVisible = waiting
+        binding.textQuickConnectHint.isVisible = waiting
+        when (state) {
+            is QuickConnectState.WaitingForApproval -> binding.textQuickConnectCode.text = state.code
+            is QuickConnectState.SignedIn -> {
+                withContext(Dispatchers.IO) {
+                    apiClientController.setupUser(serverId, state.user.userId, state.user.accessToken)
+                }
+                Timber.i("Quick Connect sign-in for userId=${state.user.userId}")
+                mainViewModel.refreshState()
+            }
+            QuickConnectState.Unavailable -> setError(getString(R.string.login_quick_connect_unavailable))
+            QuickConnectState.Expired -> setError(getString(R.string.login_quick_connect_expired))
+            QuickConnectState.Failed -> setError(getString(R.string.login_quick_connect_failed))
         }
     }
 

@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.testing.endtoend
 
 import android.view.View
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -14,7 +15,14 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
+import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matcher
+import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.api.client.extensions.authenticateUserByName
+import org.jellyfin.sdk.api.client.extensions.quickConnectApi
+import org.jellyfin.sdk.api.client.extensions.sessionApi
+import org.jellyfin.sdk.api.client.extensions.userApi
+import org.jellyfin.sdk.model.DeviceInfo
 import org.junit.Assume.assumeFalse
 import org.junit.Before
 import org.junit.Rule
@@ -27,6 +35,8 @@ const val WAIT_TIMEOUT_MS = 15_000L
  * take well over [WAIT_TIMEOUT_MS] on an emulator, which made each suite's first test flaky.
  */
 const val FIRST_SCREEN_TIMEOUT_MS = 45_000L
+
+private const val QUICK_CONNECT_CODE_LENGTH = 6
 
 /**
  * Base for e2e tests that sign in to the Vault through common's screens: the Compose connect screen,
@@ -65,6 +75,39 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
         onView(withId(CommonR.id.editUsername)).perform(replaceText(e2eUsername()))
         onView(withId(CommonR.id.editPassword)).perform(replaceText(e2ePassword()))
         onView(withId(CommonR.id.buttonLogin)).perform(click())
+    }
+
+    /** Opens Quick Connect on the sign-in screen and returns the code it shows. */
+    protected fun startQuickConnect(): String {
+        waitForView(CommonR.id.buttonQuickConnect)
+        onView(withId(CommonR.id.buttonQuickConnect)).perform(click())
+        waitForView(CommonR.id.textQuickConnectCode)
+        var code = ""
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) {
+            onView(withId(CommonR.id.textQuickConnectCode)).check { view, _ ->
+                code = (view as TextView).text.toString().filter(Char::isDigit)
+            }
+            code.length == QUICK_CONNECT_CODE_LENGTH
+        }
+        return code
+    }
+
+    /**
+     * Approves [code] as the e2e user, from a separate signed-in device, the way someone would from
+     * their phone or the web client's profile page.
+     */
+    protected fun approveQuickConnect(code: String) = runBlocking {
+        val approver = koinGet<Jellyfin>().createApi(
+            baseUrl = e2eHostname(),
+            deviceInfo = DeviceInfo("vault-e2e-quickconnect-approver", "e2e"),
+        )
+        val auth = approver.userApi.authenticateUserByName(e2eUsername(), e2ePassword()).content
+        approver.update(accessToken = auth.accessToken)
+        try {
+            approver.quickConnectApi.authorizeQuickConnect(code)
+        } finally {
+            approver.sessionApi.reportSessionEnded()
+        }
     }
 
     protected fun waitForComposeText(text: String, timeoutMillis: Long = WAIT_TIMEOUT_MS) {

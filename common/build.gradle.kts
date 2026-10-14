@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.timber)
 
     // Testing
+    testImplementation(project(":common-testing"))
     testImplementation(libs.junit.api)
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)

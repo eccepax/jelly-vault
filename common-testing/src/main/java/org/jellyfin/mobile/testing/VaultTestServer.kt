@@ -31,7 +31,14 @@ object VaultTestServer {
      * A client signed in as its own device. The server keys sessions by device, so a test that ends
      * a session must use its own [deviceId], never [apiClient]'s, or it signs every other test out.
      */
-    fun newSignedInClient(deviceId: String = "vault-contract-tests"): ApiClient {
+    fun newSignedInClient(deviceId: String = "vault-contract-tests"): ApiClient =
+        newSignedOutClient(deviceId).apply {
+            val auth = runBlocking { userApi.authenticateUserByName(username, password).content }
+            update(accessToken = auth.accessToken)
+        }
+
+    /** A client that hasn't signed in, as a fresh install would be (for sign-in flows). */
+    fun newSignedOutClient(deviceId: String): ApiClient {
         val factory = OkHttpFactory()
         return factory.create(
             baseUrl = hostname,
@@ -40,10 +47,7 @@ object VaultTestServer {
             deviceInfo = DeviceInfo(deviceId, "JVM"),
             httpClientOptions = HttpClientOptions(),
             socketConnectionFactory = factory,
-        ).apply {
-            val auth = runBlocking { userApi.authenticateUserByName(username, password).content }
-            update(accessToken = auth.accessToken)
-        }
+        )
     }
 
     /**
