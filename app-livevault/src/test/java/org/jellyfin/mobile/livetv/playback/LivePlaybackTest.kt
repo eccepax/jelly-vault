@@ -268,6 +268,23 @@ class LivePlaybackTest {
     }
 
     @Test
+    fun `coming back to a channel that had failed tries it again`() = runTest {
+        val playback = playback()
+        streams.failing += "a"
+        playback.play("a", lineup)
+        settle()
+        playback.state.value shouldBe PlaybackState.Failed("a")
+        streams.failing -= "a"
+
+        playback.pause()
+        playback.resume()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        assertOnlyOpen("ls-a-1")
+    }
+
+    @Test
     fun `coming back after stopping plays nothing`() = runTest {
         val playback = playback()
         playback.play("a", lineup)

@@ -81,12 +81,16 @@ class LivePlayback(
         request(null, debounce = false)
     }
 
-    /** The app went to the background: frees the connection, remembering the channel for [resume]. */
+    /**
+     * The app went to the background: frees the connection, remembering the channel for [resume].
+     * A channel that had failed is tried again on the way back.
+     */
     fun pause() {
         resumeChannel = when (val state = state.value) {
             is PlaybackState.Playing -> state.channelId
             is PlaybackState.Tuning -> state.channelId
-            else -> null
+            is PlaybackState.Failed -> state.channelId
+            PlaybackState.Idle -> null
         }
         if (resumeChannel != null) stop()
     }
