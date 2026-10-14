@@ -91,6 +91,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import org.jellyfin.mobile.common.R as CommonR
 
 private const val SLEEP_TIMER_TICK_INTERVAL_MS = 1000L
 private const val SLEEP_TIMER_NOTIFICATION_UPDATE_INTERVAL_TICKS = 60
@@ -397,7 +398,7 @@ class AudiobookPlayerViewModel(application: Application) :
             ?: emptyList()
 
         startPositions.zip(chapterMarkings).forEach { (pos, marking) ->
-            val color = if (playbackPosition >= pos) R.color.jellyfin_accent else R.color.playback_timebar_unplayed
+            val color = if (playbackPosition >= pos) CommonR.color.jellyfin_accent else R.color.playback_timebar_unplayed
             marking.setColor(color)
         }
     }

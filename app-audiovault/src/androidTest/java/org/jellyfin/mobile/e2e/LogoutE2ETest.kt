@@ -16,6 +16,7 @@ import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.R as CommonR
 import org.junit.Test
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Library toolbar overflow -> Settings (`ModernAndroidPreferences`-based, a RecyclerView of rows

@@ -37,6 +37,7 @@ import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Fragment for browsing and playing audiobooks/audio content from Jellyfin server
@@ -56,7 +57,7 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
         container: ViewGroup?,
         savedInstanceState: Bundle?,
     ): View {
-        val localInflater = inflater.withThemedContext(requireContext(), R.style.AppTheme_Settings)
+        val localInflater = inflater.withThemedContext(requireContext(), CommonR.style.AppTheme_Settings)
         _binding = FragmentLibraryBinding.inflate(localInflater, container, false)
         binding.root.applyWindowInsetsAsMargins()
 

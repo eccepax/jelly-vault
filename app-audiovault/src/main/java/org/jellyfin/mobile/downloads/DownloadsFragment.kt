@@ -21,6 +21,7 @@ import org.jellyfin.mobile.utils.withThemedContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.jellyfin.mobile.common.R as CommonR
 
 class DownloadsFragment : Fragment() {
     private val viewModel: DownloadsViewModel by viewModel()
@@ -29,7 +30,7 @@ class DownloadsFragment : Fragment() {
     private lateinit var adapter: DownloadsAdapter
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        val localInflater = inflater.withThemedContext(requireContext(), R.style.AppTheme_Settings)
+        val localInflater = inflater.withThemedContext(requireContext(), CommonR.style.AppTheme_Settings)
         val binding = FragmentDownloadsBinding.inflate(localInflater, container, false)
         binding.root.applyWindowInsetsAsMargins()
         binding.toolbar.setTitle(R.string.downloads)
