@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.livetv.channels
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,9 +56,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -76,11 +80,13 @@ import java.time.Instant
 /**
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
  * on tablets and TVs; cards and chips are focusable, so a TV remote's D-pad moves through them.
+ * [onTv], the remote starts on the channel to continue (else the first one) rather than on search.
  */
 @Composable
 fun ChannelsScreen(
     state: ChannelsUiState,
     now: Instant,
+    onTv: Boolean = false,
     onQueryChange: (String) -> Unit,
     onTagSelect: (String?) -> Unit,
     onFavoritesSelect: () -> Unit,
@@ -89,6 +95,11 @@ fun ChannelsScreen(
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
 ) {
+    val startFocus = remember { FocusRequester() }
+    val loaded = state is ChannelsUiState.Loaded && state.channels.isNotEmpty()
+    LaunchedEffect(onTv, loaded) {
+        if (onTv && loaded) startFocus.requestFocus()
+    }
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
             Header(
@@ -108,7 +119,7 @@ fun ChannelsScreen(
                 }
                 is ChannelsUiState.Loaded -> {
                     state.lastChannel?.let { channel ->
-                        ContinueWatching(channel, now, onFavoriteToggle, onChannelClick)
+                        ContinueWatching(channel, now, onFavoriteToggle, onChannelClick, startFocus)
                     }
                     FilterChips(
                         tags = state.tags,
@@ -119,7 +130,13 @@ fun ChannelsScreen(
                     if (state.channels.isEmpty()) {
                         Centered { Text(emptyMessage(state.filter), textAlign = TextAlign.Center) }
                     } else {
-                        ChannelGrid(state.channels, now, onFavoriteToggle, onChannelClick)
+                        ChannelGrid(
+                            channels = state.channels,
+                            now = now,
+                            onFavoriteToggle = onFavoriteToggle,
+                            onChannelClick = onChannelClick,
+                            firstFocus = startFocus.takeIf { state.lastChannel == null },
+                        )
                     }
                 }
             }
@@ -252,6 +269,8 @@ private fun ChannelGrid(
     now: Instant,
     onFavoriteToggle: (LiveChannel) -> Unit,
     onChannelClick: (LiveChannel) -> Unit,
+    /** Given to the first card, when it's where the remote starts. */
+    firstFocus: FocusRequester?,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = CARD_MIN_WIDTH),
@@ -265,6 +284,7 @@ private fun ChannelGrid(
                 now = now,
                 onClick = { onChannelClick(channel) },
                 onFavoriteToggle = { onFavoriteToggle(channel) },
+                focus = firstFocus.takeIf { channel == channels.first() },
             )
         }
     }
@@ -276,6 +296,7 @@ private fun ContinueWatching(
     now: Instant,
     onFavoriteToggle: (LiveChannel) -> Unit,
     onChannelClick: (LiveChannel) -> Unit,
+    focus: FocusRequester,
 ) {
     Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
         Text(
@@ -289,6 +310,7 @@ private fun ContinueWatching(
             onClick = { onChannelClick(channel) },
             onFavoriteToggle = { onFavoriteToggle(channel) },
             tag = ChannelsScreenTags.CONTINUE,
+            focus = focus,
         )
     }
 }
@@ -300,6 +322,7 @@ private fun ChannelCard(
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     tag: String = ChannelsScreenTags.channel(channel.id),
+    focus: FocusRequester? = null,
 ) {
     val interactions = remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
@@ -311,6 +334,7 @@ private fun ChannelCard(
             .clip(CardShape)
             .background(MaterialTheme.colors.surface)
             .focusBorder(focused, CardShape)
+            .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
             .clickable(interactionSource = interactions, indication = null, onClick = onClick)
             .padding(10.dp),
     ) {
@@ -459,9 +483,12 @@ fun ChannelsRoute(
         viewModel.refresh()
         onPauseOrDispose {}
     }
+    val onTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK ==
+        Configuration.UI_MODE_TYPE_TELEVISION
     ChannelsScreen(
         state = state,
         now = now,
+        onTv = onTv,
         onQueryChange = viewModel::onQueryChange,
         onTagSelect = viewModel::selectTag,
         onFavoritesSelect = viewModel::showFavorites,

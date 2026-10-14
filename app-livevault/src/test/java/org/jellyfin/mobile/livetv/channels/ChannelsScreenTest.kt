@@ -1,7 +1,17 @@
 package org.jellyfin.mobile.livetv.channels
 
 import android.app.Application
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
@@ -49,19 +60,33 @@ class ChannelsScreenTest {
         filter: ChannelFilter = ChannelFilter(),
     ) = ChannelsUiState.Loaded(channels = channels, tags = listOf("Free", "My Teams", "Sports"), filter = filter)
 
-    private fun show(state: ChannelsUiState) {
+    private fun show(state: ChannelsUiState, onTv: Boolean = false) {
         composeRule.setContent {
-            ChannelsScreen(
-                state = state,
-                now = now,
-                onQueryChange = { query = it },
-                onTagSelect = { tagSelected = it },
-                onFavoritesSelect = { favoritesSelected = true },
-                onFavoriteToggle = { favoriteToggled = it },
-                onChannelClick = { clicked = it },
-                onSignOut = { signedOut = true },
-                onRetry = { retried = true },
-            )
+            // A TV has no touch screen: the remote's D-pad keeps it in keyboard input mode, which
+            // it's already in when the screen appears.
+            val inputMode = LocalInputModeManager.current
+            var ready by remember { mutableStateOf(!onTv) }
+            if (onTv) {
+                LaunchedEffect(Unit) {
+                    inputMode.requestInputMode(InputMode.Keyboard)
+                    snapshotFlow { inputMode.inputMode }.first { it == InputMode.Keyboard }
+                    ready = true
+                }
+            }
+            if (ready) {
+                ChannelsScreen(
+                    state = state,
+                    now = now,
+                    onTv = onTv,
+                    onQueryChange = { query = it },
+                    onTagSelect = { tagSelected = it },
+                    onFavoritesSelect = { favoritesSelected = true },
+                    onFavoriteToggle = { favoriteToggled = it },
+                    onChannelClick = { clicked = it },
+                    onSignOut = { signedOut = true },
+                    onRetry = { retried = true },
+                )
+            }
         }
     }
 
@@ -255,5 +280,27 @@ class ChannelsScreenTest {
         show(loaded())
 
         composeRule.onNodeWithText("Continue watching").assertDoesNotExist()
+    }
+
+    @Test
+    fun `on a TV the remote starts on the channel to continue`() {
+        show(loaded().copy(lastChannel = espn), onTv = true)
+
+        composeRule.onNodeWithTag(ChannelsScreenTags.CONTINUE).assertIsFocused()
+    }
+
+    @Test
+    fun `on a TV with nothing to continue the remote starts on the first channel`() {
+        show(loaded(), onTv = true)
+
+        composeRule.onNodeWithTag(ChannelsScreenTags.channel(bulls.id)).assertIsFocused()
+    }
+
+    @Test
+    fun `on a phone nothing is focused`() {
+        show(loaded().copy(lastChannel = espn))
+
+        composeRule.onNodeWithTag(ChannelsScreenTags.CONTINUE).assertIsNotFocused()
+        composeRule.onNodeWithTag(ChannelsScreenTags.channel(bulls.id)).assertIsNotFocused()
     }
 }
