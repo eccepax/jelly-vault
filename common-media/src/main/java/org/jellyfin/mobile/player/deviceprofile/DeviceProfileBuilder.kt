@@ -128,9 +128,12 @@ class DeviceProfileBuilder(
         /**
          * Container formats ExoPlayer plays. IMPORTANT: [AVAILABLE_VIDEO_CODECS] and
          * [AVAILABLE_AUDIO_CODECS] map codecs to the container at the same index.
+         *
+         * Jellyfin names MP4 audio by file extension, so "m4a" and "m4b" (audiobooks) must be listed
+         * alongside "mp4" or they get transcoded to an unseekable stream.
          */
         val SUPPORTED_CONTAINER_FORMATS = listOf(
-            "mp4", "fmp4", "webm", "mkv", "mp3", "ogg", "wav", "mpegts", "flv", "aac", "flac", "3gp",
+            "mp4,m4a,m4b", "fmp4", "webm", "mkv", "mp3", "ogg", "wav", "mpegts", "flv", "aac", "flac", "3gp",
         )
 
         val AVAILABLE_VIDEO_CODECS = listOf(

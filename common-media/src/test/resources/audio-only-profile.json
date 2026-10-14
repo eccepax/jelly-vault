@@ -5,7 +5,7 @@
     "MusicStreamingTranscodingBitrate": 384000,
     "DirectPlayProfiles": [
         {
-            "Container": "mp4",
+            "Container": "mp4,m4a,m4b",
             "AudioCodec": "aac,alac,ac3",
             "Type": "Audio"
         },
@@ -59,7 +59,7 @@
         {
             "Type": "Audio",
             "Conditions": [],
-            "Container": "mp4"
+            "Container": "mp4,m4a,m4b"
         },
         {
             "Type": "Audio",
