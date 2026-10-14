@@ -1,40 +1,15 @@
-import io.gitlab.arturbosch.detekt.Detekt
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    id("vault.android.library")
     alias(libs.plugins.kotlin.ksp)
-    alias(libs.plugins.kotlin.parcelize)
+    id("org.jetbrains.kotlin.plugin.parcelize")
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.androidx.room)
-    alias(libs.plugins.detekt)
     alias(libs.plugins.roborazzi)
-    alias(libs.plugins.android.junit5)
-}
-
-detekt {
-    buildUponDefaultConfig = true
-    allRules = false
-    config.setFrom("${rootProject.projectDir}/detekt.yml")
-    autoCorrect = true
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_11
-        optIn.add("kotlin.RequiresOptIn")
-    }
 }
 
 android {
     namespace = "org.jellyfin.mobile.common"
-    compileSdk = 36
-
-    defaultConfig {
-        minSdk = 26
-    }
 
     testOptions {
         unitTests {
@@ -48,8 +23,6 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
         isCoreLibraryDesugaringEnabled = true
     }
 
@@ -118,30 +91,6 @@ dependencies {
     // into the debug variant, which is what unit tests actually run against.
     debugImplementation(libs.androidx.fragment.testing.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
-
-    // Formatting rules for detekt
-    detektPlugins(libs.detekt.formatting)
-}
-
-tasks {
-    withType<Detekt> {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-
-        reports {
-            html.required.set(true)
-            xml.required.set(false)
-            txt.required.set(true)
-            sarif.required.set(true)
-        }
-    }
-
-    withType<Test> {
-        useJUnitPlatform()
-        testLogging {
-            outputs.upToDateWhen { false }
-            showStandardStreams = true
-        }
-    }
 }
 
 androidComponents {

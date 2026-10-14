@@ -68,16 +68,12 @@ robolectric = "4.16"
 roborazzi = "1.76.0"
 
 [plugins]
-android-app = { id = "com.android.application", version.ref = "android-plugin" }
-android-library = { id = "com.android.library", version.ref = "android-plugin" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+# android, kotlin-android, parcelize, detekt and android-junit5 are on buildSrc's classpath:
+# apply them through the vault.* convention plugins (or by id, without a version).
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "kotlin-ksp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 androidx-room = { id = "androidx.room", version.ref = "androidx-room" }
-android-junit5 = { id = "de.mannodermaus.android-junit5", version.ref = "android-junit5" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 
 [libraries]
@@ -91,6 +87,10 @@ kotlin-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-s
 koin = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin-compose" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-plugin" }
+# Gradle plugins on buildSrc's classpath, for the vault.* convention plugins
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
+android-junit5-gradle-plugin = { module = "de.mannodermaus.gradle.plugins:android-junit5", version.ref = "android-junit5" }
 androidx-core = { group = "androidx.core", name = "core", version.ref = "androidx-core" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidx-appcompat" }

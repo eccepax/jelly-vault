@@ -2,8 +2,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // Shared test helpers for the app modules' JVM (Robolectric) tests. Only ever a testImplementation dependency.
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
 }
 
 kotlin {
