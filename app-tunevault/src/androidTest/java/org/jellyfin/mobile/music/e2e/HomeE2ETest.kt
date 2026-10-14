@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.common.server.toServerDateTime
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.home.HomeScreenTags
 import org.jellyfin.mobile.music.playback.PlaybackController
@@ -21,8 +22,7 @@ import org.jellyfin.sdk.model.serializer.toUUID
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.Instant
 import java.util.UUID
 
 /** Home against the real Vault. One test writes a track's play state and restores it. */
@@ -63,7 +63,7 @@ class HomeE2ETest : LoggedInE2ETest() {
         val id = londonMay.id.toUUID()
         markedTrack = id
         original = runBlocking { apiClient.itemsApi.getItems(ids = listOf(id)).content.items.single().userData }
-        runBlocking { apiClient.playStateApi.markPlayedItem(id, datePlayed = LocalDateTime.now(ZoneOffset.UTC)) }
+        runBlocking { apiClient.playStateApi.markPlayedItem(id, datePlayed = Instant.now().toServerDateTime()) }
 
         // Home refreshes whenever it's shown: leave and come back.
         composeRule.onNodeWithText("Library").performClick()

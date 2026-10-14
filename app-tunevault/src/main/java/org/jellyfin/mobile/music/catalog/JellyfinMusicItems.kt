@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.music.catalog
 
+import org.jellyfin.mobile.common.server.toServerInstant
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.sdk.api.client.ApiClient
@@ -9,7 +10,6 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.CollectionType
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
-import java.time.ZoneOffset
 import java.util.UUID
 
 private const val TICKS_PER_MS = 10_000L
@@ -42,8 +42,7 @@ internal class JellyfinMusicItems(private val apiClient: ApiClient) {
         artist = item.albumArtist.orEmpty(),
         year = item.productionYear,
         coverUrl = item.imageTags?.get(ImageType.PRIMARY)?.let { tag -> coverUrl(item.id, tag) },
-        // The server's timestamps are UTC.
-        dateAdded = item.dateCreated?.toInstant(ZoneOffset.UTC),
+        dateAdded = item.dateCreated?.toServerInstant(),
         isFavorite = item.userData?.isFavorite == true,
     )
 

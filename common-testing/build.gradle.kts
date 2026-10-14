@@ -13,6 +13,7 @@ dependencies {
     compileOnly(project(":common"))
     implementation(libs.bundles.coroutines)
     api(libs.jellyfin.sdk)
+    api(libs.kotlin.serialization.json)
 
     // Contract tests (JUnit 5, on the JVM): the apps' unit tests bring it; it can't be dexed into e2e APKs.
     compileOnly(libs.junit.api)

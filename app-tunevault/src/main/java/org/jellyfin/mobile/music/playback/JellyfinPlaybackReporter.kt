@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.playback
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jellyfin.mobile.common.server.toServerDateTime
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.PlayMethod
@@ -13,8 +14,6 @@ import org.jellyfin.sdk.model.api.PlaybackStopInfo
 import org.jellyfin.sdk.model.api.RepeatMode
 import org.jellyfin.sdk.model.serializer.toUUID
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
 
 private const val TICKS_PER_MS = 10_000L
 
@@ -70,7 +69,7 @@ class JellyfinPlaybackReporter(
         withContext(ioDispatcher) {
             apiClient.playStateApi.markPlayedItem(
                 trackId.toUUID(),
-                datePlayed = LocalDateTime.ofInstant(at, ZoneOffset.UTC),
+                datePlayed = at.toServerDateTime(),
             )
         }
     }

@@ -5,6 +5,7 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.common.server.toServerDateTime
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -14,8 +15,7 @@ import org.jellyfin.sdk.model.serializer.toUUID
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.Instant
 
 /** Writes one track's play state (to make it the most recent play) and puts it back afterwards. */
 class JellyfinHomeFeedContractTest {
@@ -44,7 +44,7 @@ class JellyfinHomeFeedContractTest {
 
     @Test
     fun `the most recently played track comes first`() = runBlocking<Unit> {
-        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = LocalDateTime.now(ZoneOffset.UTC))
+        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = Instant.now().toServerDateTime())
 
         val recent = feed.recentlyPlayed(limit = 10)
 
@@ -53,7 +53,7 @@ class JellyfinHomeFeedContractTest {
 
     @Test
     fun `recently played is newest first and capped`() = runBlocking<Unit> {
-        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = LocalDateTime.now(ZoneOffset.UTC))
+        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = Instant.now().toServerDateTime())
 
         val recent = feed.recentlyPlayed(limit = 3)
 
@@ -63,7 +63,7 @@ class JellyfinHomeFeedContractTest {
 
     @Test
     fun `recently played never includes unplayed tracks`() = runBlocking<Unit> {
-        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = LocalDateTime.now(ZoneOffset.UTC))
+        api.playStateApi.markPlayedItem(track.id.toUUID(), datePlayed = Instant.now().toServerDateTime())
 
         val recent = feed.recentlyPlayed(limit = 50)
 
