@@ -65,6 +65,7 @@ org-json = "20240303"
 androidx-test-runner = "1.7.0"
 androidx-test-espresso = "3.7.0"
 robolectric = "4.16"
+roborazzi = "1.76.0"
 
 [plugins]
 android-app = { id = "com.android.application", version.ref = "android-plugin" }
@@ -77,6 +78,7 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 androidx-room = { id = "androidx.room", version.ref = "androidx-room" }
 android-junit5 = { id = "de.mannodermaus.android-junit5", version.ref = "android-junit5" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 
 [libraries]
 # KotlinX
@@ -173,6 +175,7 @@ androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "
 androidx-test-espresso = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-test-espresso" }
 androidx-test-espresso-contrib = { group = "androidx.test.espresso", name = "espresso-contrib", version.ref = "androidx-test-espresso" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 
 # Detekt plugins
 detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }

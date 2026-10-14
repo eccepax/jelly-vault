@@ -11,6 +11,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.androidx.room)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.roborazzi)
     alias(libs.plugins.android.junit5)
 }
 
@@ -183,6 +184,7 @@ dependencies {
     // JUnit5 platform's vintage engine alongside the Jupiter suite.
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(project(":test-support"))
     testImplementation(libs.compose.ui.test.junit4)
     // TestExoPlayer + fake media sources: a real player driving fake media under Robolectric.
     testImplementation(libs.androidx.media3.test.utils)

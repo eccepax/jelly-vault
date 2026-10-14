@@ -72,6 +72,15 @@ Requires Android Studio or the Android command-line tools and a JDK.
 ./gradlew detekt
 ```
 
+### Screenshot tests
+
+Each app's main screens are screenshotted as they look on a phone in dark mode with 3-button navigation, and compared with approved images in `src/test/screenshots/`. GitHub's checks fail if a screen changes:
+
+```bash
+./gradlew verifyRoborazziDebug :app-audiovault:verifyRoborazziLibreDebug   # compare; diffs land in build/outputs/roborazzi/
+./gradlew recordRoborazziDebug :app-audiovault:recordRoborazziLibreDebug   # approve the current look
+```
+
 The end-to-end tests (`scripts/run-e2e-tests.sh`) run against a real Jellyfin server. Point them at yours in `local.properties` (never commit this file):
 
 ```properties

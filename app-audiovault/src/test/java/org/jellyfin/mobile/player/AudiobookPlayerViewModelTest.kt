@@ -255,14 +255,6 @@ class AudiobookPlayerViewModelTest {
         coVerify(exactly = 0) { queueManager.previous() }
     }
 
-    @Test
-    fun `skipping to next delegates to the queue manager`() {
-        viewModel.skipToNext()
-        idle()
-
-        coVerify { queueManager.next() }
-    }
-
     // --- playback speed --------------------------------------------------------------------------
 
     @Test

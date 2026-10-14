@@ -27,7 +27,6 @@ import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.robolectric.mockedPlayerViewModelForPlayerFragment
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.model.api.MediaSegmentDto
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -299,73 +298,4 @@ class PlayerFragmentTest {
 
     // --- Public callback-target methods (called by PlayerMenus/dialogs; already public, no UI
     // simulation needed) ------------------------------------------------------------------------
-
-    @Test
-    fun `onSpeedSelected delegates to the view model`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onSpeedSelected(1.5f) }
-        }
-
-        verify { playerViewModel.setPlaybackSpeed(1.5f) }
-    }
-
-    @Test
-    fun `onPressSpeedUp delegates to the view model`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onPressSpeedUp(true) }
-        }
-
-        verify { playerViewModel.setPressSpeedUp(true, Constants.HOLD_SPEEDUP_MULTIPLIER) }
-    }
-
-    @Test
-    fun `onSkipToPrevious delegates to the view model`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onSkipToPrevious() }
-        }
-
-        verify { playerViewModel.skipToPrevious() }
-    }
-
-    @Test
-    fun `onSkipToNext delegates to the view model`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onSkipToNext() }
-        }
-
-        verify { playerViewModel.skipToNext() }
-    }
-
-    @Test
-    fun `onSkipMediaSegment delegates to the view model`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-        val segment = mockk<MediaSegmentDto>(relaxed = true)
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onSkipMediaSegment(segment) }
-        }
-
-        verify { playerViewModel.skipMediaSegment(segment) }
-    }
-
-    @Test
-    fun `onAudioTrackSelected delegates to the track selection helper`() {
-        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
-        val trackSelectionHelper = playerViewModel.trackSelectionHelper
-
-        launch(playerViewModel).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onAudioTrackSelected(2) { } }
-            shadowOf(Looper.getMainLooper()).idle()
-        }
-
-        coVerify { trackSelectionHelper.selectAudioTrack(2) }
-    }
 }

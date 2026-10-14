@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.androidx.room)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.roborazzi)
     alias(libs.plugins.android.junit5)
 }
 
@@ -110,6 +111,7 @@ dependencies {
     // so its tests run through the JUnit5 platform's vintage engine
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(project(":test-support"))
     testImplementation(libs.androidx.fragment.testing)
     // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
     // into the debug variant, which is what unit tests actually run against.

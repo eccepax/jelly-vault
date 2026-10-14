@@ -26,3 +26,12 @@ jobs:
         uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
       - name: Run test task
         run: ./gradlew test
+      - name: Compare screenshots with the approved ones
+        run: ./gradlew verifyRoborazziDebug :app-audiovault:verifyRoborazziLibreDebug --tests '*ScreenshotTest'
+      - name: Upload screenshot comparisons
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ failure() }}
+        with:
+          name: screenshot-comparisons
+          retention-days: 14
+          path: '*/build/outputs/roborazzi/'
