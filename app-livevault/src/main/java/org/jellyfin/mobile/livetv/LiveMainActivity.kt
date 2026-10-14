@@ -11,7 +11,7 @@ import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
 import org.jellyfin.mobile.common.ui.utils.AppTheme
-import org.jellyfin.mobile.livetv.ui.LiveTvHome
+import org.jellyfin.mobile.livetv.channels.ChannelsRoute
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -29,7 +29,10 @@ class LiveMainActivity : AppCompatActivity() {
 
         setContent {
             AppTheme {
-                VaultRoot(mainViewModel, appPreferences, logoRes = R.drawable.live_logo) { LiveTvHome() }
+                VaultRoot(mainViewModel, appPreferences, logoRes = R.drawable.live_logo) {
+                    // Playing a channel comes in M3.
+                    ChannelsRoute(onChannelClick = {})
+                }
             }
         }
     }

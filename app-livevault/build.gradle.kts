@@ -48,6 +48,8 @@ dependencies {
     // UI
     implementation(libs.google.material)
     implementation(libs.bundles.compose)
+    implementation(libs.bundles.coil)
+    implementation(libs.coil.compose)
 
     // Network
     implementation(libs.jellyfin.sdk)
