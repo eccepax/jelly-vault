@@ -24,6 +24,7 @@
 #   E2E_AVD_NAME         AVD to boot if none is already running (default: A52ish)
 #   E2E_VAULT_CHECK_URL   URL polled to confirm the Vault is up (default: http://localhost:8096/System/Info/Public)
 #   ANDROID_HOME          Android SDK root (falls back to the common Windows default if unset)
+#   ANDROID_SERIAL        Device to test on; required when more than one is connected
 
 set -euo pipefail
 
@@ -75,7 +76,12 @@ if ! curl -s -m 5 -o /dev/null -w '' "$VAULT_CHECK_URL"; then
 fi
 
 log "Checking for a connected device/emulator"
-DEVICE_LINE="$("$ADB" devices | awk 'NR>1 && $2=="device" {print; exit}')"
+# The tests wipe the app's data, so never guess between devices (e.g. an emulator and a personal phone)
+DEVICE_COUNT="$("$ADB" devices | awk 'NR>1 && $2=="device"' | wc -l)"
+if [ "$DEVICE_COUNT" -gt 1 ] && [ -z "${ANDROID_SERIAL:-}" ]; then
+    die "$DEVICE_COUNT devices connected — set ANDROID_SERIAL to the one to test on"
+fi
+DEVICE_LINE="$("$ADB" devices | awk -v s="${ANDROID_SERIAL:-}" 'NR>1 && $2=="device" && (s=="" || $1==s) {print; exit}')"
 if [ -z "$DEVICE_LINE" ]; then
     [ -x "$EMULATOR" ] || die "No device connected and emulator not found at $EMULATOR"
     log "No device connected — booting AVD '$AVD_NAME' (override with E2E_AVD_NAME)"
