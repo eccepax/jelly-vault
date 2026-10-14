@@ -255,16 +255,14 @@ class DownloadUtils(
     }
 
     private fun createDownloadNotificationChannel() {
-        if (AndroidVersion.isAtLeastO) {
-            val notificationChannel = NotificationChannel(
-                Constants.DOWNLOAD_NOTIFICATION_CHANNEL_ID,
-                context.getString(R.string.downloads),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = context.getString(R.string.download_notifications_description)
-            }
-            notificationManager?.createNotificationChannel(notificationChannel)
+        val notificationChannel = NotificationChannel(
+            Constants.DOWNLOAD_NOTIFICATION_CHANNEL_ID,
+            context.getString(R.string.downloads),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(R.string.download_notifications_description)
         }
+        notificationManager?.createNotificationChannel(notificationChannel)
     }
 
     private inner class JellyfinDownloadTracker(val jellyfinMediaSource: JellyfinMediaSource) : DownloadTracker.Listener {

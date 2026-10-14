@@ -45,7 +45,7 @@ android {
 
     defaultConfig {
         applicationId = "com.bookvault"
-        minSdk = 21
+        minSdk = 26
         targetSdk = 36
         versionName = project.getVersionName()
         versionCode = getVersionCode(versionName!!)
@@ -96,7 +96,7 @@ android {
 
     lint {
         lintConfig = file("$rootDir/android-lint.xml")
-        abortOnError = false
+        abortOnError = true
         sarifReport = true
     }
 

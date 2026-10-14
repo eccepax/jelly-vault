@@ -146,16 +146,14 @@ suspend fun MainActivity.removeDownload(download: LocalJellyfinMediaSource, forc
 }
 
 fun Context.createMediaNotificationChannel(notificationManager: NotificationManager) {
-    if (AndroidVersion.isAtLeastO) {
-        val notificationChannel = NotificationChannel(
-            Constants.MEDIA_NOTIFICATION_CHANNEL_ID,
-            getString(R.string.app_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = "Media notifications"
-        }
-        notificationManager.createNotificationChannel(notificationChannel)
+    val notificationChannel = NotificationChannel(
+        Constants.MEDIA_NOTIFICATION_CHANNEL_ID,
+        getString(R.string.app_name),
+        NotificationManager.IMPORTANCE_LOW,
+    ).apply {
+        description = "Media notifications"
     }
+    notificationManager.createNotificationChannel(notificationChannel)
 }
 
 fun Context.getDownloadsPaths(): List<String> = ArrayList<String>().apply {

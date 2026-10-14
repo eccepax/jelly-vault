@@ -11,30 +11,6 @@ import android.os.Build
  */
 object AndroidVersion {
     /**
-     * Checks whether the current Android version is at least Android 6 Marshmallow, API 23.
-     *
-     * @see Build.VERSION_CODES.M
-     */
-    inline val isAtLeastM: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-
-    /**
-     * Checks whether the current Android version is at least Android 7 Nougat, API 24.
-     *
-     * @see Build.VERSION_CODES.N
-     */
-    inline val isAtLeastN: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-
-    /**
-     * Checks whether the current Android version is at least Android 8 Oreo, API 26.
-     *
-     * @see Build.VERSION_CODES.O
-     */
-    inline val isAtLeastO: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-
-    /**
      * Checks whether the current Android version is at least Android 9 Pie, API 28.
      *
      * @see Build.VERSION_CODES.P

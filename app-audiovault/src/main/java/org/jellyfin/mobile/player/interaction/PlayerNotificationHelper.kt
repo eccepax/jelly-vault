@@ -95,13 +95,8 @@ class PlayerNotificationHelper(private val viewModel: PlayerHost) : KoinComponen
             }
 
             val notification = Notification.Builder(context).apply {
-                if (AndroidVersion.isAtLeastO) {
-                    // Set notification channel on Android O and above
-                    setChannelId(Constants.MEDIA_NOTIFICATION_CHANNEL_ID)
-                    setColorized(true)
-                } else {
-                    setPriority(Notification.PRIORITY_LOW)
-                }
+                setChannelId(Constants.MEDIA_NOTIFICATION_CHANNEL_ID)
+                setColorized(true)
                 setStyle(style)
                 setSmallIcon(R.drawable.ic_notification)
                 if (!AndroidVersion.isAtLeastQ) {

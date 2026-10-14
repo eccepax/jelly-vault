@@ -33,12 +33,7 @@ class AudioPlaybackService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (AndroidVersion.isAtLeastN) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     companion object {
@@ -47,11 +42,7 @@ class AudioPlaybackService : Service() {
         fun start(context: Context, notification: Notification) {
             val intent = Intent(context, AudioPlaybackService::class.java)
                 .putExtra(EXTRA_NOTIFICATION, notification)
-            if (AndroidVersion.isAtLeastO) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
