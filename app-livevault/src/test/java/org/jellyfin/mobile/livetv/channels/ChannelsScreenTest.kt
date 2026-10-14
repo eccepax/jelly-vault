@@ -78,13 +78,15 @@ class ChannelsScreenTest {
                     state = state,
                     now = now,
                     onTv = onTv,
-                    onQueryChange = { query = it },
-                    onTagSelect = { tagSelected = it },
-                    onFavoritesSelect = { favoritesSelected = true },
-                    onFavoriteToggle = { favoriteToggled = it },
-                    onChannelClick = { clicked = it },
-                    onSignOut = { signedOut = true },
-                    onRetry = { retried = true },
+                    actions = ChannelsActions(
+                        onQueryChange = { query = it },
+                        onTagSelect = { tagSelected = it },
+                        onFavoritesSelect = { favoritesSelected = true },
+                        onFavoriteToggle = { favoriteToggled = it },
+                        onChannelClick = { clicked = it },
+                        onSignOut = { signedOut = true },
+                        onRetry = { retried = true },
+                    ),
                 )
             }
         }

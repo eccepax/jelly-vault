@@ -31,13 +31,15 @@ class ChannelsScreenTabletTest {
             ChannelsScreen(
                 state = ChannelsUiState.Loaded(listOf(first, second), tags = emptyList(), filter = ChannelFilter()),
                 now = Instant.EPOCH,
-                onQueryChange = {},
-                onTagSelect = {},
-                onFavoritesSelect = {},
-                onFavoriteToggle = {},
-                onChannelClick = {},
-                onSignOut = {},
-                onRetry = {},
+                actions = ChannelsActions(
+                    onQueryChange = {},
+                    onTagSelect = {},
+                    onFavoritesSelect = {},
+                    onFavoriteToggle = {},
+                    onChannelClick = {},
+                    onSignOut = {},
+                    onRetry = {},
+                ),
             )
         }
 

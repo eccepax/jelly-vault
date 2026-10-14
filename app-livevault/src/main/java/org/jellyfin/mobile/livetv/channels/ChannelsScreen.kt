@@ -87,13 +87,7 @@ fun ChannelsScreen(
     state: ChannelsUiState,
     now: Instant,
     onTv: Boolean = false,
-    onQueryChange: (String) -> Unit,
-    onTagSelect: (String?) -> Unit,
-    onFavoritesSelect: () -> Unit,
-    onFavoriteToggle: (LiveChannel) -> Unit,
-    onChannelClick: (LiveChannel) -> Unit,
-    onRetry: () -> Unit,
-    onSignOut: () -> Unit,
+    actions: ChannelsActions,
 ) {
     val startFocus = remember { FocusRequester() }
     val loaded = state is ChannelsUiState.Loaded && state.channels.isNotEmpty()
@@ -104,8 +98,8 @@ fun ChannelsScreen(
         Column(Modifier.safeDrawingPadding()) {
             Header(
                 query = (state as? ChannelsUiState.Loaded)?.filter?.query.orEmpty(),
-                onQueryChange = onQueryChange,
-                onSignOut = onSignOut,
+                onQueryChange = actions.onQueryChange,
+                onSignOut = actions.onSignOut,
             )
             when (state) {
                 ChannelsUiState.Loading -> Centered {
@@ -113,19 +107,19 @@ fun ChannelsScreen(
                 }
                 ChannelsUiState.Error -> Centered {
                     Text(stringResource(R.string.channels_error))
-                    Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
+                    Button(onClick = actions.onRetry, modifier = Modifier.padding(top = 16.dp)) {
                         Text(stringResource(R.string.retry))
                     }
                 }
                 is ChannelsUiState.Loaded -> {
                     state.lastChannel?.let { channel ->
-                        ContinueWatching(channel, now, onFavoriteToggle, onChannelClick, startFocus)
+                        ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
                     }
                     FilterChips(
                         tags = state.tags,
                         filter = state.filter,
-                        onTagSelect = onTagSelect,
-                        onFavoritesSelect = onFavoritesSelect,
+                        onTagSelect = actions.onTagSelect,
+                        onFavoritesSelect = actions.onFavoritesSelect,
                     )
                     if (state.channels.isEmpty()) {
                         Centered { Text(emptyMessage(state.filter), textAlign = TextAlign.Center) }
@@ -133,8 +127,8 @@ fun ChannelsScreen(
                         ChannelGrid(
                             channels = state.channels,
                             now = now,
-                            onFavoriteToggle = onFavoriteToggle,
-                            onChannelClick = onChannelClick,
+                            onFavoriteToggle = actions.onFavoriteToggle,
+                            onChannelClick = actions.onChannelClick,
                             firstFocus = startFocus.takeIf { state.lastChannel == null },
                         )
                     }
@@ -489,14 +483,21 @@ fun ChannelsRoute(
         state = state,
         now = now,
         onTv = onTv,
-        onQueryChange = viewModel::onQueryChange,
-        onTagSelect = viewModel::selectTag,
-        onFavoritesSelect = viewModel::showFavorites,
-        onFavoriteToggle = { viewModel.toggleFavorite(it.id) },
-        // Zapping from the player moves through the channels the viewer was looking at.
-        onChannelClick = { channel -> onChannelClick(channel, (state as? ChannelsUiState.Loaded)?.channels.orEmpty()) },
-        onRetry = viewModel::retry,
-        onSignOut = onSignOut,
+        actions = ChannelsActions(
+            onQueryChange = viewModel::onQueryChange,
+            onTagSelect = viewModel::selectTag,
+            onFavoritesSelect = viewModel::showFavorites,
+            onFavoriteToggle = { viewModel.toggleFavorite(it.id) },
+            // Zapping from the player moves through the channels the viewer was looking at.
+            onChannelClick = { channel ->
+                onChannelClick(
+                    channel,
+                    (state as? ChannelsUiState.Loaded)?.channels.orEmpty(),
+                )
+            },
+            onRetry = viewModel::retry,
+            onSignOut = onSignOut,
+        ),
     )
 }
 
