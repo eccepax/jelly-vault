@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
@@ -158,7 +159,8 @@ private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: ()
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
-                .testTag(ChannelsScreenTags.SEARCH),
+                .testTag(ChannelsScreenTags.SEARCH)
+                .dpadLeavesTextField(),
         )
     }
 }

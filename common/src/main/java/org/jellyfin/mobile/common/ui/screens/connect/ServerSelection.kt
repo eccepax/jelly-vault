@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.setup.ConnectionHelper
+import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.common.ui.state.CheckUrlState
 import org.jellyfin.mobile.common.ui.state.ServerSelectionMode
 import org.jellyfin.mobile.common.ui.utils.CenterRow
@@ -220,6 +221,7 @@ private fun ServerUrlField(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
+            .dpadLeavesTextField()
             .onKeyEvent { keyEvent ->
                 when (keyEvent.nativeKeyEvent.keyCode) {
                     KeyEvent.KEYCODE_ENTER -> {

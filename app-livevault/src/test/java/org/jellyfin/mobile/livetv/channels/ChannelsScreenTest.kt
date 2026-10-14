@@ -8,7 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
@@ -18,8 +20,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
@@ -304,5 +309,22 @@ class ChannelsScreenTest {
 
         composeRule.onNodeWithTag(ChannelsScreenTags.CONTINUE).assertIsNotFocused()
         composeRule.onNodeWithTag(ChannelsScreenTags.channel(bulls.id)).assertIsNotFocused()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `on a TV the remote can go into the search box and out again`() {
+        show(loaded(), onTv = true)
+        composeRule.onNodeWithTag(ChannelsScreenTags.channel(bulls.id)).assertIsFocused()
+
+        composeRule.onRoot().performKeyInput {
+            pressKey(Key.DirectionUp)
+            pressKey(Key.DirectionUp)
+        }
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).assertIsFocused()
+
+        composeRule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).assertIsNotFocused()
     }
 }
