@@ -2,8 +2,13 @@ package org.jellyfin.mobile.livetv.playback
 
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 
@@ -86,5 +91,68 @@ class StreamCloserTest {
 
         log.events.shouldBeEmpty()
         ledger.all() shouldContainExactly listOf(watching)
+    }
+
+    @Test
+    fun `closing everything closes every open stream`() = runTest {
+        val closer = closer()
+        val a = stream("a").ticket
+        val b = stream("b").ticket
+        closer.track(a)
+        closer.track(b)
+
+        closer.closeAll()
+
+        log.events shouldContainExactlyInAnyOrder listOf("close:ls-a-1", "close:ls-b-1")
+        ledger.all().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a stream already closing is not closed a second time`() = runTest {
+        // Each close takes one viewer off the server's shared stream: a second would cut off another viewer.
+        val closer = closer()
+        val ticket = stream("a").ticket
+        closer.track(ticket)
+        val gate = CompletableDeferred<Unit>()
+        streams.closeGate = gate
+        closer.close(ticket)
+        runCurrent()
+
+        val closingAll = backgroundScope.launch { closer.closeAll() }
+        runCurrent()
+        gate.complete(Unit)
+        settle()
+
+        closingAll.isCompleted shouldBe true
+        log.events shouldContainExactly listOf("close:ls-a-1")
+    }
+
+    @Test
+    fun `closing everything waits for a close already under way`() = runTest {
+        val closer = closer()
+        val ticket = stream("a").ticket
+        closer.track(ticket)
+        val gate = CompletableDeferred<Unit>()
+        streams.closeGate = gate
+        closer.close(ticket)
+        runCurrent()
+
+        val closingAll = backgroundScope.launch { closer.closeAll() }
+        runCurrent()
+
+        closingAll.isCompleted shouldBe false
+        gate.complete(Unit)
+        settle()
+        closingAll.isCompleted shouldBe true
+    }
+
+    @Test
+    fun `forgetting drops the streams that could not be closed`() = runTest {
+        val closer = closer()
+        closer.track(stream("a").ticket)
+
+        closer.forgetAll()
+
+        ledger.all().shouldBeEmpty()
     }
 }

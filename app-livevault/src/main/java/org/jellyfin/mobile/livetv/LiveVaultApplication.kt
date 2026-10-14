@@ -2,7 +2,6 @@ package org.jellyfin.mobile.livetv
 
 import android.app.Application
 import org.jellyfin.mobile.common.app.apiModule
-import org.jellyfin.mobile.common.app.plainSignOutModule
 import org.jellyfin.mobile.livetv.app.liveAppModule
 import org.jellyfin.mobile.livetv.data.liveDatabaseModule
 import org.jellyfin.sdk.model.ClientInfo
@@ -23,7 +22,6 @@ class LiveVaultApplication : Application() {
                 liveAppModule,
                 apiModule(ClientInfo("LiveVault", BuildConfig.VERSION_NAME)),
                 liveDatabaseModule,
-                plainSignOutModule,
             )
         }
     }

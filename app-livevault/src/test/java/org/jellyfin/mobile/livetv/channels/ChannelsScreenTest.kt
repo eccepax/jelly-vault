@@ -42,6 +42,7 @@ class ChannelsScreenTest {
     private var favoriteToggled: LiveChannel? = null
     private var clicked: LiveChannel? = null
     private var retried = false
+    private var signedOut = false
 
     private fun loaded(
         channels: List<LiveChannel> = listOf(bulls, espn, tubi),
@@ -58,6 +59,7 @@ class ChannelsScreenTest {
                 onFavoritesSelect = { favoritesSelected = true },
                 onFavoriteToggle = { favoriteToggled = it },
                 onChannelClick = { clicked = it },
+                onSignOut = { signedOut = true },
                 onRetry = { retried = true },
             )
         }
@@ -204,5 +206,37 @@ class ChannelsScreenTest {
         show(loaded())
 
         composeRule.onNodeWithText("MLB").assertIsDisplayed()
+    }
+
+    @Test
+    fun `sign out is in the menu, once confirmed`() {
+        show(loaded())
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("Sign out").performClick()
+        signedOut shouldBe false
+        composeRule.onNodeWithText("Yes, sign out").performClick()
+
+        signedOut shouldBe true
+    }
+
+    @Test
+    fun `sign out can be called off`() {
+        show(loaded())
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("Sign out").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        signedOut shouldBe false
+        composeRule.onNodeWithText("Yes, sign out").assertDoesNotExist()
+    }
+
+    @Test
+    fun `sign out can be reached while the channels fail to load`() {
+        show(ChannelsUiState.Error)
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("Sign out").assertIsDisplayed()
     }
 }

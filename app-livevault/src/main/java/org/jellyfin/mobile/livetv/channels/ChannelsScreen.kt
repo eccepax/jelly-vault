@@ -25,8 +25,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.AlertDialog
 import androidx.compose.material.Button
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.LinearProgressIndicator
@@ -34,8 +37,10 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -43,8 +48,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,10 +87,15 @@ fun ChannelsScreen(
     onFavoriteToggle: (LiveChannel) -> Unit,
     onChannelClick: (LiveChannel) -> Unit,
     onRetry: () -> Unit,
+    onSignOut: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
-            Header(query = (state as? ChannelsUiState.Loaded)?.filter?.query.orEmpty(), onQueryChange = onQueryChange)
+            Header(
+                query = (state as? ChannelsUiState.Loaded)?.filter?.query.orEmpty(),
+                onQueryChange = onQueryChange,
+                onSignOut = onSignOut,
+            )
             when (state) {
                 ChannelsUiState.Loading -> Centered {
                     CircularProgressIndicator(Modifier.testTag(ChannelsScreenTags.LOADING))
@@ -113,9 +125,16 @@ fun ChannelsScreen(
 }
 
 @Composable
-private fun Header(query: String, onQueryChange: (String) -> Unit) {
+private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit) {
     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-        Text(stringResource(R.string.live_tv_title), style = MaterialTheme.typography.h5)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.live_tv_title),
+                style = MaterialTheme.typography.h5,
+                modifier = Modifier.weight(1f),
+            )
+            MoreMenu(onSignOut)
+        }
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
@@ -127,6 +146,44 @@ private fun Header(query: String, onQueryChange: (String) -> Unit) {
                 .padding(top = 8.dp)
                 .testTag(ChannelsScreenTags.SEARCH),
         )
+    }
+}
+
+@Composable
+private fun MoreMenu(onSignOut: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    var confirming by remember { mutableStateOf(false) }
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            text = { Text(stringResource(R.string.sign_out_question)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirming = false
+                        onSignOut()
+                    },
+                ) { Text(stringResource(R.string.sign_out_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.channels_more_options))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                onClick = {
+                    expanded = false
+                    confirming = true
+                },
+            ) {
+                Text(stringResource(R.string.sign_out))
+            }
+        }
     }
 }
 
@@ -355,6 +412,7 @@ private const val DIM_ALPHA = 0.7f
 @Composable
 fun ChannelsRoute(
     onChannelClick: (channel: LiveChannel, lineup: List<LiveChannel>) -> Unit,
+    onSignOut: () -> Unit,
     viewModel: ChannelsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -379,6 +437,7 @@ fun ChannelsRoute(
         // Zapping from the player moves through the channels the viewer was looking at.
         onChannelClick = { channel -> onChannelClick(channel, (state as? ChannelsUiState.Loaded)?.channels.orEmpty()) },
         onRetry = viewModel::retry,
+        onSignOut = onSignOut,
     )
 }
 

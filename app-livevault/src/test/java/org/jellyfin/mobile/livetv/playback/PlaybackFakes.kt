@@ -35,6 +35,9 @@ class FakeLiveStreams(private val log: EventLog) : LiveStreams {
     /** Closes fail this many more times before succeeding. */
     var closeFailures = 0
 
+    /** Closes wait for this gate (the server takes a moment). */
+    var closeGate: CompletableDeferred<Unit>? = null
+
     val openStreams = mutableSetOf<String>()
 
     override suspend fun open(channelId: String): OpenedStream {
@@ -51,6 +54,7 @@ class FakeLiveStreams(private val log: EventLog) : LiveStreams {
     }
 
     override suspend fun close(stream: StreamTicket) {
+        closeGate?.await()
         if (closeFailures > 0) {
             closeFailures--
             log += "close-failed:${stream.liveStreamId}"

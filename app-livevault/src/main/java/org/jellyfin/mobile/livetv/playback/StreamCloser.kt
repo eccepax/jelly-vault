@@ -2,9 +2,11 @@ package org.jellyfin.mobile.livetv.playback
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
@@ -13,6 +15,9 @@ import timber.log.Timber
  * the app. A stream stays in the ledger until the server confirms the close, so one the app couldn't
  * close (offline, or the app was killed while watching) is closed on the next launch
  * ([closeLeftovers]). [scope] should outlive any screen: an app-wide scope.
+ *
+ * Each stream is closed once at a time: every close takes one viewer off the server's shared tuner
+ * stream, so closing the same open twice would cut off someone else watching the channel.
  */
 class StreamCloser(
     private val streams: LiveStreams,
@@ -26,16 +31,43 @@ class StreamCloser(
 
     /** Closes [ticket] in the background. */
     fun close(ticket: StreamTicket) {
-        scope.launch { closeNow(ticket) }
+        closing(ticket)
     }
 
-    /** Closes [ticket], retrying a few times; returns once it's closed or given up on. Never cancelled. */
-    suspend fun closeNow(ticket: StreamTicket) = withContext(NonCancellable) {
+    /**
+     * Closes [ticket], retrying a few times; returns once it's closed or given up on. Never
+     * cancelled. Joins a close of the same ticket that's already under way.
+     */
+    suspend fun closeNow(ticket: StreamTicket) = withContext(NonCancellable) { closing(ticket).await() }
+
+    /** Closes every stream still open (signing out): returns once each is closed or given up on. */
+    suspend fun closeAll() = withContext(NonCancellable) { ledger.all().map(::closing).awaitAll() }
+
+    /** Forgets the streams that couldn't be closed: the next account can't close them. */
+    fun forgetAll() {
+        ledger.all().forEach(ledger::remove)
+    }
+
+    private val inFlight = mutableMapOf<StreamTicket, Deferred<Unit>>()
+
+    private fun closing(ticket: StreamTicket): Deferred<Unit> = synchronized(inFlight) {
+        inFlight.getOrPut(ticket) {
+            scope.async {
+                try {
+                    closeWithRetries(ticket)
+                } finally {
+                    synchronized(inFlight) { inFlight.remove(ticket) }
+                }
+            }
+        }
+    }
+
+    private suspend fun closeWithRetries(ticket: StreamTicket) {
         repeat(MAX_ATTEMPTS) { attempt ->
             try {
                 streams.close(ticket)
                 ledger.remove(ticket)
-                return@withContext
+                return
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -57,7 +89,7 @@ class StreamCloser(
         leftoversClosed = true
         val leftovers = ledger.all()
         if (leftovers.isEmpty()) return
-        scope.launch { leftovers.forEach { closeNow(it) } }
+        leftovers.forEach(::closing)
     }
 
     private companion object {

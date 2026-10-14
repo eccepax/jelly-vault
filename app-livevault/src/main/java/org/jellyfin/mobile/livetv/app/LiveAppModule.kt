@@ -3,7 +3,11 @@ package org.jellyfin.mobile.livetv.app
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.jellyfin.mobile.common.account.SignOut
+import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.livetv.account.AccountViewModel
+import org.jellyfin.mobile.livetv.account.liveVaultSignOut
 import org.jellyfin.mobile.livetv.catalog.JellyfinLiveTvCatalog
 import org.jellyfin.mobile.livetv.catalog.LiveTvCatalog
 import org.jellyfin.mobile.livetv.channels.ChannelsViewModel
@@ -35,5 +39,9 @@ val liveAppModule = module {
     // App-wide scope: a stream is closed even when the screen that opened it is gone.
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
     single<LiveTvSessions> { JellyfinLiveTvSessions(get()) }
+    // Account
+    single { liveVaultSignOut(get(), get(), get<ApiClientController>()::logoutUser) }
+    viewModel { AccountViewModel(signOut = { get<SignOut>()() }) }
+
     viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), get()) }
 }
