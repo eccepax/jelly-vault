@@ -16,6 +16,10 @@
     <string name="player_tuning">Tuning…</string>
     <string name="player_failed">Couldn\'t play this channel</string>
     <string name="player_back">Back</string>
+    <string name="player_login_in_use">Your TV provider\'s login is in use</string>
+    <string name="player_login_in_use_detail">It allows one stream at a time. Free channels still work.</string>
+    <string name="player_login_holder">%1$s (%2$s) is watching %3$s</string>
+    <string name="player_free_channels">Free channels</string>
     <string name="player_back_to_channels">Back to channels</string>
     <string name="player_next_channel">Next channel</string>
     <string name="player_previous_channel">Previous channel</string>

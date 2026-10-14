@@ -9,7 +9,9 @@ import org.jellyfin.mobile.livetv.catalog.LiveTvCatalog
 import org.jellyfin.mobile.livetv.channels.ChannelsViewModel
 import org.jellyfin.mobile.livetv.playback.ExoLivePlayer
 import org.jellyfin.mobile.livetv.playback.JellyfinLiveStreams
+import org.jellyfin.mobile.livetv.playback.JellyfinLiveTvSessions
 import org.jellyfin.mobile.livetv.playback.LiveStreams
+import org.jellyfin.mobile.livetv.playback.LiveTvSessions
 import org.jellyfin.mobile.livetv.playback.PreferencesStreamLedger
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.StreamLedger
@@ -32,5 +34,6 @@ val liveAppModule = module {
     single<StreamLedger> { PreferencesStreamLedger(androidContext()) }
     // App-wide scope: a stream is closed even when the screen that opened it is gone.
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
-    viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext())) }
+    single<LiveTvSessions> { JellyfinLiveTvSessions(get()) }
+    viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), get()) }
 }

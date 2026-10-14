@@ -22,6 +22,7 @@ fun LiveProgram.endTimeText(zone: ZoneId = ZoneId.systemDefault(), locale: Local
 
 /** The name to show: free (Tubi) channels lose the "FREE| " prefix the Vault gives them. */
 val LiveChannel.displayName: String
-    get() = name.removePrefix(FREE_PREFIX).trim().ifEmpty { name }
+    get() = channelDisplayName(name)
 
-private const val FREE_PREFIX = "FREE|"
+/** [displayName] for when only the name is known. */
+fun channelDisplayName(name: String): String = name.removePrefix(LiveChannel.FREE_PREFIX).trim().ifEmpty { name }

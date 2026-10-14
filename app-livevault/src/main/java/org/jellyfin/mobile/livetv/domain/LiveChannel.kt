@@ -15,7 +15,22 @@ data class LiveChannel(
     val isFavorite: Boolean,
     /** What's airing on the channel, or null when its guide has nothing for now. */
     val nowPlaying: LiveProgram?,
-)
+) {
+    /**
+     * Whether watching it takes the household's single provider login. Free (Tubi) channels don't:
+     * the Vault tags them Free and names them "FREE| ...".
+     */
+    val usesProviderLogin: Boolean
+        get() = FREE_TAG !in tags && channelNameUsesProviderLogin(name)
+
+    companion object {
+        const val FREE_TAG = "Free"
+        const val FREE_PREFIX = "FREE|"
+    }
+}
+
+/** [LiveChannel.usesProviderLogin] for when only the name is known. */
+fun channelNameUsesProviderLogin(name: String): Boolean = !name.startsWith(LiveChannel.FREE_PREFIX)
 
 data class LiveProgram(
     val title: String,

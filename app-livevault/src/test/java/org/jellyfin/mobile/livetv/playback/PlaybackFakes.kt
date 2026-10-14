@@ -112,3 +112,13 @@ fun TestScope.settle() {
 }
 
 private const val SETTLE_MS = 60_000L
+
+class FakeLiveTvSessions : LiveTvSessions {
+    var watching: List<ChannelSession> = emptyList()
+    var failure: Exception? = null
+
+    override suspend fun othersWatching(): List<ChannelSession> {
+        failure?.let { throw it }
+        return watching
+    }
+}

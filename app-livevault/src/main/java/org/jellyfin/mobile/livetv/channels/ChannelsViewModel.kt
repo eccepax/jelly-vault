@@ -99,6 +99,12 @@ class ChannelsViewModel(
         savedState[KEY_TAG] = tag.takeIf { it != selected }
     }
 
+    /** Shows the channels carrying [tag], whatever was selected before. */
+    fun showTag(tag: String) {
+        savedState[KEY_FAVORITES] = false
+        savedState[KEY_TAG] = tag
+    }
+
     /** Shows only favorites, or every channel when they're already shown. */
     fun showFavorites() {
         savedState[KEY_TAG] = null

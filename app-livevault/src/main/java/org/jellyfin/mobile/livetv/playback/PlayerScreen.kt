@@ -47,6 +47,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -57,15 +58,23 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import org.jellyfin.mobile.livetv.R
+import org.jellyfin.mobile.livetv.channels.channelDisplayName
 import org.jellyfin.mobile.livetv.channels.displayName
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 
-/** What the player shows: [videoStarted] is the player actually rendering, not just the stream being open. */
+/**
+ * What the player shows: [videoStarted] is the player actually rendering, not just the stream being
+ * open. [loginInUse] explains a failure on a channel that needs the provider login.
+ */
 data class WatchUiState(
     val playback: PlaybackState,
     val channel: LiveChannel?,
     val videoStarted: Boolean,
+    val loginInUse: LoginInUse? = null,
 )
+
+/** The provider login is probably taken; [holders] are the server's viewers known to have it. */
+data class LoginInUse(val holders: List<ChannelSession>)
 
 object PlayerScreenTags {
     const val BUFFERING = "player_buffering"
@@ -83,6 +92,7 @@ fun PlayerScreen(
     onZap: (Int) -> Unit,
     onRetry: () -> Unit,
     onExit: () -> Unit,
+    onShowFree: () -> Unit,
     video: @Composable () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
@@ -121,13 +131,13 @@ fun PlayerScreen(
             ) { overlayRequests++ },
     ) {
         video()
-        Center(state, onRetry, onExit)
+        Center(state, onRetry, onExit, onShowFree)
         if (overlayVisible) Overlay(state.channel, onZap, onExit)
     }
 }
 
 @Composable
-private fun Center(state: WatchUiState, onRetry: () -> Unit, onExit: () -> Unit) {
+private fun Center(state: WatchUiState, onRetry: () -> Unit, onExit: () -> Unit, onShowFree: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -146,14 +156,56 @@ private fun Center(state: WatchUiState, onRetry: () -> Unit, onExit: () -> Unit)
                 CircularProgressIndicator(Modifier.testTag(PlayerScreenTags.BUFFERING))
             }
             is PlaybackState.Failed -> {
-                Text(stringResource(R.string.player_failed), color = Color.White, style = MaterialTheme.typography.h6)
+                val loginInUse = state.loginInUse
+                if (loginInUse == null) {
+                    Text(
+                        stringResource(R.string.player_failed),
+                        color = Color.White,
+                        style = MaterialTheme.typography.h6,
+                    )
+                } else {
+                    LoginInUseMessage(loginInUse)
+                }
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (loginInUse != null) {
+                        Button(onClick = onShowFree) { Text(stringResource(R.string.player_free_channels)) }
+                    }
                     Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
                     Button(onClick = onExit) { Text(stringResource(R.string.player_back)) }
                 }
             }
             PlaybackState.Idle -> Unit
         }
+    }
+}
+
+@Composable
+private fun LoginInUseMessage(loginInUse: LoginInUse) {
+    Text(
+        stringResource(R.string.player_login_in_use),
+        color = Color.White,
+        style = MaterialTheme.typography.h6,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(horizontal = 24.dp),
+    )
+    Text(
+        stringResource(R.string.player_login_in_use_detail),
+        color = Color.White.copy(alpha = DIM_ALPHA),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+    )
+    loginInUse.holders.forEach { holder ->
+        Text(
+            stringResource(
+                R.string.player_login_holder,
+                holder.deviceName,
+                holder.userName,
+                channelDisplayName(holder.channelName),
+            ),
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
     }
 }
 
@@ -229,7 +281,7 @@ private const val DIM_ALPHA = 0.8f
  * frees the provider connection (and comes back to the channel on return); a rotation doesn't.
  */
 @Composable
-fun PlayerRoute(viewModel: WatchViewModel) {
+fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
     val state by viewModel.state.collectAsState()
     val activity = LocalActivity.current
     BackHandler(onBack = viewModel::exit)
@@ -245,6 +297,7 @@ fun PlayerRoute(viewModel: WatchViewModel) {
         onZap = viewModel::zap,
         onRetry = viewModel::retry,
         onExit = viewModel::exit,
+        onShowFree = onShowFree,
         video = {
             val exoPlayer = (viewModel.player as? ExoLivePlayer)?.exoPlayer
             AndroidView(

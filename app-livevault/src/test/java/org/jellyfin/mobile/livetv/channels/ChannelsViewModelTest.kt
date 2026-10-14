@@ -115,6 +115,17 @@ class ChannelsViewModelTest {
     }
 
     @Test
+    fun `showing a tag selects it even when it already is`() {
+        val viewModel = viewModel()
+        viewModel.showFavorites()
+        viewModel.showTag("Sports")
+
+        viewModel.showTag("Sports")
+
+        viewModel.loaded.filter shouldBe ChannelFilter(tag = "Sports")
+    }
+
+    @Test
     fun `selecting favorites again goes back to every channel`() {
         val viewModel = viewModel()
         viewModel.showFavorites()

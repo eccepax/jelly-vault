@@ -22,8 +22,11 @@ class WatchViewModelTest {
     private val streams = FakeLiveStreams(log)
     private val player = FakeLivePlayer(log)
     private val ledger = FakeStreamLedger()
+    private val sessions = FakeLiveTvSessions()
     private val bulls = channel("1", "Bulls")
     private val espn = channel("43", "ESPN")
+    private val tubi = channel("5001", "FREE| Movies", tags = listOf("Free"))
+    private val roku = ChannelSession(deviceName = "Living Room", userName = "root", channelName = "ESPN")
 
     @BeforeEach
     fun setUp() {
@@ -40,7 +43,12 @@ class WatchViewModelTest {
      * runs on the test dispatcher, where a playing channel's progress loop never goes idle.
      */
     private fun watchTest(block: suspend TestScope.(WatchViewModel) -> Unit) = runTest(dispatcher) {
-        val viewModel = WatchViewModel(streams, StreamCloser(streams, ledger, scope = backgroundScope), player)
+        val viewModel = WatchViewModel(
+            streams,
+            StreamCloser(streams, ledger, scope = backgroundScope),
+            player,
+            sessions,
+        )
         try {
             block(viewModel)
         } finally {
@@ -110,5 +118,65 @@ class WatchViewModelTest {
         player.released shouldBe true
         streams.openStreams.shouldBeEmpty()
         ledger.all().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a free channel that fails just says so`() = watchTest { viewModel ->
+        streams.failing += tubi.id
+        sessions.watching = listOf(roku)
+
+        viewModel.watch(tubi, listOf(tubi))
+        settle()
+
+        viewModel.state.value.playback shouldBe PlaybackState.Failed(tubi.id)
+        viewModel.state.value.loginInUse shouldBe null
+    }
+
+    @Test
+    fun `a provider channel that fails says the login is in use, and by whom`() = watchTest { viewModel ->
+        streams.failing += espn.id
+        val tablet = ChannelSession(deviceName = "Tablet", userName = "kid", channelName = "FREE| Cartoons")
+        sessions.watching = listOf(roku, tablet)
+
+        viewModel.watch(espn, listOf(espn))
+        settle()
+
+        viewModel.state.value.playback shouldBe PlaybackState.Failed(espn.id)
+        viewModel.state.value.loginInUse shouldBe LoginInUse(holders = listOf(roku))
+    }
+
+    @Test
+    fun `the login is still said to be in use when the holder is not on the Vault`() = watchTest { viewModel ->
+        streams.failing += espn.id
+
+        viewModel.watch(espn, listOf(espn))
+        settle()
+
+        viewModel.state.value.loginInUse shouldBe LoginInUse(holders = emptyList())
+    }
+
+    @Test
+    fun `the login is still said to be in use when the sessions cannot be read`() = watchTest { viewModel ->
+        streams.failing += espn.id
+        sessions.failure = java.io.IOException("offline")
+
+        viewModel.watch(espn, listOf(espn))
+        settle()
+
+        viewModel.state.value.loginInUse shouldBe LoginInUse(holders = emptyList())
+    }
+
+    @Test
+    fun `retrying clears the login message`() = watchTest { viewModel ->
+        streams.failing += espn.id
+        viewModel.watch(espn, listOf(espn))
+        settle()
+        streams.failing -= espn.id
+
+        viewModel.retry()
+        settle()
+
+        viewModel.state.value.playback shouldBe PlaybackState.Playing(espn.id)
+        viewModel.state.value.loginInUse shouldBe null
     }
 }
