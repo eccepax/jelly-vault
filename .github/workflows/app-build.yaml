@@ -27,6 +27,13 @@ jobs:
         run: ./gradlew assembleDebug
       - name: Assemble release APKs (unsigned; catches R8/minification build failures)
         run: ./gradlew assembleRelease
+      - name: Check database schemas are committed (a changed schema needs a version bump and a migration)
+        run: |
+          if [ -n "$(git status --porcelain -- ':(glob)*/schemas/**')" ]; then
+            git status --porcelain -- ':(glob)*/schemas/**'
+            echo "::error::The build changed exported Room schemas. Bump the database version, add a migration, and commit the new schema."
+            exit 1
+          fi
       - name: Create publish bundle
         run: mkdir -p build/gh-app-publish/; find app-*/build/outputs/apk/ -iname "*.apk" -exec mv "{}" build/gh-app-publish/ \;
       - name: Compile the e2e tests (they need a server and emulator to run, but must still build)
