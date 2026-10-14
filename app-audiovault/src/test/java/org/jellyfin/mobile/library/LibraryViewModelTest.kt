@@ -285,8 +285,10 @@ class LibraryViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.items.test {
-            awaitItem() shouldBe emptyList() // StateFlow's initial value, before the cache read lands
-            awaitItem().map { it.displayName } shouldBe listOf("Cached Book") // painted from cache
+            // StateFlow's initial empty value is only seen if the cache read hasn't landed yet
+            val first = awaitItem()
+            val painted = if (first.isEmpty()) awaitItem() else first
+            painted.map { it.displayName } shouldBe listOf("Cached Book") // painted from cache
             awaitItem() shouldBe emptyList() // revalidated from the (empty, per this test's stub) server
         }
         coVerify { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
