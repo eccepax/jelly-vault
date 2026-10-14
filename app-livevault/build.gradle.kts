@@ -10,7 +10,7 @@ android {
     namespace = "org.jellyfin.mobile.livetv"
 
     defaultConfig {
-        applicationId = "org.jellyfin.mobile.livetv"
+        applicationId = "com.livevault"
     }
 
     buildFeatures {
@@ -88,4 +88,11 @@ dependencies {
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.compose.ui.test.junit4)
+}
+
+androidComponents {
+    // Compose UI tests rely on the debug-only ui-test-manifest, so unit tests run against debug builds only
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        variant.enableUnitTest = false
+    }
 }

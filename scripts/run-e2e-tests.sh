@@ -3,7 +3,7 @@
 # animations (required by Espresso, and reset on every emulator boot), checks the Vault server is
 # reachable, then runs the whole e2e package for the chosen module.
 #
-# Prerequisites (see <module>/src/androidTest/java/.../e2e/BaseE2ETest.kt):
+# Prerequisites (see common-testing's org/jellyfin/mobile/testing/endtoend/VaultE2ETest.kt):
 #   - local.properties must have e2e.username / e2e.password (never commit these) — the tests
 #     run against a real local Jellyfin server (the Vault), not a mock.
 #   - The Vault server itself must be running and reachable.

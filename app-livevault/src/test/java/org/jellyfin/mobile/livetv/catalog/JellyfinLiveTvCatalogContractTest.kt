@@ -26,7 +26,7 @@ import java.time.Instant
 /**
  * Runs [JellyfinLiveTvCatalog] against the real Vault's Live TV (Dispatcharr as an HDHomeRun tuner).
  * Read-only apart from one channel's favorite flag, which is restored afterwards. Never plays a
- * stream: a Trex channel would take the household's single provider login.
+ * stream: any other channel would take the household's single provider login.
  */
 class JellyfinLiveTvCatalogContractTest {
 
