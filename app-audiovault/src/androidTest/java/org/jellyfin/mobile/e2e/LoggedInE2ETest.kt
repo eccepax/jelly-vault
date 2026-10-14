@@ -51,10 +51,10 @@ abstract class LoggedInE2ETest : BaseE2ETest() {
         composeRule.onNodeWithText(hostHint).performTextInput(e2eHostname())
         composeRule.onNodeWithText(connectButtonText).performClick()
 
-        waitForView(R.id.editUsername)
-        onView(withId(R.id.editUsername)).perform(replaceText(e2eUsername()))
-        onView(withId(R.id.editPassword)).perform(replaceText(e2ePassword()))
-        onView(withId(R.id.buttonLogin)).perform(click())
+        waitForView(CommonR.id.editUsername)
+        onView(withId(CommonR.id.editUsername)).perform(replaceText(e2eUsername()))
+        onView(withId(CommonR.id.editPassword)).perform(replaceText(e2ePassword()))
+        onView(withId(CommonR.id.buttonLogin)).perform(click())
 
         waitForView(R.id.recycler_view)
     }

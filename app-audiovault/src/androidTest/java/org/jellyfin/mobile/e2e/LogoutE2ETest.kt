@@ -14,6 +14,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.R as CommonR
 import org.junit.Test
 
 /**
@@ -48,7 +49,7 @@ class LogoutE2ETest : LoggedInE2ETest() {
         )
         onView(withText(context.getString(R.string.pref_sign_out))).perform(click())
 
-        waitForView(R.id.editUsername)
-        onView(withId(R.id.editUsername)).check(matches(isDisplayed()))
+        waitForView(CommonR.id.editUsername)
+        onView(withId(CommonR.id.editUsername)).check(matches(isDisplayed()))
     }
 }

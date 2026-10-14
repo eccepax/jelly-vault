@@ -29,6 +29,8 @@ jobs:
         run: ./gradlew assembleRelease
       - name: Create publish bundle
         run: mkdir -p build/gh-app-publish/; find app-*/build/outputs/apk/ -iname "*.apk" -exec mv "{}" build/gh-app-publish/ \;
+      - name: Compile the e2e tests (they need a server and emulator to run, but must still build)
+        run: ./gradlew assembleAndroidTest
       - name: Upload artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
