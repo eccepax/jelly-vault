@@ -64,6 +64,11 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     private fun extractEntry(zip: ZipFile, entry: ZipEntry, destDir: File) {
         val outFile = File(destDir, entry.name)
+        // Zip Slip: a malicious EPUB's "../" entries would otherwise overwrite the app's own files
+        if (!outFile.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) {
+            Timber.w("Skipping EPUB entry outside the book's folder: %s", entry.name)
+            return
+        }
         if (entry.isDirectory) {
             outFile.mkdirs()
             return
@@ -118,7 +123,7 @@ class EpubRenderer(private val context: Context) : Closeable {
                 ?.mapNotNull { it.getAttribute("idref").takeIf { idref -> idref.isNotEmpty() } }
                 .orEmpty()
             spineRefs.mapNotNull { idref ->
-                manifest[idref]?.let { href -> File(opfDir, href).takeIf { it.exists() } }
+                manifest[idref]?.let { href -> resolveEpubHref(opfDir, href).takeIf { it.exists() } }
             }
         } catch (e: Exception) {
             Timber.e(e, "OPF parse failed")

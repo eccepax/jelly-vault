@@ -3,6 +3,7 @@ package org.jellyfin.mobile.books.reader
 import org.w3c.dom.Element
 import timber.log.Timber
 import java.io.File
+import java.net.URLDecoder
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
@@ -13,9 +14,28 @@ import javax.xml.parsers.DocumentBuilderFactory
 internal fun parseXml(file: File): Element {
     val factory = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = false
+        // EPUBs are untrusted, and NCX files name the DAISY DTD by URL: never fetch DTDs or
+        // external entities. Android's parser never does and rejects these features, hence runCatching.
+        for (feature in UNTRUSTED_XML_FEATURES) runCatching { setFeature(feature, false) }
     }
     val document = file.inputStream().use { factory.newDocumentBuilder().parse(it) }
     return document.documentElement
+}
+
+private val UNTRUSTED_XML_FEATURES = listOf(
+    "http://apache.org/xml/features/nonvalidating/load-external-dtd",
+    "http://xml.org/sax/features/external-general-entities",
+    "http://xml.org/sax/features/external-parameter-entities",
+)
+
+/**
+ * The file an EPUB `href` points to, relative to [baseDir]. Hrefs are URLs: drop any `#fragment`
+ * and percent-decode (`chapter%201.xhtml` is the file `chapter 1.xhtml`); unlike form data, `+`
+ * stays a plus.
+ */
+internal fun resolveEpubHref(baseDir: File, href: String): File {
+    val path = href.substringBefore('#').replace("+", "%2B")
+    return File(baseDir, URLDecoder.decode(path, Charsets.UTF_8.name()))
 }
 
 /**

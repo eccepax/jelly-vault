@@ -288,4 +288,114 @@ class EpubRendererTest {
 
         renderer.getTableOfContents().map { it.title } shouldBe listOf("Prologue")
     }
+
+    // --- untrusted and unusual EPUBs -------------------------------------------------------------
+
+    @Test
+    fun `an entry whose path climbs out of the book's folder is not extracted`() = runTest {
+        val epub = buildEpub(
+            "META-INF/container.xml" to containerXml,
+            "OEBPS/content.opf" to opfXml("chapter1.xhtml"),
+            "OEBPS/chapter1.xhtml" to "<html><body>One</body></html>",
+            "../escaped.txt" to "overwrites a file outside the book's folder",
+        )
+
+        val renderer = EpubRenderer(app)
+        renderer.openFile(epub, "book-zip-slip")
+
+        File(cacheDir, "escaped.txt").exists() shouldBe false
+        renderer.chapterCount shouldBe 1
+    }
+
+    @Test
+    fun `manifest hrefs are URL-decoded, so a chapter named with a space is found`() = runTest {
+        val epub = buildEpub(
+            "META-INF/container.xml" to containerXml,
+            "OEBPS/content.opf" to opfXml("chapter%201.xhtml", "chapter2.xhtml"),
+            "OEBPS/chapter 1.xhtml" to "<html><body>One</body></html>",
+            "OEBPS/chapter2.xhtml" to "<html><body>Two</body></html>",
+        )
+
+        val renderer = EpubRenderer(app)
+        renderer.openFile(epub, "book-encoded-manifest")
+
+        renderer.chapterCount shouldBe 2
+        renderer.getChapterFile(0)?.name shouldBe "chapter 1.xhtml"
+    }
+
+    @Test
+    fun `TOC hrefs are URL-decoded`() = runTest {
+        val opfWithNav = """
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+                <manifest>
+                    <item id="ch0" href="chapter%201.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="navdoc" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+                </manifest>
+                <spine>
+                    <itemref idref="ch0"/>
+                </spine>
+            </package>
+        """.trimIndent()
+        val navXhtml = """
+            <?xml version="1.0"?>
+            <html xmlns:epub="http://www.idpf.org/2007/ops">
+                <body>
+                    <nav epub:type="toc"><ol><li><a href="chapter%201.xhtml#start">Prologue</a></li></ol></nav>
+                </body>
+            </html>
+        """.trimIndent()
+        val epub = buildEpub(
+            "META-INF/container.xml" to containerXml,
+            "OEBPS/content.opf" to opfWithNav,
+            "OEBPS/nav.xhtml" to navXhtml,
+            "OEBPS/chapter 1.xhtml" to "<html><body>One</body></html>",
+        )
+
+        val renderer = EpubRenderer(app)
+        renderer.openFile(epub, "book-encoded-toc")
+
+        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0))
+    }
+
+    @Test
+    fun `an NCX's external DTD and entities are never fetched`() = runTest {
+        val secret = File(cacheDir, "secret.txt").apply { writeText("SECRET") }
+        val opfWithNcx = """
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+                <manifest>
+                    <item id="ch0" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+                </manifest>
+                <spine toc="ncx"><itemref idref="ch0"/></spine>
+            </package>
+        """.trimIndent()
+        // Real NCX files declare the DAISY DTD by URL; an unreachable one must not break the TOC
+        val tocNcx = """
+            <?xml version="1.0"?>
+            <!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://127.0.0.1:9/ncx-2005-1.dtd" [
+                <!ENTITY leak SYSTEM "${secret.toURI()}">
+            ]>
+            <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/">
+                <navMap>
+                    <navPoint id="np1">
+                        <navLabel><text>Prologue&leak;</text></navLabel>
+                        <content src="chapter1.xhtml"/>
+                    </navPoint>
+                </navMap>
+            </ncx>
+        """.trimIndent()
+        val epub = buildEpub(
+            "META-INF/container.xml" to containerXml,
+            "OEBPS/content.opf" to opfWithNcx,
+            "OEBPS/toc.ncx" to tocNcx,
+            "OEBPS/chapter1.xhtml" to "<html><body>One</body></html>",
+        )
+
+        val renderer = EpubRenderer(app)
+        renderer.openFile(epub, "book-ncx-dtd")
+
+        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0))
+    }
 }

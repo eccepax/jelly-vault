@@ -19,13 +19,13 @@ internal class EpubTocParser {
         }?.getAttribute("href")
 
         val rawEntries: List<Pair<String, File>> = if (navHref != null) {
-            val navFile = File(opfDir, navHref)
+            val navFile = resolveEpubHref(opfDir, navHref)
             parseNavToc(navFile).map { (title, href) -> title to resolveHref(navFile, href) }
         } else {
             val ncxId = opfRoot.findDescendant("spine")?.getAttribute("toc")?.takeIf { it.isNotEmpty() }
             val ncxHref = manifestItems.firstOrNull { it.getAttribute("id") == ncxId }?.getAttribute("href")
             ncxHref?.let { href ->
-                val ncxFile = File(opfDir, href)
+                val ncxFile = resolveEpubHref(opfDir, href)
                 parseNcxToc(ncxFile).map { (title, entryHref) -> title to resolveHref(ncxFile, entryHref) }
             }.orEmpty()
         }
@@ -33,9 +33,8 @@ internal class EpubTocParser {
         return rawEntries.mapNotNull { (title, file) -> resolveTocEntry(title, file, spineFiles) }
     }
 
-    /** Resolves a TOC entry's `href` (which may carry a `#fragment`) relative to its own source file. */
-    private fun resolveHref(sourceFile: File, href: String): File =
-        File(sourceFile.parentFile, href.substringBefore('#'))
+    /** Resolves a TOC entry's `href` relative to its own source file. */
+    private fun resolveHref(sourceFile: File, href: String): File = resolveEpubHref(sourceFile.parentFile, href)
 
     private fun resolveTocEntry(title: String, targetFile: File, spineFiles: List<File>): EpubTocEntry? {
         val spineIndex = spineFiles.indexOfFirst { it.canonicalFile == targetFile.canonicalFile }
