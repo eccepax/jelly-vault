@@ -38,10 +38,15 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
         onView(waitForPlayerControl(R.id.next_button)).perform(click()) // +30s (audiobook skip-forward interval)
         val positionAfter = textOf(waitForPlayerControl(R.id.exo_position))
 
-        assert(positionAfter != positionBefore) {
-            "Expected the displayed position to change after fast-forwarding, but it stayed \"$positionBefore\""
+        // Merely "changed" passed by luck when the server transcoded: the clock restarted at 0:00
+        // and only differed if it had already ticked past 0:00 before the tap.
+        assert(seconds(positionAfter) >= seconds(positionBefore) + MIN_SKIP_SECONDS) {
+            "Expected fast-forward to move from \"$positionBefore\" by about 30s, but it shows \"$positionAfter\""
         }
     }
+
+    private fun seconds(position: String): Int =
+        position.split(':').fold(0) { total, part -> total * 60 + part.trim().toInt() }
 
     @Test
     fun chapterSkipButtonsDoNotBreakPlayback() {
@@ -70,5 +75,10 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
             },
         )
         return text
+    }
+
+    private companion object {
+        // The skip is 30s; allow for rounding and the position display's update interval
+        const val MIN_SKIP_SECONDS = 20
     }
 }

@@ -114,9 +114,12 @@ class DeviceProfileBuilder {
          * List of container formats supported by ExoPlayer for audio
          *
          * IMPORTANT: Don't change without updating [AVAILABLE_AUDIO_CODECS]
+         *
+         * Jellyfin names MP4 audio by file extension, so "m4a" and "m4b" (audiobooks) must be listed
+         * alongside "mp4" or they get transcoded to an unseekable stream.
          */
         private val SUPPORTED_CONTAINER_FORMATS = arrayOf(
-            "mp4", "fmp4", "webm", "mkv", "mp3", "ogg", "wav", "mpegts", "flv", "aac", "flac", "3gp",
+            "mp4,m4a,m4b", "fmp4", "webm", "mkv", "mp3", "ogg", "wav", "mpegts", "flv", "aac", "flac", "3gp",
         )
 
         /**
