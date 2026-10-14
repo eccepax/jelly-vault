@@ -104,6 +104,28 @@ class ChannelsViewModelTest {
     }
 
     @Test
+    fun `selecting the selected tag again clears it`() {
+        val viewModel = viewModel()
+        viewModel.selectTag("Sports")
+
+        viewModel.selectTag("Sports")
+
+        viewModel.loaded.filter shouldBe ChannelFilter()
+        viewModel.loaded.channels shouldContainExactly listOf(bulls, espn, cnn)
+    }
+
+    @Test
+    fun `selecting favorites again goes back to every channel`() {
+        val viewModel = viewModel()
+        viewModel.showFavorites()
+
+        viewModel.showFavorites()
+
+        viewModel.loaded.filter shouldBe ChannelFilter()
+        viewModel.loaded.channels shouldContainExactly listOf(bulls, espn, cnn)
+    }
+
+    @Test
     fun `favorites shows only favorite channels, in place of a tag`() {
         val viewModel = viewModel()
         viewModel.selectTag("Sports")

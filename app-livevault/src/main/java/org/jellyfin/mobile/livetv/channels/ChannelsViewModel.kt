@@ -92,15 +92,17 @@ class ChannelsViewModel(
         if (all.any { channel -> channel.nowPlaying?.let { !it.end.isAfter(now) } == true }) refresh()
     }
 
-    /** Shows the channels carrying [tag], or every channel when null. */
+    /** Shows the channels carrying [tag], or every channel when null or already selected. */
     fun selectTag(tag: String?) {
+        val selected = savedState.get<String?>(KEY_TAG)
         savedState[KEY_FAVORITES] = false
-        savedState[KEY_TAG] = tag
+        savedState[KEY_TAG] = tag.takeIf { it != selected }
     }
 
+    /** Shows only favorites, or every channel when they're already shown. */
     fun showFavorites() {
         savedState[KEY_TAG] = null
-        savedState[KEY_FAVORITES] = true
+        savedState[KEY_FAVORITES] = savedState.get<Boolean>(KEY_FAVORITES) != true
     }
 
     fun onQueryChange(text: String) {
