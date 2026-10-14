@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.e2e
 
+import android.os.Build
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
@@ -36,6 +37,8 @@ class DownloadE2ETest : LoggedInE2ETest() {
         // proceeding — grant it upfront via UiAutomation rather than dealing with a system
         // permission dialog outside the app's own window (Espresso can't reach it; would need
         // UiAutomator). Self-contained: works on a fresh install without any manual adb setup.
+        // The permission only exists on API 33+; older versions refuse to grant it.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
             ApplicationProvider.getApplicationContext<android.content.Context>().packageName,
             "android.permission.POST_NOTIFICATIONS",
