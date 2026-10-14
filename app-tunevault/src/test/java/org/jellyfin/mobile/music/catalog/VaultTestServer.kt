@@ -8,14 +8,14 @@ import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.DeviceInfo
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.net.HttpURLConnection
 import java.net.URI
 
 /**
  * A logged-in [ApiClient] for the real local Vault, built straight from the SDK's JVM
- * [OkHttpFactory] (the `Jellyfin` entry point needs an Android Context; this doesn't). Tests using
- * it are skipped, not failed, when the Vault is down or no credentials are configured.
+ * [OkHttpFactory] (the `Jellyfin` entry point needs an Android Context; this doesn't).
  */
 object VaultTestServer {
     val hostname: String = System.getProperty("contract.hostname").orEmpty()
@@ -43,15 +43,19 @@ object VaultTestServer {
         }
     }
 
+    /**
+     * Skips when no credentials are configured (CI has no server). With credentials, an unreachable
+     * Vault fails instead: a skip there would let a dead server pass as green.
+     */
     fun assumeAvailable() {
         assumeTrue(username.isNotBlank() && password.isNotBlank(), "e2e credentials not in local.properties")
-        assumeTrue(isReachable(), "Vault not reachable at $hostname")
+        reachabilityError()?.let { fail<Unit>("Vault not reachable at $hostname: $it") }
     }
 
-    private fun isReachable(): Boolean = runCatching {
+    private fun reachabilityError(): String? = runCatching {
         val connection = URI("$hostname/System/Info/Public").toURL().openConnection() as HttpURLConnection
-        connection.connectTimeout = 2_000
-        connection.readTimeout = 2_000
-        connection.responseCode == 200
-    }.getOrDefault(false)
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 10_000
+        connection.responseCode.takeIf { it != 200 }?.let { "HTTP $it" }
+    }.getOrElse { it.toString() }
 }
