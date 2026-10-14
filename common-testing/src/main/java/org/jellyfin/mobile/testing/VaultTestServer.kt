@@ -2,7 +2,10 @@ package org.jellyfin.mobile.testing
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.HttpClientOptions
@@ -57,10 +60,15 @@ object VaultTestServer {
      * The server's raw JSON answer to an authenticated GET of [path] (e.g. "/Items?ids=..."), for
      * checking what the server really stores without going through the SDK's decoding.
      */
-    fun rawJson(path: String): JsonObject {
+    fun rawJson(path: String): JsonObject = rawJsonElement(path).jsonObject
+
+    /** [rawJson] for endpoints that answer with a JSON array (e.g. "/Sessions"). */
+    fun rawJsonArray(path: String): JsonArray = rawJsonElement(path).jsonArray
+
+    private fun rawJsonElement(path: String): JsonElement {
         val connection = URI("$hostname$path").toURL().openConnection() as HttpURLConnection
         connection.setRequestProperty("Authorization", "MediaBrowser Token=\"${apiClient.accessToken}\"")
-        return connection.inputStream.use { Json.parseToJsonElement(it.reader().readText()).jsonObject }
+        return connection.inputStream.use { Json.parseToJsonElement(it.reader().readText()) }
     }
 
     /**

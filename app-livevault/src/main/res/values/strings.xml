@@ -13,4 +13,10 @@
     <string name="channels_no_match">No channels match \"%1$s\"</string>
     <string name="channels_no_favorites">No favorite channels yet. Tap the star on a channel to add it.</string>
     <string name="channels_empty">No channels</string>
+    <string name="player_tuning">Tuning…</string>
+    <string name="player_failed">Couldn\'t play this channel</string>
+    <string name="player_back">Back</string>
+    <string name="player_back_to_channels">Back to channels</string>
+    <string name="player_next_channel">Next channel</string>
+    <string name="player_previous_channel">Previous channel</string>
 </resources>

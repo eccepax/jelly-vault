@@ -353,7 +353,10 @@ private const val DIM_ALPHA = 0.7f
 
 /** The channel browser, refreshing what's on now when the app returns and when a program ends. */
 @Composable
-fun ChannelsRoute(onChannelClick: (LiveChannel) -> Unit, viewModel: ChannelsViewModel = koinViewModel()) {
+fun ChannelsRoute(
+    onChannelClick: (channel: LiveChannel, lineup: List<LiveChannel>) -> Unit,
+    viewModel: ChannelsViewModel = koinViewModel(),
+) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
         while (true) {
@@ -373,7 +376,8 @@ fun ChannelsRoute(onChannelClick: (LiveChannel) -> Unit, viewModel: ChannelsView
         onTagSelect = viewModel::selectTag,
         onFavoritesSelect = viewModel::showFavorites,
         onFavoriteToggle = { viewModel.toggleFavorite(it.id) },
-        onChannelClick = onChannelClick,
+        // Zapping from the player moves through the channels the viewer was looking at.
+        onChannelClick = { channel -> onChannelClick(channel, (state as? ChannelsUiState.Loaded)?.channels.orEmpty()) },
         onRetry = viewModel::retry,
     )
 }

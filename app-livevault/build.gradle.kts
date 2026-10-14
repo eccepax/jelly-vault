@@ -27,6 +27,7 @@ base.archivesName.set("livevault-v${project.getVersionName()}")
 dependencies {
     // Common module
     implementation(project(":common"))
+    implementation(project(":common-media"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)
@@ -49,6 +50,12 @@ dependencies {
     implementation(libs.google.material)
     implementation(libs.bundles.compose)
     implementation(libs.bundles.coil)
+
+    // Playback
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.hls)
+    implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
 
     // Network
