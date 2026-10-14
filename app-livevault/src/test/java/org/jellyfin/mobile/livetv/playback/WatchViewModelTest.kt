@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.jellyfin.mobile.livetv.catalog.channel
+import org.jellyfin.mobile.livetv.viewing.FakeViewingMemory
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -23,6 +24,7 @@ class WatchViewModelTest {
     private val player = FakeLivePlayer(log)
     private val ledger = FakeStreamLedger()
     private val sessions = FakeLiveTvSessions()
+    private val memory = FakeViewingMemory()
     private val bulls = channel("1", "Bulls")
     private val espn = channel("43", "ESPN")
     private val tubi = channel("5001", "FREE| Movies", tags = listOf("Free"))
@@ -48,6 +50,7 @@ class WatchViewModelTest {
             StreamCloser(streams, ledger, scope = backgroundScope),
             player,
             sessions,
+            memory,
         )
         try {
             block(viewModel)
@@ -178,5 +181,36 @@ class WatchViewModelTest {
 
         viewModel.state.value.playback shouldBe PlaybackState.Playing(espn.id)
         viewModel.state.value.loginInUse shouldBe null
+    }
+
+    @Test
+    fun `a channel that plays is remembered`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        memory.lastChannelId.value shouldBe bulls.id
+    }
+
+    @Test
+    fun `zapping remembers where it lands`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        viewModel.zap(+1)
+        settle()
+
+        memory.lastChannelId.value shouldBe espn.id
+    }
+
+    @Test
+    fun `a channel that fails is not remembered`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        streams.failing += espn.id
+
+        viewModel.zap(+1)
+        settle()
+
+        memory.lastChannelId.value shouldBe bulls.id
     }
 }

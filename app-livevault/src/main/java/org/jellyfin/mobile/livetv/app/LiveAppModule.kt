@@ -20,6 +20,8 @@ import org.jellyfin.mobile.livetv.playback.PreferencesStreamLedger
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.StreamLedger
 import org.jellyfin.mobile.livetv.playback.WatchViewModel
+import org.jellyfin.mobile.livetv.viewing.PreferencesViewingMemory
+import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -30,7 +32,8 @@ val liveAppModule = module {
     single { AppPreferences(androidApplication()) }
 
     single<LiveTvCatalog> { JellyfinLiveTvCatalog(get()) }
-    viewModel { ChannelsViewModel(get(), get()) }
+    single<ViewingMemory> { PreferencesViewingMemory(androidContext()) }
+    viewModel { ChannelsViewModel(get(), get(), get()) }
 
     // Playback
     single { DeviceProfileBuilder("LiveVault", includeVideo = true) }
@@ -40,8 +43,8 @@ val liveAppModule = module {
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
     single<LiveTvSessions> { JellyfinLiveTvSessions(get()) }
     // Account
-    single { liveVaultSignOut(get(), get(), get<ApiClientController>()::logoutUser) }
+    single { liveVaultSignOut(get(), get(), get(), get<ApiClientController>()::logoutUser) }
     viewModel { AccountViewModel(signOut = { get<SignOut>()() }) }
 
-    viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), get()) }
+    viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), get(), get()) }
 }

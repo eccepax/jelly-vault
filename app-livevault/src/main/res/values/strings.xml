@@ -10,6 +10,7 @@
     <string name="retry">Retry</string>
     <string name="channels_error">Couldn\'t load channels</string>
     <string name="channels_search">Search channels</string>
+    <string name="channels_continue_watching">Continue watching</string>
     <string name="channels_all">All</string>
     <string name="channels_favorites">Favorites</string>
     <string name="channels_no_guide">No guide information</string>

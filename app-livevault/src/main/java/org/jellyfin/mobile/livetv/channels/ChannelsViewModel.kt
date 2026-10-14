@@ -16,6 +16,7 @@ import org.jellyfin.mobile.livetv.catalog.LiveTvCatalog
 import org.jellyfin.mobile.livetv.catalog.filteredBy
 import org.jellyfin.mobile.livetv.catalog.tags
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
 import java.time.Instant
 
@@ -23,23 +24,36 @@ sealed interface ChannelsUiState {
     data object Loading : ChannelsUiState
     data object Error : ChannelsUiState
 
-    /** [channels] are the ones [filter] lets through; [tags] are every tag in use. */
+    /**
+     * [channels] are the ones [filter] lets through; [tags] are every tag in use. [lastChannel] is
+     * the channel last watched, offered to continue (not while searching).
+     */
     data class Loaded(
         val channels: List<LiveChannel>,
         val tags: List<String>,
         val filter: ChannelFilter,
+        val lastChannel: LiveChannel? = null,
     ) : ChannelsUiState
 }
 
 /**
  * The channel browser: loads every channel once and filters on the device, so switching tags or
  * typing a search is instant. The filter is kept in [SavedStateHandle] so it survives rotation and
- * process death.
+ * process death, and the tag (or Favorites) in [memory] for the next time the app opens.
  */
 class ChannelsViewModel(
     private val catalog: LiveTvCatalog,
     private val savedState: SavedStateHandle,
+    private val memory: ViewingMemory,
 ) : ViewModel() {
+
+    init {
+        // A new screen opens where the viewer left off; a recreated one keeps its own filter.
+        if (KEY_TAG !in savedState && KEY_FAVORITES !in savedState) {
+            savedState[KEY_TAG] = memory.tag
+            savedState[KEY_FAVORITES] = memory.favoritesOnly
+        }
+    }
 
     private sealed interface Channels {
         data object Loading : Channels
@@ -54,13 +68,19 @@ class ChannelsViewModel(
         savedState.getStateFlow<String?>(KEY_TAG, null),
         savedState.getStateFlow(KEY_FAVORITES, false),
         savedState.getStateFlow(KEY_QUERY, ""),
-    ) { channels, tag, favoritesOnly, query ->
+        memory.lastChannelId,
+    ) { channels, tag, favoritesOnly, query, lastChannelId ->
         when (channels) {
             Channels.Loading -> ChannelsUiState.Loading
             Channels.Error -> ChannelsUiState.Error
             is Channels.Loaded -> {
                 val filter = ChannelFilter(tag = tag, favoritesOnly = favoritesOnly, query = query)
-                ChannelsUiState.Loaded(channels.all.filteredBy(filter), channels.all.tags(), filter)
+                ChannelsUiState.Loaded(
+                    channels = channels.all.filteredBy(filter),
+                    tags = channels.all.tags(),
+                    filter = filter,
+                    lastChannel = channels.all.firstOrNull { it.id == lastChannelId }.takeIf { query.isBlank() },
+                )
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ChannelsUiState.Loading)
@@ -95,20 +115,23 @@ class ChannelsViewModel(
     /** Shows the channels carrying [tag], or every channel when null or already selected. */
     fun selectTag(tag: String?) {
         val selected = savedState.get<String?>(KEY_TAG)
-        savedState[KEY_FAVORITES] = false
-        savedState[KEY_TAG] = tag.takeIf { it != selected }
+        setFilter(tag = tag.takeIf { it != selected }, favoritesOnly = false)
     }
 
     /** Shows the channels carrying [tag], whatever was selected before. */
     fun showTag(tag: String) {
-        savedState[KEY_FAVORITES] = false
-        savedState[KEY_TAG] = tag
+        setFilter(tag = tag, favoritesOnly = false)
     }
 
     /** Shows only favorites, or every channel when they're already shown. */
     fun showFavorites() {
-        savedState[KEY_TAG] = null
-        savedState[KEY_FAVORITES] = savedState.get<Boolean>(KEY_FAVORITES) != true
+        setFilter(tag = null, favoritesOnly = savedState.get<Boolean>(KEY_FAVORITES) != true)
+    }
+
+    private fun setFilter(tag: String?, favoritesOnly: Boolean) {
+        savedState[KEY_TAG] = tag
+        savedState[KEY_FAVORITES] = favoritesOnly
+        memory.rememberFilter(tag, favoritesOnly)
     }
 
     fun onQueryChange(text: String) {

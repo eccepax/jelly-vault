@@ -11,11 +11,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.Lifecycle
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
-import org.jellyfin.mobile.livetv.data.LiveDatabase
 import org.jellyfin.mobile.livetv.playback.PlayerScreenTags
 import org.jellyfin.mobile.livetv.playback.StreamLedger
 import org.jellyfin.mobile.livetv.playback.StreamTicket
@@ -39,7 +39,7 @@ class PlaybackE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
     private val ledger get() = koinGet<StreamLedger>()
 
     override fun clearAppState() {
-        koinGet<LiveDatabase>().clearAllTables()
+        clearLiveVaultState()
     }
 
     @After
@@ -96,6 +96,12 @@ class PlaybackE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
         pressBack()
         waitUntil("back on the channels") { composeRule.onAllNodes(anyChannel).fetchSemanticsNodes().isNotEmpty() }
         waitUntil("stream closed") { ledger.all().isEmpty() }
+
+        // The channel just watched is offered to continue (once the search is cleared).
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextClearance()
+        waitUntil("continue watching") {
+            composeRule.onAllNodes(hasTestTag(ChannelsScreenTags.CONTINUE)).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test

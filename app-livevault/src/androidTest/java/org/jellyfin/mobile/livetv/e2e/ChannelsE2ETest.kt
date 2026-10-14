@@ -12,7 +12,6 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
-import org.jellyfin.mobile.livetv.data.LiveDatabase
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
@@ -29,7 +28,7 @@ class ChannelsE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
     }
 
     override fun clearAppState() {
-        koinGet<LiveDatabase>().clearAllTables()
+        clearLiveVaultState()
     }
 
     private fun waitForChannels() {

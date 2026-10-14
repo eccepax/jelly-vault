@@ -239,4 +239,21 @@ class ChannelsScreenTest {
         composeRule.onNodeWithContentDescription("More options").performClick()
         composeRule.onNodeWithText("Sign out").assertIsDisplayed()
     }
+
+    @Test
+    fun `offers to continue the last channel`() {
+        show(loaded().copy(lastChannel = espn))
+
+        composeRule.onNodeWithText("Continue watching").assertIsDisplayed()
+        composeRule.onNodeWithTag(ChannelsScreenTags.CONTINUE).performClick()
+
+        clicked shouldBe espn
+    }
+
+    @Test
+    fun `no offer when there is nothing to continue`() {
+        show(loaded())
+
+        composeRule.onNodeWithText("Continue watching").assertDoesNotExist()
+    }
 }

@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
-import org.jellyfin.mobile.livetv.data.LiveDatabase
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
@@ -25,7 +24,7 @@ class SignOutE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class
     }
 
     override fun clearAppState() {
-        koinGet<LiveDatabase>().clearAllTables()
+        clearLiveVaultState()
     }
 
     private fun waitForChannels() {

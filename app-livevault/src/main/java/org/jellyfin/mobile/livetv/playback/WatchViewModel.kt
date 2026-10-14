@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
 
 /**
@@ -24,6 +26,7 @@ class WatchViewModel(
     closer: StreamCloser,
     val player: LivePlayer,
     private val sessions: LiveTvSessions,
+    private val memory: ViewingMemory,
 ) : ViewModel() {
 
     private val playback = LivePlayback(streams, player, closer, viewModelScope)
@@ -61,6 +64,15 @@ class WatchViewModel(
         SharingStarted.Eagerly,
         WatchUiState(PlaybackState.Idle, channel = null, videoStarted = false),
     )
+
+    init {
+        // Where the viewer actually ended up watching: a zap's landing, not a channel that failed.
+        viewModelScope.launch {
+            playback.state.collect { state ->
+                if (state is PlaybackState.Playing) memory.rememberChannel(state.channelId)
+            }
+        }
+    }
 
     /** Watches [channel]; zapping moves through [lineup] (the channels the viewer was browsing). */
     fun watch(channel: LiveChannel, lineup: List<LiveChannel>) {

@@ -15,6 +15,7 @@ import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.catalog.FakeLiveTvCatalog
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
+import org.jellyfin.mobile.livetv.viewing.FakeViewingMemory
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -28,6 +29,7 @@ class ChannelsViewModelTest {
     private val bulls = channel("1", "Bulls", tags = listOf("My Teams", "Sports"), now = program("Bulls at Pacers"))
     private val espn = channel("43", "ESPN", tags = listOf("Sports"))
     private val cnn = channel("200", "CNN", tags = listOf("News"), favorite = true)
+    private val memory = FakeViewingMemory()
 
     @BeforeEach
     fun setUp() {
@@ -40,7 +42,8 @@ class ChannelsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()) = ChannelsViewModel(catalog, savedState)
+    private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()) =
+        ChannelsViewModel(catalog, savedState, memory)
 
     private val ChannelsViewModel.loaded get() = state.value.shouldBeInstanceOf<ChannelsUiState.Loaded>()
 
@@ -276,5 +279,83 @@ class ChannelsViewModelTest {
         viewModel.refresh()
 
         viewModel.loaded.channels shouldContainExactly listOf(bulls, espn, cnn)
+    }
+
+    @Test
+    fun `opens on the tag selected last time`() {
+        memory.tag = "Sports"
+
+        viewModel().loaded.filter shouldBe ChannelFilter(tag = "Sports")
+    }
+
+    @Test
+    fun `opens on favorites if they were shown last time`() {
+        memory.favoritesOnly = true
+
+        viewModel().loaded.filter shouldBe ChannelFilter(favoritesOnly = true)
+    }
+
+    @Test
+    fun `the selected tag is remembered for next time`() {
+        viewModel().selectTag("Sports")
+
+        memory.tag shouldBe "Sports"
+        memory.favoritesOnly shouldBe false
+    }
+
+    @Test
+    fun `showing favorites is remembered for next time`() {
+        viewModel().showFavorites()
+
+        memory.favoritesOnly shouldBe true
+        memory.tag shouldBe null
+    }
+
+    @Test
+    fun `this screen's own filter wins over the remembered one`() {
+        // After a rotation the saved state belongs to this screen and is newer than the memory.
+        val savedState = SavedStateHandle()
+        viewModel(savedState).selectTag("Sports")
+        memory.tag = "News"
+
+        viewModel(savedState).loaded.filter.tag shouldBe "Sports"
+    }
+
+    @Test
+    fun `nothing to continue at first`() {
+        viewModel().loaded.lastChannel shouldBe null
+    }
+
+    @Test
+    fun `the last channel watched is offered to continue`() {
+        memory.rememberChannel(espn.id)
+
+        viewModel().loaded.lastChannel shouldBe espn
+    }
+
+    @Test
+    fun `the offer follows what is watched`() {
+        val viewModel = viewModel()
+
+        memory.rememberChannel(cnn.id)
+
+        viewModel.loaded.lastChannel shouldBe cnn
+    }
+
+    @Test
+    fun `a last channel the server no longer has is not offered`() {
+        memory.rememberChannel("id-gone")
+
+        viewModel().loaded.lastChannel shouldBe null
+    }
+
+    @Test
+    fun `the offer is hidden while searching`() {
+        memory.rememberChannel(espn.id)
+        val viewModel = viewModel()
+
+        viewModel.onQueryChange("cnn")
+
+        viewModel.loaded.lastChannel shouldBe null
     }
 }

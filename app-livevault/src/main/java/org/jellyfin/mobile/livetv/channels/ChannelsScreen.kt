@@ -107,6 +107,9 @@ fun ChannelsScreen(
                     }
                 }
                 is ChannelsUiState.Loaded -> {
+                    state.lastChannel?.let { channel ->
+                        ContinueWatching(channel, now, onFavoriteToggle, onChannelClick)
+                    }
                     FilterChips(
                         tags = state.tags,
                         filter = state.filter,
@@ -268,13 +271,42 @@ private fun ChannelGrid(
 }
 
 @Composable
-private fun ChannelCard(channel: LiveChannel, now: Instant, onClick: () -> Unit, onFavoriteToggle: () -> Unit) {
+private fun ContinueWatching(
+    channel: LiveChannel,
+    now: Instant,
+    onFavoriteToggle: (LiveChannel) -> Unit,
+    onChannelClick: (LiveChannel) -> Unit,
+) {
+    Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
+        Text(
+            stringResource(R.string.channels_continue_watching),
+            style = MaterialTheme.typography.caption,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
+        ChannelCard(
+            channel = channel,
+            now = now,
+            onClick = { onChannelClick(channel) },
+            onFavoriteToggle = { onFavoriteToggle(channel) },
+            tag = ChannelsScreenTags.CONTINUE,
+        )
+    }
+}
+
+@Composable
+private fun ChannelCard(
+    channel: LiveChannel,
+    now: Instant,
+    onClick: () -> Unit,
+    onFavoriteToggle: () -> Unit,
+    tag: String = ChannelsScreenTags.channel(channel.id),
+) {
     val interactions = remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .testTag(ChannelsScreenTags.channel(channel.id))
+            .testTag(tag)
             .fillMaxWidth()
             .clip(CardShape)
             .background(MaterialTheme.colors.surface)
