@@ -86,6 +86,7 @@ kotlin-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-s
 # Core
 koin = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin-compose" }
+koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-plugin" }
 # Gradle plugins on buildSrc's classpath, for the vault.* convention plugins
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }

@@ -81,6 +81,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.koin.test)
     // Robolectric shadows the Android framework for Fragment-level JVM tests; it is JUnit4-based,
     // so its tests run through the JUnit5 platform's vintage engine
     testImplementation(libs.junit4)
