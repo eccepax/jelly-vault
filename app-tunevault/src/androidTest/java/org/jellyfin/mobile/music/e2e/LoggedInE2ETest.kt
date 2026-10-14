@@ -1,43 +1,28 @@
 package org.jellyfin.mobile.music.e2e
 
 import android.Manifest
-import android.content.Context
 import android.os.Build
-import android.view.View
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.replaceText
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.rule.GrantPermissionRule
-import org.hamcrest.Matcher
 import org.jellyfin.mobile.music.TuneMainActivity
-import org.junit.Assume.assumeFalse
-import org.junit.Before
+import org.jellyfin.mobile.music.data.TuneDatabase
+import org.jellyfin.mobile.music.offline.ServerConnectivity
+import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Rule
-import org.jellyfin.mobile.common.R as CommonR
-
-const val WAIT_TIMEOUT_MS = 15_000L
 
 /**
  * Base for any e2e test that needs to start from the signed-in library. The connect screen is
  * common's Compose `ConnectScreen`; login is common's classic-View `LoginFragment` (hosted inside
  * TuneVault's Compose tree), so it's driven with Espresso.
  */
-abstract class LoggedInE2ETest : BaseE2ETest() {
-
-    @get:Rule
-    val composeRule = createAndroidComposeRule<TuneMainActivity>()
+abstract class LoggedInE2ETest : SignedInE2ETest<TuneMainActivity>(TuneMainActivity::class.java) {
 
     /** Pre-granted, so the system's prompt on a first download never covers the screen under test. */
     @get:Rule
@@ -47,32 +32,22 @@ abstract class LoggedInE2ETest : BaseE2ETest() {
         GrantPermissionRule.grant()
     }
 
-    @Before
-    fun requireCredentials() {
-        assumeFalse("e2e.username not configured in local.properties — skipping", e2eUsername().isBlank())
-        assumeFalse("e2e.password not configured in local.properties — skipping", e2ePassword().isBlank())
+    override fun clearAppState() {
+        koinGet<TuneDatabase>().clearAllTables()
+        // Playback (a Koin singleton + the PlaybackService) also outlives each test; without this
+        // the previous test's queue is still loaded and its mini-player already on screen.
+        onMain { koinGet<PlaybackController>().stop() }
+        // Online/offline is app-wide too: after a test that took the Vault away, the app only
+        // notices it's back at its next check. Starting before then, a test would see the
+        // downloads-only library (empty, once downloads are cleared) instead of the server's.
+        val connectivity = koinGet<ServerConnectivity>()
+        val deadline = System.currentTimeMillis() + ServerConnectivity.RETRY_INTERVAL_MS * 2
+        while (connectivity.isOffline.value && System.currentTimeMillis() < deadline) Thread.sleep(POLL_MS)
+        check(!connectivity.isOffline.value) { "The app still thinks the Vault is unreachable" }
     }
 
     /** Connects to the Vault and logs in. Returns once the login has been submitted. */
-    protected fun connectAndLogin() {
-        val context: Context = ApplicationProvider.getApplicationContext()
-        val hostHint = context.getString(CommonR.string.host_input_hint)
-        val connectButtonText = context.getString(CommonR.string.connect_button_text)
-
-        waitForComposeText(hostHint)
-        composeRule.onNodeWithText(hostHint).performTextInput(e2eHostname())
-        composeRule.onNodeWithText(connectButtonText).performClick()
-
-        signIn()
-    }
-
-    /** Fills in and submits the sign-in form (the server is already chosen). */
-    protected fun signIn() {
-        waitForView(withId(CommonR.id.editUsername))
-        onView(withId(CommonR.id.editUsername)).perform(replaceText(e2eUsername()))
-        onView(withId(CommonR.id.editPassword)).perform(replaceText(e2ePassword()))
-        onView(withId(CommonR.id.buttonLogin)).perform(click())
-    }
+    protected fun connectAndLogin() = connectAndSignIn()
 
     /** Signs in (landing on Home) and switches to the Library tab. */
     protected fun connectAndLoginToLibrary() {
@@ -99,16 +74,6 @@ abstract class LoggedInE2ETest : BaseE2ETest() {
         scrollToAndClick(title)
         waitForComposeText(firstTrack)
     }
-
-    protected fun waitForComposeText(text: String, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching { composeRule.onNodeWithText(text).assertExists() }.isSuccess
-        }
-    }
-
-    protected fun waitForView(matcher: Matcher<View>, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching { onView(matcher).check(matches(isDisplayed())) }.isSuccess
-        }
-    }
 }
+
+private const val POLL_MS = 250L

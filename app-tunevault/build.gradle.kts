@@ -1,119 +1,26 @@
-import io.gitlab.arturbosch.detekt.Detekt
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.util.Properties
-
 plugins {
-    alias(libs.plugins.android.app)
-    alias(libs.plugins.kotlin.android)
+    id("vault.android.app")
     alias(libs.plugins.kotlin.ksp)
-    alias(libs.plugins.kotlin.parcelize)
+    id("org.jetbrains.kotlin.plugin.parcelize")
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.androidx.room)
-    alias(libs.plugins.detekt)
     alias(libs.plugins.roborazzi)
-    alias(libs.plugins.android.junit5)
-}
-
-detekt {
-    buildUponDefaultConfig = true
-    allRules = false
-    config.setFrom("${rootProject.projectDir}/detekt.yml")
-    autoCorrect = true
-}
-
-// The android-junit5 plugin auto-adds its JUnit5 Compose test artifact (android-test-compose-junit6)
-// whenever compose-ui-test is on a test classpath, and that artifact depends on
-// de.mannodermaus.junit5:core:2.0.0, which isn't published. Compose UI tests here use the JUnit4
-// createComposeRule (Robolectric unit tests + instrumented e2e), same as the sibling apps, so the
-// artifact isn't needed.
-configurations.configureEach {
-    exclude(group = "de.mannodermaus.junit5", module = "android-test-compose-junit6")
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_11
-        optIn.add("kotlin.RequiresOptIn")
-    }
-}
-
-// e2e.* properties are read from the gitignored local.properties (never committed) and passed to
-// the androidTest APK only as instrumentation runner arguments — they never touch BuildConfig or
-// the real app build. Same setup as app-audiovault / app-bookvault.
-val localProperties = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile.inputStream().use { load(it) }
-    }
 }
 
 android {
     namespace = "org.jellyfin.mobile.music"
-    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tunevault"
-        minSdk = 26
-        targetSdk = 36
-        versionName = project.getVersionName()
-        versionCode = getVersionCode(versionName!!)
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables.useSupportLibrary = true
-
-        testInstrumentationRunnerArguments["e2eHostname"] =
-            localProperties.getProperty("e2e.hostname", "http://10.0.2.2:8096")
-        testInstrumentationRunnerArguments["e2eUsername"] = localProperties.getProperty("e2e.username", "")
-        testInstrumentationRunnerArguments["e2ePassword"] = localProperties.getProperty("e2e.password", "")
-    }
-
-    val releaseSigningConfig = SigningHelper.loadSigningConfig(project)?.let { config ->
-        signingConfigs.create("release") {
-            storeFile = config.storeFile
-            storePassword = config.storePassword
-            keyAlias = config.keyAlias
-            keyPassword = config.keyPassword
-        }
-    }
-
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = releaseSigningConfig
-        }
-        getByName("debug") {
-            applicationIdSuffix = ".debug"
-            isDebuggable = true
-        }
     }
 
     buildFeatures {
-        buildConfig = true
         compose = true
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-        isCoreLibraryDesugaringEnabled = true
-    }
-
-    lint {
-        lintConfig = file("$rootDir/android-lint.xml")
-        abortOnError = true
-        sarifReport = true
     }
 
     room {
         schemaDirectory("$projectDir/schemas")
-    }
-
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
     }
 }
 
@@ -137,7 +44,6 @@ dependencies {
     implementation(libs.androidx.fragment)
     // Hosts common's View-based LoginFragment inside the otherwise all-Compose UI.
     implementation(libs.androidx.fragment.compose)
-    coreLibraryDesugaring(libs.androiddesugarlibs)
 
     // Lifecycle
     implementation(libs.bundles.androidx.lifecycle)
@@ -174,6 +80,7 @@ dependencies {
     debugImplementation(libs.leakcanary)
 
     // Testing
+    testImplementation(project(":common-testing"))
     testImplementation(libs.junit.api)
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)
@@ -191,39 +98,10 @@ dependencies {
     testImplementation(libs.androidx.media3.test.utils.robolectric)
     testRuntimeOnly(libs.junit.vintage.engine)
     debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.compose.ui.test.junit4)
-
-    // Formatting rules for detekt
-    detektPlugins(libs.detekt.formatting)
-}
-
-tasks {
-    withType<Detekt> {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-
-        reports {
-            html.required.set(true)
-            xml.required.set(false)
-            txt.required.set(true)
-            sarif.required.set(true)
-        }
-    }
-
-    withType<Test> {
-        useJUnitPlatform()
-        // MusicCatalog contract tests run on the JVM against the real Vault (skipped if it's
-        // unreachable or the credentials are missing). The host is localhost here, not the
-        // emulator's 10.0.2.2 alias that e2e.hostname defaults to.
-        systemProperty("contract.hostname", localProperties.getProperty("contract.hostname", "http://localhost:8096"))
-        systemProperty("contract.username", localProperties.getProperty("e2e.username", ""))
-        systemProperty("contract.password", localProperties.getProperty("e2e.password", ""))
-        testLogging {
-            outputs.upToDateWhen { false }
-            showStandardStreams = true
-        }
-    }
 }
 
 androidComponents {

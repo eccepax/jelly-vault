@@ -7,11 +7,8 @@ import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.downloads.BookDownloadManager
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
 import org.jellyfin.mobile.books.reader.BookReaderViewModel
-import org.jellyfin.mobile.common.MainViewModel
-import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
-import org.jellyfin.mobile.common.setup.ConnectionHelper
 import org.koin.android.ext.koin.androidApplication
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -23,14 +20,11 @@ val bookAppModule = module {
     single { ImageLoader(androidApplication()) }
 
     // Controllers
-    single { ApiClientController(get(), get(), get(), get(), get()) }
-    single { ConnectionHelper(get(), get()) }
 
     // Download manager
     single { BookDownloadManager(androidApplication(), get(), get(), get<DownloadRecordDao>()) }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
     viewModel { (libraryId: String?) ->
         BookLibraryViewModel(get(), get(), get<BookProgressDao>(), get(), get<DownloadRecordDao>(), libraryId)
     }

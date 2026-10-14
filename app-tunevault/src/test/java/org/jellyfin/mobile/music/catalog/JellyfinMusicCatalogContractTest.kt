@@ -12,6 +12,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -119,6 +123,16 @@ class JellyfinMusicCatalogContractTest {
             album.dateAdded.shouldNotBeNull()
             album.dateAdded!!.isAfter(now) shouldBe false
         }
+    }
+
+    @Test
+    fun `when an album was added is the time the server stores`() = runBlocking<Unit> {
+        // Compared with the raw JSON: the SDK's own decoding of the date is what's under test.
+        val album = catalog.albums().first { it.title == "The Purple Bird" }
+        val raw = VaultTestServer.rawJson("/Items?ids=${album.id}&fields=DateCreated")["Items"]!!
+            .jsonArray.single().jsonObject["DateCreated"]!!.jsonPrimitive.content
+
+        album.dateAdded shouldBe Instant.parse(raw)
     }
 
     @Test

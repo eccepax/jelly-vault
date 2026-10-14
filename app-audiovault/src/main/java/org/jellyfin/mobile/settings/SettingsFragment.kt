@@ -29,6 +29,7 @@ import org.jellyfin.mobile.utils.extensions.requireMainActivity
 import org.jellyfin.mobile.utils.getDownloadsPaths
 import org.jellyfin.mobile.utils.withThemedContext
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
+import org.jellyfin.mobile.common.R as CommonR
 
 class SettingsFragment : Fragment(), BackPressInterceptor {
 
@@ -43,7 +44,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        val localInflater = inflater.withThemedContext(requireContext(), R.style.AppTheme_Settings)
+        val localInflater = inflater.withThemedContext(requireContext(), CommonR.style.AppTheme_Settings)
         val binding = FragmentSettingsBinding.inflate(localInflater, container, false)
         binding.root.applyWindowInsetsAsMargins()
         binding.toolbar.setTitle(R.string.activity_name_settings)

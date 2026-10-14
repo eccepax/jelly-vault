@@ -4,9 +4,10 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonPrimitive
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
-import org.jellyfin.mobile.music.catalog.VaultTestServer
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneOffset
 
 /**
  * A play made offline is sent later with the time it happened. Writes the track's play data, so
@@ -67,7 +67,11 @@ class JellyfinOfflinePlayContractTest {
         val after = userData()
         after.playCount shouldBe before + 1
         after.played shouldBe true
-        val recorded = after.lastPlayedDate.shouldNotBeNull().toInstant(ZoneOffset.UTC)
+        after.lastPlayedDate.shouldNotBeNull()
+        // From the raw JSON: the SDK's own decoding of the date is what's under test.
+        val recorded = Instant.parse(
+            VaultTestServer.rawJson("/UserItems/${track.id}/UserData")["LastPlayedDate"]!!.jsonPrimitive.content,
+        )
         Duration.between(heardAt, recorded).abs().toMillis() shouldBeLessThan 60_000L
     }
 

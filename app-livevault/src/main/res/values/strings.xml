@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">LiveVault</string>
+    <string name="live_tv_title">Live TV</string>
+    <string name="channels_more_options">More options</string>
+    <string name="sign_out">Sign out</string>
+    <string name="signing_out">Signing out…</string>
+    <string name="sign_out_question">Sign out of the Vault?</string>
+    <string name="sign_out_confirm">Yes, sign out</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="channels_error">Couldn\'t load channels</string>
+    <string name="channels_search">Search channels</string>
+    <string name="channels_continue_watching">Continue watching</string>
+    <string name="channels_all">All</string>
+    <string name="channels_favorites">Favorites</string>
+    <string name="channels_no_guide">No guide information</string>
+    <string name="channels_until">until %1$s</string>
+    <string name="channels_favorite">Add %1$s to favorites</string>
+    <string name="channels_unfavorite">Remove %1$s from favorites</string>
+    <string name="channels_no_match">No channels match \"%1$s\"</string>
+    <string name="channels_no_favorites">No favorite channels yet. Tap the star on a channel to add it.</string>
+    <string name="channels_empty">No channels</string>
+    <string name="player_tuning">Tuning…</string>
+    <string name="player_failed">Couldn\'t play this channel</string>
+    <string name="player_back">Back</string>
+    <string name="player_login_in_use">Your TV provider\'s login is in use</string>
+    <string name="player_login_in_use_detail">It allows one stream at a time. Free channels still work.</string>
+    <string name="player_login_holder">%1$s (%2$s) is watching %3$s</string>
+    <string name="player_free_channels">Free channels</string>
+    <string name="player_back_to_channels">Back to channels</string>
+    <string name="player_next_channel">Next channel</string>
+    <string name="player_previous_channel">Previous channel</string>
+</resources>

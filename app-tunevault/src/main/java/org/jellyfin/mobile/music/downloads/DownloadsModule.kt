@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.scheduler.Requirements
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.data.TuneDatabase

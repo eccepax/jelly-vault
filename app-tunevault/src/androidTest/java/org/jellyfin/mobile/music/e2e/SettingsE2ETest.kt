@@ -11,6 +11,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withId
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

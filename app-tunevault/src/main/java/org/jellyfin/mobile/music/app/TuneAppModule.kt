@@ -10,13 +10,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
-import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.setup.ConnectionHelper
 import org.jellyfin.mobile.music.BuildConfig
 import org.jellyfin.mobile.music.account.SettingsViewModel
-import org.jellyfin.mobile.music.account.SignOut
+import org.jellyfin.mobile.music.account.tuneVaultSignOut
 import org.jellyfin.mobile.music.catalog.AccountInfo
 import org.jellyfin.mobile.music.catalog.FavoritesRepository
 import org.jellyfin.mobile.music.catalog.FavoritesStore
@@ -27,11 +26,9 @@ import org.jellyfin.mobile.music.catalog.JellyfinHomeFeed
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.catalog.JellyfinMusicSearch
 import org.jellyfin.mobile.music.catalog.JellyfinPlaylistStore
-import org.jellyfin.mobile.music.catalog.JellyfinServerSession
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.catalog.MusicSearch
 import org.jellyfin.mobile.music.catalog.PlaylistStore
-import org.jellyfin.mobile.music.catalog.ServerSession
 import org.jellyfin.mobile.music.data.TuneDatabase
 import org.jellyfin.mobile.music.downloads.DownloadRepository
 import org.jellyfin.mobile.music.downloads.DownloadedViewModel
@@ -90,8 +87,6 @@ val tuneAppModule = module {
     single { OkHttpClient() }
 
     // Controllers
-    single { ApiClientController(get(), get(), get(), get(), get()) }
-    single { ConnectionHelper(get(), get()) }
 
     // Catalog
     single {
@@ -149,12 +144,11 @@ val tuneAppModule = module {
     single { SleepTimerVisibility(get(), get()) }
 
     // Account
-    single<ServerSession> { JellyfinServerSession(get()) }
     single {
         val apiClientController = get<ApiClientController>()
         val downloads = get<DownloadRepository>()
         val offlinePlays = get<OfflinePlayReporter>()
-        SignOut(
+        tuneVaultSignOut(
             get(),
             get(),
             get(),
@@ -169,7 +163,6 @@ val tuneAppModule = module {
     }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
     viewModel { AlbumsViewModel(get(), get()).reloadingOnModeChange(isOffline(), AlbumsViewModel::retry) }
     viewModel { (albumId: String) ->
         AlbumDetailViewModel(

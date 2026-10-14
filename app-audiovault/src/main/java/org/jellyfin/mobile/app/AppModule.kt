@@ -24,10 +24,7 @@ import androidx.media3.extractor.ts.TsExtractor
 import coil3.ImageLoader
 import kotlinx.coroutines.channels.Channel
 import okhttp3.OkHttpClient
-import org.jellyfin.mobile.common.MainViewModel
-import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.setup.ConnectionHelper
 import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
@@ -63,13 +60,11 @@ val applicationModule = module {
     single(named(PLAYER_EVENT_CHANNEL)) { Channel<PlayerEvent>() }
 
     // Controllers
-    single { ApiClientController(get(), get(), get(), get(), get()) }
 
     // Event handlers and channels
     single { ActivityEventHandler() }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
     viewModel { DownloadsViewModel() }
     viewModel { LibraryViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { AudiobookPlayerViewModel(get()) }
@@ -79,11 +74,10 @@ val applicationModule = module {
     fragment { PlayerFragment() }
 
     // Connection helper
-    single { ConnectionHelper(get(), get()) }
 
     // Media player helpers
     single { MediaSourceResolver(get()) }
-    single { DeviceProfileBuilder() }
+    single { DeviceProfileBuilder(Constants.APP_INFO_NAME, includeVideo = false) }
     single { MediaSegmentRepository() }
 
     // ExoPlayer factories

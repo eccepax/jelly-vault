@@ -11,6 +11,7 @@ import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.catalog.PlaylistStore
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test

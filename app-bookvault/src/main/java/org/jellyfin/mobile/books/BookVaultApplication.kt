@@ -5,6 +5,7 @@ import org.jellyfin.mobile.books.app.bookAppModule
 import org.jellyfin.mobile.books.data.bookDatabaseModule
 import org.jellyfin.mobile.books.utils.BookTree
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.app.plainSignOutModule
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.fragment.koin.fragmentFactory
@@ -26,6 +27,7 @@ class BookVaultApplication : Application() {
                 bookAppModule,
                 apiModule(ClientInfo("BookVault", BuildConfig.VERSION_NAME)),
                 bookDatabaseModule,
+                plainSignOutModule,
             )
         }
     }

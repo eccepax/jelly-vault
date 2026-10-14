@@ -9,6 +9,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -278,17 +279,24 @@ class LibraryViewModelTest {
             lastPlayed = "",
         )
         coEvery { audiobookEntryDao.getAll(1L) } returns listOf(cachedEntry)
+        // The server answers only once the cached list has been seen: both run on real IO threads,
+        // and if both landed first the StateFlow would conflate the cached list away.
+        val serverMayAnswer = CompletableDeferred<Unit>()
         coEvery {
             userViewsApi.getUserViews(userId = any(), includeHidden = any())
-        } returns queryResult(listOf(libraryView("Books", CollectionType.BOOKS)))
+        } coAnswers {
+            serverMayAnswer.await()
+            queryResult(listOf(libraryView("Books", CollectionType.BOOKS)))
+        }
 
         val viewModel = createViewModel()
 
         viewModel.items.test {
-            // StateFlow's initial empty value is only seen if the cache read hasn't landed yet
-            val first = awaitItem()
-            val painted = if (first.isEmpty()) awaitItem() else first
+            var painted = awaitItem()
+            while (painted.isEmpty()) painted = awaitItem() // StateFlow's initial empty value
             painted.map { it.displayName } shouldBe listOf("Cached Book") // painted from cache
+
+            serverMayAnswer.complete(Unit)
             awaitItem() shouldBe emptyList() // revalidated from the (empty, per this test's stub) server
         }
         coVerify { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }

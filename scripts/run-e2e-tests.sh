@@ -3,7 +3,7 @@
 # animations (required by Espresso, and reset on every emulator boot), checks the Vault server is
 # reachable, then runs the whole e2e package for the chosen module.
 #
-# Prerequisites (see <module>/src/androidTest/java/.../e2e/BaseE2ETest.kt):
+# Prerequisites (see common-testing's org/jellyfin/mobile/testing/endtoend/VaultE2ETest.kt):
 #   - local.properties must have e2e.username / e2e.password (never commit these) — the tests
 #     run against a real local Jellyfin server (the Vault), not a mock.
 #   - The Vault server itself must be running and reachable.
@@ -17,7 +17,8 @@
 #   E2E_MODULE=app-tunevault E2E_SUITE=smoke scripts/run-e2e-tests.sh   # app-tunevault, critical paths only
 #
 # Env vars:
-#   E2E_MODULE            Which app module to test: app-audiovault (default), app-bookvault or app-tunevault
+#   E2E_MODULE            Which app module to test: app-audiovault (default), app-bookvault, app-tunevault
+#                         or app-livevault
 #   E2E_SUITE             Part of the suite to run (app-tunevault only; tags in its e2e/E2ESuites.kt):
 #                           full (default), smoke (~2 min), or one area: browse, playback,
 #                           collections (favorites/playlists), account, downloads (the slowest)
@@ -52,8 +53,12 @@ case "$MODULE" in
         GRADLE_TASK=":app-tunevault:connectedDebugAndroidTest"
         E2E_PACKAGE="org.jellyfin.mobile.music.e2e"
         ;;
+    app-livevault)
+        GRADLE_TASK=":app-livevault:connectedDebugAndroidTest"
+        E2E_PACKAGE="org.jellyfin.mobile.livetv.e2e"
+        ;;
     *)
-        echo "error: unknown E2E_MODULE '$MODULE' — expected app-audiovault, app-bookvault or app-tunevault" >&2
+        echo "error: unknown E2E_MODULE '$MODULE' — expected app-audiovault, app-bookvault, app-tunevault or app-livevault" >&2
         exit 1
         ;;
 esac

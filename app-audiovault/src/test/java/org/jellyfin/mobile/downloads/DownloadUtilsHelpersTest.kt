@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.downloads
 
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -58,32 +59,14 @@ class DownloadUtilsHelpersTest {
         isDestinationInternal(downloadToInternal = null, itemType = BaseItemKind.AUDIO_BOOK) shouldBe false
     }
 
-    // --- buildDownloadUrl -----------------------------------------------------------------------
+    // --- itemDownloadUrl round trip ---------------------------------------------------------------
 
     @Test
-    fun `builds a dashless download URL that extractItemId can parse back out`() {
+    fun `the shared download URL builder produces ids extractItemId can parse back out`() {
         val itemId = UUID.fromString("ded9d452-b0ef-fd8a-13f9-78d5ba92d1b6")
 
-        val url = buildDownloadUrl("https://server", "tok", itemId)
-
-        url shouldBe "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?api_key=tok"
-        extractItemId(url) shouldBe "ded9d452b0effd8a13f978d5ba92d1b6"
-    }
-
-    @Test
-    fun `strips a trailing slash from the base URL`() {
-        val itemId = UUID.fromString("ded9d452-b0ef-fd8a-13f9-78d5ba92d1b6")
-
-        buildDownloadUrl("https://server/", "tok", itemId) shouldBe
-            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?api_key=tok"
-    }
-
-    @Test
-    fun `a null access token produces an empty api_key query value rather than the string null`() {
-        val itemId = UUID.fromString("ded9d452-b0ef-fd8a-13f9-78d5ba92d1b6")
-
-        buildDownloadUrl("https://server", null, itemId) shouldBe
-            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?api_key="
+        extractItemId(itemDownloadUrl("https://server", itemId, "tok")) shouldBe "ded9d452b0effd8a13f978d5ba92d1b6"
+        extractItemId(itemDownloadUrl("https://server", itemId, null)) shouldBe "ded9d452b0effd8a13f978d5ba92d1b6"
     }
 
     // --- isValidDownloadConnection ---------------------------------------------------------------

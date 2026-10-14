@@ -8,6 +8,7 @@ import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.app.LibraryPreferences
 import org.jellyfin.mobile.music.domain.AlbumSort
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

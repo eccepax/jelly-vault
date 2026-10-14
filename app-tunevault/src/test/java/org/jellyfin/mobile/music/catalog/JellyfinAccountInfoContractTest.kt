@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.catalog
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeBlank
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 

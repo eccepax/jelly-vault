@@ -1,0 +1,143 @@
+{
+    "Name": "AudioVault",
+    "MaxStreamingBitrate": 120000000,
+    "MaxStaticBitrate": 100000000,
+    "MusicStreamingTranscodingBitrate": 384000,
+    "DirectPlayProfiles": [
+        {
+            "Container": "mp4,m4a,m4b",
+            "AudioCodec": "aac,alac,ac3",
+            "Type": "Audio"
+        },
+        {
+            "Container": "fmp4",
+            "AudioCodec": "aac,ac3,eac3",
+            "Type": "Audio"
+        },
+        {
+            "Container": "mkv",
+            "AudioCodec": "pcm_s8,pcm_s16be,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_alaw,pcm_mulaw,aac,alac,ac3,eac3,dts,mlp,truehd",
+            "Type": "Audio"
+        },
+        {
+            "Container": "wav",
+            "AudioCodec": "pcm_s8,pcm_s16be,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_alaw,pcm_mulaw",
+            "Type": "Audio"
+        },
+        {
+            "Container": "mpegts",
+            "AudioCodec": "pcm_s8,pcm_s16be,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_alaw,pcm_mulaw,aac,ac3,eac3,dts,mlp,truehd",
+            "Type": "Audio"
+        },
+        {
+            "Container": "flv",
+            "AudioCodec": "aac",
+            "Type": "Audio"
+        },
+        {
+            "Container": "aac",
+            "AudioCodec": "aac",
+            "Type": "Audio"
+        },
+        {
+            "Container": "3gp",
+            "AudioCodec": "aac",
+            "Type": "Audio"
+        }
+    ],
+    "TranscodingProfiles": [
+        {
+            "Container": "mp3",
+            "Type": "Audio",
+            "VideoCodec": "",
+            "AudioCodec": "mp3",
+            "Protocol": "http",
+            "Conditions": []
+        }
+    ],
+    "ContainerProfiles": [
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "mp4,m4a,m4b"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "fmp4"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "mkv"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "wav"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "mpegts"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "flv"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "aac"
+        },
+        {
+            "Type": "Audio",
+            "Conditions": [],
+            "Container": "3gp"
+        }
+    ],
+    "CodecProfiles": [],
+    "SubtitleProfiles": [
+        {
+            "Format": "dvbsub",
+            "Method": "Embed"
+        },
+        {
+            "Format": "pgssub",
+            "Method": "Embed"
+        },
+        {
+            "Format": "srt",
+            "Method": "Embed"
+        },
+        {
+            "Format": "subrip",
+            "Method": "Embed"
+        },
+        {
+            "Format": "ttml",
+            "Method": "Embed"
+        },
+        {
+            "Format": "srt",
+            "Method": "External"
+        },
+        {
+            "Format": "subrip",
+            "Method": "External"
+        },
+        {
+            "Format": "ttml",
+            "Method": "External"
+        },
+        {
+            "Format": "vtt",
+            "Method": "External"
+        },
+        {
+            "Format": "webvtt",
+            "Method": "External"
+        }
+    ]
+}

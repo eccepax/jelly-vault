@@ -3,6 +3,8 @@ package org.jellyfin.mobile.music.catalog
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.common.server.JellyfinServerSession
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.extensions.userApi
 import org.junit.jupiter.api.BeforeEach

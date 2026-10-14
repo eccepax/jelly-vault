@@ -19,6 +19,11 @@
     <string name="login_password">Password</string>
     <string name="login_button">Sign in</string>
     <string name="login_change_server">Change server</string>
+    <string name="login_quick_connect">Use Quick Connect</string>
+    <string name="login_quick_connect_hint">On a phone or computer that\'s signed in to Jellyfin, open your profile, choose Quick Connect and enter this code.</string>
+    <string name="login_quick_connect_unavailable">Quick Connect is turned off on this server</string>
+    <string name="login_quick_connect_expired">That code expired. Choose Use Quick Connect for a new one.</string>
+    <string name="login_quick_connect_failed">Quick Connect didn\'t work. Check the server and try again.</string>
     <string name="login_error_missing_username">Please enter a username</string>
     <string name="login_error_missing_server">No server selected</string>
     <string name="login_error_invalid_response">Login failed (invalid server response)</string>

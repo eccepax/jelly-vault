@@ -4,9 +4,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
-import org.jellyfin.mobile.music.downloads.withAccessToken
+import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.net.HttpURLConnection
