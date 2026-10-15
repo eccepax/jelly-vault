@@ -17,7 +17,6 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerHost
@@ -57,7 +56,6 @@ class QueueManagerTest {
     private val videosApi = mockk<VideosApi>(relaxed = true)
     private val mediaSourceResolver = mockk<MediaSourceResolver>(relaxed = true)
     private val deviceProfileBuilder = mockk<DeviceProfileBuilder>(relaxed = true)
-    private val downloadDao = mockk<DownloadDao>(relaxed = true)
     private val downloads = mockk<AudiobookDownloads> { coEvery { playable(any()) } returns null }
     private val progressiveFactory = mockk<ProgressiveMediaSource.Factory>(relaxed = true)
     private val hlsFactory = mockk<HlsMediaSource.Factory>(relaxed = true)
@@ -79,7 +77,6 @@ class QueueManagerTest {
                     single { apiClient }
                     single { mediaSourceResolver }
                     single { deviceProfileBuilder }
-                    single { downloadDao }
                     single { downloads }
                     single { progressiveFactory }
                     single { hlsFactory }
