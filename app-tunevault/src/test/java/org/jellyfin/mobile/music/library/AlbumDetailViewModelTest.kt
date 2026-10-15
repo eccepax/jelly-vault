@@ -8,12 +8,12 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.catalog.FakeFavoritesStore
 import org.jellyfin.mobile.music.catalog.FakeMusicCatalog
 import org.jellyfin.mobile.music.catalog.FavoritesRepository
 import org.jellyfin.mobile.music.catalog.album
 import org.jellyfin.mobile.music.domain.track
-import org.jellyfin.mobile.music.downloads.DownloadStatus
 import org.jellyfin.mobile.music.downloads.FakeCollectionDownloads
 import org.jellyfin.mobile.music.playback.FakePlaybackController
 import org.junit.jupiter.api.AfterEach
@@ -145,10 +145,10 @@ class AlbumDetailViewModelTest {
 
     @Test
     fun `reports the album's download status`() {
-        downloads.statuses.value = mapOf("pb" to DownloadStatus.InProgress(done = 1, total = 2))
+        downloads.statuses.value = mapOf("pb" to GroupStatus.InProgress(done = 1, total = 2))
 
         AlbumDetailViewModel("pb", catalog, playback, favorites, downloads).downloadStatus.value shouldBe
-            DownloadStatus.InProgress(done = 1, total = 2)
+            GroupStatus.InProgress(done = 1, total = 2)
     }
 
     @Test

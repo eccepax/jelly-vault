@@ -69,6 +69,10 @@
     <string name="pref_download_location">Download location</string>
     <string name="view_downloads">View downloads</string>
     <string name="downloads">Downloads</string>
+    <plurals name="downloading_tracks">
+        <item quantity="one">Downloading %d track</item>
+        <item quantity="other">Downloading %d tracks</item>
+    </plurals>
     <string name="library">Library</string>
     <string name="download_notifications_description">Download notifications</string>
     <string name="failed_information">Failed to retrieve media information</string>

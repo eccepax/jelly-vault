@@ -10,21 +10,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.books.R
-import org.jellyfin.mobile.books.data.BookDatabase
+import org.jellyfin.mobile.books.downloads.BookDownloads
+import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// BookDownloadManager does a plain synchronous OkHttp GET-to-file (no Media3 DownloadService, no
-// background queue) over the emulator's connection to the host machine's Vault — much faster than
-// AudioVault's multi-track Media3 download, but still a real network+disk round trip.
-private const val DOWNLOAD_TIMEOUT_MS = 30_000L
+// A real download through Media3's DownloadManager from the host machine's Vault
+private const val DOWNLOAD_TIMEOUT_MS = 60_000L
 
 /**
- * Long-press -> immediate download (`BookLibraryFragment.showDownloadDialog`, already exercised at
- * the unit level in `BookLibraryFragmentTest` — unlike `app-audiovault`, a *new* download has no
- * confirmation dialog: it fires immediately and shows a `Toast`). Completion is detected by polling
- * `DownloadRecordDao` directly via [koinGet] — `BookLibraryViewModel`'s `downloadedIds` StateFlow
- * is sourced from the same table, so a non-empty result is a reliable signal the download actually
- * wrote a `DownloadRecord`, not just that the tap was registered.
+ * Long-press -> immediate download (`BookLibraryFragment.showDownloadDialog`; a new download has no
+ * confirmation dialog, it starts at once and shows a Toast). Finished means the book's whole file
+ * is on the device, not just that the tap registered.
  */
 class DownloadE2ETest : LoggedInE2ETest() {
 
@@ -32,15 +29,16 @@ class DownloadE2ETest : LoggedInE2ETest() {
     fun downloadingALibraryItemPersistsItLocally() {
         loginAndWaitForLibrary()
         waitForView(allOf(withId(R.id.recycler_view_list), hasMinimumChildCount(1)))
-        assert(downloadCount() == 0) { "Expected no downloads before the test (state should be reset by BaseE2ETest)" }
+        assertTrue("Expected no downloads before the test", downloadedIds().isEmpty())
 
         onView(withId(R.id.recycler_view_list))
             .perform(actionOnItemAtPosition<RecyclerView.ViewHolder>(0, longClick()))
 
-        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadCount() > 0 }
-
-        assert(downloadCount() > 0) { "Expected at least one DownloadRecord row after the download completed" }
+        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadedIds().isNotEmpty() }
+        val file = checkNotNull(onMain { koinGet<ItemDownloads>().fileFor(downloadedIds().single()) })
+        val head = ByteArray(2).also { bytes -> file.inputStream().use { it.read(bytes) } }
+        assertTrue("Expected an EPUB (PK) or a PDF (%P), got ${String(head)}", String(head) in setOf("PK", "%P"))
     }
 
-    private fun downloadCount(): Int = runBlocking { koinGet<BookDatabase>().downloadRecordDao.getAll().first().size }
+    private fun downloadedIds(): Set<String> = runBlocking { koinGet<BookDownloads>().downloadedIds.first() }
 }

@@ -1,19 +1,14 @@
 package org.jellyfin.mobile.music.e2e
 
-import android.net.Uri
-import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.cache.Cache
-import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.offline.DownloadManager
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.domain.Track
-import org.jellyfin.mobile.music.downloads.TrackCacheKey
-import org.jellyfin.mobile.music.downloads.TrackDownload
-import org.jellyfin.mobile.music.downloads.TrackDownloader
+import org.jellyfin.mobile.common.downloads.DownloadFiles
+import org.jellyfin.mobile.common.downloads.ItemDownload
+import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.sdk.api.client.ApiClient
@@ -26,14 +21,14 @@ import org.junit.Test
 import java.net.HttpURLConnection
 import java.net.URI
 
-/** The real downloader, cache and player against the real Vault: no UI involved. */
+/** The real downloader, download files and player against the real Vault: no UI involved. */
 @UnstableApi
 @DownloadsArea
 class DownloaderE2ETest : LoggedInE2ETest() {
 
-    private val downloader: TrackDownloader get() = koinGet()
+    private val downloader: ItemDownloads get() = koinGet()
     private val catalog: JellyfinMusicCatalog get() = koinGet()
-    private val cache: Cache get() = koinGet()
+    private val files: DownloadFiles get() = koinGet()
     private val apiClient: ApiClient get() = koinGet()
     private var realBaseUrl: String? = null
 
@@ -58,31 +53,14 @@ class DownloaderE2ETest : LoggedInE2ETest() {
 
     private fun downloadAndWait(track: Track) {
         onMain { downloader.download(track.id, catalog.downloadUri(track.id, StreamingQuality.ORIGINAL)) }
-        composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { stateOf(track.id)?.state == TrackDownload.State.DONE }
+        composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { stateOf(track.id)?.state == ItemDownload.State.DONE }
     }
 
-    /** Reads [track] from the device only (no network, no writing): its size and first bytes. */
+    /** [track]'s downloaded file: its size and first bytes. */
     private fun readFromDevice(track: Track): Pair<Long, String> {
-        val source = CacheDataSource.Factory()
-            .setCache(cache)
-            .setCacheKeyFactory(TrackCacheKey.factory)
-            .setCacheWriteDataSinkFactory(null)
-            .createDataSource()
-        source.open(DataSpec(Uri.parse(catalog.downloadUri(track.id, StreamingQuality.ORIGINAL))))
-        return try {
-            val buffer = ByteArray(BUFFER_BYTES)
-            var total = 0L
-            var head = ""
-            while (true) {
-                val read = source.read(buffer, 0, buffer.size)
-                if (read == C.RESULT_END_OF_INPUT) break
-                if (total == 0L) head = String(buffer, 0, minOf(read, 4))
-                total += read
-            }
-            total to head
-        } finally {
-            source.close()
-        }
+        val file = checkNotNull(onMain { downloader.fileFor(track.id) }) { "${track.id} isn't downloaded" }
+        val head = ByteArray(4).also { bytes -> file.inputStream().use { it.read(bytes) } }
+        return file.length() to String(head)
     }
 
     private fun serverLength(track: Track): Long {
@@ -95,7 +73,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
         }
     }
 
-    private fun isOnDevice(track: Track) = "track:${track.id}" in cache.keys
+    private fun isOnDevice(track: Track) = files.fileOf(track.id).exists()
 
     @Test
     fun aSongDownloadsWholeAndReadsBackFromTheDeviceAlone() {
@@ -120,11 +98,11 @@ class DownloaderE2ETest : LoggedInE2ETest() {
         composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { (stateOf(track.id)?.bytesDownloaded ?: 0L) > 0L }
         onMain { manager.pauseDownloads() }
         val partial = stateOf(track.id)!!
-        assumeTrue("finished before it could be paused", partial.state != TrackDownload.State.DONE)
+        assumeTrue("finished before it could be paused", partial.state != ItemDownload.State.DONE)
         Thread.sleep(PAUSE_MS)
         onMain { manager.resumeDownloads() }
 
-        composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { stateOf(track.id)?.state == TrackDownload.State.DONE }
+        composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { stateOf(track.id)?.state == ItemDownload.State.DONE }
         assertEquals(serverLength(track), readFromDevice(track).first)
     }
 
@@ -153,7 +131,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
         onMain { downloader.remove(track.id) }
 
         composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) { stateOf(track.id) == null && !isOnDevice(track) }
-        assertEquals(0L, cache.cacheSpace)
+        assertEquals(emptyList<String>(), files.root.list().orEmpty().toList())
     }
 
     @Test
@@ -172,7 +150,6 @@ class DownloaderE2ETest : LoggedInE2ETest() {
         const val DOWNLOAD_TIMEOUT_MS = 120_000L
         const val PLAY_TIMEOUT_MS = 30_000L
         const val PAUSE_MS = 1_500L
-        const val BUFFER_BYTES = 64 * 1024
         const val UNREACHABLE = "http://10.255.255.1:9"
     }
 }

@@ -13,7 +13,7 @@ import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.DownloadRepository
-import org.jellyfin.mobile.music.downloads.DownloadStatus
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.offline.ServerConnectivity
 import org.jellyfin.mobile.music.playback.OfflinePlayReporter
 import org.jellyfin.mobile.music.playback.PlaybackController
@@ -76,7 +76,7 @@ class OfflineE2ETest : LoggedInE2ETest() {
     private fun download(album: Album, tracks: List<Track>) {
         runBlocking { repository.downloadAlbum(album, tracks) }
         composeRule.waitUntil(DOWNLOAD_TIMEOUT_MS) {
-            runBlocking { repository.status(album.id).first() } == DownloadStatus.Downloaded
+            runBlocking { repository.status(album.id).first() } == GroupStatus.Downloaded
         }
     }
 
@@ -101,7 +101,7 @@ class OfflineE2ETest : LoggedInE2ETest() {
 
         // The button's label: rows are only marked (by description), so the text is the button's alone.
         waitForComposeText("Downloaded", timeoutMillis = DOWNLOAD_TIMEOUT_MS)
-        assertEquals(DownloadStatus.Downloaded, runBlocking { repository.status(album.id).first() })
+        assertEquals(GroupStatus.Downloaded, runBlocking { repository.status(album.id).first() })
         pressBack()
         composeRule.onNodeWithText("Downloaded").performScrollTo().performClick()
         waitForComposeText(album.title)

@@ -8,19 +8,17 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.cache.Cache
-import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
+import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.music.TuneMainActivity
-import org.jellyfin.mobile.music.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
-import org.jellyfin.mobile.music.downloads.TrackDownload
-import org.jellyfin.mobile.music.downloads.TrackDownloader
 import org.koin.android.ext.android.inject
 
 /**
@@ -65,15 +63,11 @@ class PlaybackService : MediaSessionService() {
 
     /** Fully downloaded songs play from the device; anything else streams. */
     private fun downloadAwareDataSource(): DataSource.Factory {
-        val downloader: TrackDownloader by inject()
-        val cache: Cache by inject()
+        val downloads: ItemDownloads by inject()
         return DownloadAwareDataSource.Factory(
-            isDownloaded = { trackId -> downloader.downloads.value[trackId]?.state == TrackDownload.State.DONE },
-            // Read-only: no upstream and no writing, so streaming never fills the download store.
-            onDevice = CacheDataSource.Factory()
-                .setCache(cache)
-                .setCacheKeyFactory(TrackCacheKey.factory)
-                .setCacheWriteDataSinkFactory(null),
+            itemIdOf = TrackCacheKey::trackIdOf,
+            fileFor = downloads::fileFor,
+            onDevice = FileDataSource.Factory(),
             server = DefaultDataSource.Factory(this),
         )
     }

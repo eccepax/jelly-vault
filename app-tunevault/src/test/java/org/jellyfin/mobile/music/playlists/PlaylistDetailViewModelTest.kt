@@ -6,9 +6,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.catalog.FakePlaylistStore
 import org.jellyfin.mobile.music.domain.track
-import org.jellyfin.mobile.music.downloads.DownloadStatus
 import org.jellyfin.mobile.music.downloads.FakeCollectionDownloads
 import org.jellyfin.mobile.music.playback.FakePlaybackController
 import org.junit.jupiter.api.AfterEach
@@ -115,10 +115,10 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun `reports the playlist's download status, and removing acts on it`() {
-        downloads.statuses.value = mapOf("road" to DownloadStatus.Downloaded)
+        downloads.statuses.value = mapOf("road" to GroupStatus.Downloaded)
         val viewModel = PlaylistDetailViewModel("road", store, playback, downloads)
 
-        viewModel.downloadStatus.value shouldBe DownloadStatus.Downloaded
+        viewModel.downloadStatus.value shouldBe GroupStatus.Downloaded
         viewModel.removeDownload()
         viewModel.retryDownload()
 

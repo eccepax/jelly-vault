@@ -1,23 +1,22 @@
 package org.jellyfin.mobile.music.downloads
 
+import android.content.Context
 import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.datasource.cache.Cache
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.NoOpCacheEvictor
-import androidx.media3.datasource.cache.SimpleCache
-import androidx.media3.exoplayer.offline.DefaultDownloadIndex
-import androidx.media3.exoplayer.offline.DefaultDownloaderFactory
-import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadService
-import androidx.media3.exoplayer.scheduler.Requirements
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.jellyfin.mobile.common.downloads.DownloadFiles
+import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.Media3ItemDownloads
+import org.jellyfin.mobile.common.downloads.downloadRequirements
+import org.jellyfin.mobile.common.downloads.fileDownloadManager
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
@@ -27,40 +26,33 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import timber.log.Timber
 import java.io.File
-import java.util.concurrent.Executors
 
-private const val DOWNLOAD_THREADS = 2
-
-/** Wi-Fi only means any unmetered network; otherwise any network at all. */
-fun downloadRequirements(wifiOnly: Boolean) =
-    Requirements(if (wifiOnly) Requirements.NETWORK_UNMETERED else Requirements.NETWORK)
+/** Where songs were kept before downloads moved to plain files; deleted, since nothing reads it now. */
+private fun Context.deleteOldSongCache() {
+    File(filesDir, "downloads").takeIf { it.isDirectory }?.deleteRecursively()
+}
 
 @UnstableApi
 val downloadsModule = module {
     single<DatabaseProvider> { StandaloneDatabaseProvider(androidContext()) }
-    // One per process: SimpleCache locks its folder. Never evicts, since downloads are kept on purpose.
-    single<Cache> { SimpleCache(File(androidContext().filesDir, "downloads"), NoOpCacheEvictor(), get()) }
+    single { DownloadFiles(File(androidContext().filesDir, "downloaded")) }
     single {
         val apiClient = get<ApiClient>()
         val authed = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory()) { dataSpec ->
             dataSpec.withUri(Uri.parse(withAccessToken(dataSpec.uri.toString(), apiClient.accessToken)))
         }
-        val writer = CacheDataSource.Factory()
-            .setCache(get())
-            .setCacheKeyFactory(TrackCacheKey.factory)
-            .setUpstreamDataSourceFactory(authed)
-        DownloadManager(
-            androidContext(),
-            DefaultDownloadIndex(get()),
-            DefaultDownloaderFactory(writer, Executors.newFixedThreadPool(DOWNLOAD_THREADS)),
-        ).apply {
-            maxParallelDownloads = DOWNLOAD_THREADS
-            requirements = downloadRequirements(get<PlaybackPreferences>().downloadOnWifiOnly)
-        }
+        androidContext().deleteOldSongCache()
+        fileDownloadManager(
+            context = androidContext(),
+            databaseProvider = get(),
+            dataSourceFactory = authed,
+            files = get(),
+            requirements = downloadRequirements(get<PlaybackPreferences>().downloadOnWifiOnly),
+        )
     }
-    single<TrackDownloader> {
+    single<ItemDownloads> {
         val context = androidContext()
-        Media3TrackDownloader(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main)) {
+        Media3ItemDownloads(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main)) {
             try {
                 DownloadService.start(context, TuneDownloadService::class.java)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -69,13 +61,14 @@ val downloadsModule = module {
             }
         }
     }
-    single<CollectionDownloads> { get<DownloadRepository>() }
-    single<DownloadSettings> { Media3DownloadSettings(get(), get()) }
     single {
         val catalog = get<JellyfinMusicCatalog>()
         val preferences = get<PlaybackPreferences>()
-        DownloadRepository(get(), get<TuneDatabase>().downloadDao, downloadUri = { trackId ->
+        DownloadGroups(get(), get<TuneDatabase>().downloadGroupDao, uriOf = { trackId ->
             catalog.downloadUri(trackId, preferences.downloadQuality)
         })
     }
+    single { DownloadRepository(get(), get<TuneDatabase>().downloadDao) }
+    single<CollectionDownloads> { get<DownloadRepository>() }
+    single<DownloadSettings> { Media3DownloadSettings(get(), get()) }
 }

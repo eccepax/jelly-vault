@@ -17,8 +17,8 @@ import java.util.UUID
  * Regression coverage for a real user-reported bug: the audiobook list visibly flickers while a
  * download is in progress. Root cause: [LibraryAdapter.updateDownloadedIds] (and
  * [LibraryAdapter.updateHiddenIds]) called `notifyDataSetChanged()` unconditionally on every
- * change — and since a multi-track audiobook downloads one [org.jellyfin.mobile.common.data.entity.DownloadRecord]
- * insert per chapter, `LibraryViewModel.downloadedIds` (and therefore this call) fires once per
+ * change — and since a multi-track audiobook finishes downloading one chapter at a time,
+ * `LibraryViewModel.downloadedIds` (and therefore this call) fires once per
  * chapter completing, forcing every *visible* row — not just the one that actually changed — to
  * fully rebind (including reloading its cover art via Coil) each time. That repeated whole-list
  * rebind is the visible flicker.

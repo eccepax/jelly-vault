@@ -6,6 +6,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.domain.track
 import org.jellyfin.mobile.music.playback.FakePlaybackController
 import org.junit.jupiter.api.AfterEach
@@ -47,13 +48,13 @@ class DownloadedViewModelTest {
     @Test
     fun `lists downloaded albums and playlists with how far each has got`() {
         downloads.collections.value = listOf(playlist, album)
-        downloads.statuses.value = mapOf("pb" to DownloadStatus.Downloaded, "road" to DownloadStatus.InProgress(0, 1))
+        downloads.statuses.value = mapOf("pb" to GroupStatus.Downloaded, "road" to GroupStatus.InProgress(0, 1))
 
         val items = DownloadedViewModel(downloads, playback).items.value
 
         items shouldBe listOf(
-            DownloadedItem(playlist, DownloadStatus.InProgress(0, 1)),
-            DownloadedItem(album, DownloadStatus.Downloaded),
+            DownloadedItem(playlist, GroupStatus.InProgress(0, 1)),
+            DownloadedItem(album, GroupStatus.Downloaded),
         )
     }
 

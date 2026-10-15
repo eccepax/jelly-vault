@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.e2e
 
+import android.net.Uri
 import android.os.Build
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
@@ -16,7 +17,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.R
-import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.downloads.AudiobookDownloads
+import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.junit.Before
 import org.junit.Test
 
@@ -25,9 +28,8 @@ import org.junit.Test
 private const val DOWNLOAD_TIMEOUT_MS = 180_000L
 
 /**
- * Long-press -> Download really downloads through Media3's `JellyfinDownloadService`. Completion is
- * detected by polling `DownloadDao` (a row is only written once a file is fully on disk), since no
- * downloads screen is reachable once logged in.
+ * Long-press -> Download really downloads through the shared download engine. Finished means a
+ * track's whole file is on the device and plays from there, not just that the tap registered.
  */
 class DownloadE2ETest : LoggedInE2ETest() {
 
@@ -49,7 +51,7 @@ class DownloadE2ETest : LoggedInE2ETest() {
     fun downloadingALibraryItemPersistsItLocally() {
         loginAndWaitForLibrary()
         waitForView(allOf(withId(R.id.recycler_view), hasMinimumChildCount(1)))
-        assert(downloadCount() == 0) { "Expected no downloads before the test (state should be reset by BaseE2ETest)" }
+        assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
 
         onView(withId(R.id.recycler_view))
             .perform(actionOnItemAtPosition<RecyclerView.ViewHolder>(0, longClick()))
@@ -58,15 +60,18 @@ class DownloadE2ETest : LoggedInE2ETest() {
         onView(withText(context.getString(R.string.download_action))).inRoot(isDialog()).perform(click())
 
         // First-ever download on a fresh install: MainActivity.requestDownload (SystemUtils.kt)
-        // asks which network types are allowed before it'll proceed at all. Pick the most
-        // permissive option so the emulator's virtual network's actual metered/roaming status
-        // (unpredictable) can't fail DownloadUtils.checkForDownloadMethod's connection check.
-        onView(withText(context.getString(R.string.mobile_data_and_roaming))).inRoot(isDialog()).perform(click())
+        // asks which network types are allowed before it'll proceed at all. Mobile data allows any
+        // network, so whether the emulator's network counts as metered can't hold the download back.
+        onView(withText(context.getString(R.string.mobile_data))).inRoot(isDialog()).perform(click())
 
-        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadCount() > 0 }
+        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadedIds().isNotEmpty() }
 
-        assert(downloadCount() > 0) { "Expected at least one DownloadEntity row after the download completed" }
+        val track = downloadedIds().first()
+        val file = checkNotNull(onMain { koinGet<ItemDownloads>().fileFor(track) }) { "$track has no file" }
+        assert(file.length() > 0) { "Expected $track's file to hold the track" }
+        // The player finds the download by the track's own stream url, whatever it carries
+        assert(audioItemIdOf(Uri.parse("http://vault/Audio/${track.replace("-", "")}/universal")) == track)
     }
 
-    private fun downloadCount(): Int = runBlocking { koinGet<DownloadDao>().getAllDownloads().first().size }
+    private fun downloadedIds(): Set<String> = runBlocking { koinGet<AudiobookDownloads>().downloadedIds.first() }
 }

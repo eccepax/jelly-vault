@@ -16,11 +16,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import okhttp3.OkHttpClient
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
-import org.jellyfin.mobile.books.downloads.BookDownloadManager
+import org.jellyfin.mobile.books.downloads.BookFiles
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -46,9 +45,8 @@ class BookReaderViewModelTest {
     lateinit var cacheDir: File
 
     private val apiClient = mockk<ApiClient>(relaxed = true)
-    private val httpClient = mockk<OkHttpClient>(relaxed = true)
     private val bookProgressDao = mockk<BookProgressDao>()
-    private val bookDownloadManager = mockk<BookDownloadManager>()
+    private val bookFiles = mockk<BookFiles>()
     private val bookBookmarkDao = mockk<BookBookmarkDao>(relaxed = true)
     private val app = mockk<Application>(relaxed = true)
 
@@ -61,11 +59,11 @@ class BookReaderViewModelTest {
         every { app.applicationContext } returns app
 
         val epubFile = File(cacheDir, "source.epub").apply { writeBytes(buildMinimalEpub()) }
-        every { bookDownloadManager.getDownloadedFile("book-1") } returns epubFile
+        coEvery { bookFiles.fileFor("book-1") } returns epubFile
         coEvery { bookProgressDao.getProgress("book-1") } returns null
         every { bookBookmarkDao.getForBook(any()) } returns flowOf(emptyList())
 
-        viewModel = BookReaderViewModel(app, apiClient, httpClient, bookProgressDao, bookDownloadManager, bookBookmarkDao)
+        viewModel = BookReaderViewModel(app, apiClient, bookProgressDao, bookFiles, bookBookmarkDao)
     }
 
     @AfterEach
@@ -139,7 +137,7 @@ class BookReaderViewModelTest {
         val pdfFile = File(cacheDir, "pdf.book").apply {
             writeBytes(byteArrayOf(0x25, 0x50, 0x44, 0x46)) // %PDF
         }
-        every { bookDownloadManager.getDownloadedFile("book-pdf") } returns pdfFile
+        coEvery { bookFiles.fileFor("book-pdf") } returns pdfFile
         coEvery { bookProgressDao.getProgress("book-pdf") } returns null
         every { bookBookmarkDao.getForBook("book-pdf") } returns flowOf(emptyList())
 
@@ -276,7 +274,7 @@ class BookReaderViewModelTest {
     @Test
     fun `an unsupported format surfaces as an error and stops loading`() = runTest {
         val badFile = File(cacheDir, "bad.bin").apply { writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03)) }
-        every { bookDownloadManager.getDownloadedFile("book-bad") } returns badFile
+        coEvery { bookFiles.fileFor("book-bad") } returns badFile
         coEvery { bookProgressDao.getProgress("book-bad") } returns null
 
         viewModel.loadBook("book-bad", initialNightMode = false)

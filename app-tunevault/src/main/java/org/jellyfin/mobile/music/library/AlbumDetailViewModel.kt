@@ -12,12 +12,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.catalog.FavoritesRepository
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.CollectionDownloads
-import org.jellyfin.mobile.music.downloads.DownloadStatus
 import org.jellyfin.mobile.music.playback.PlaybackController
 import timber.log.Timber
 
@@ -46,8 +46,8 @@ class AlbumDetailViewModel(
         (state as? AlbumDetailUiState.Loaded)?.album?.let { favorites.isFavorite(it.id, it.isFavorite) } ?: false
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val downloadStatus: StateFlow<DownloadStatus> =
-        downloads.status(albumId).stateIn(viewModelScope, SharingStarted.Eagerly, DownloadStatus.NotDownloaded)
+    val downloadStatus: StateFlow<GroupStatus> =
+        downloads.status(albumId).stateIn(viewModelScope, SharingStarted.Eagerly, GroupStatus.NotDownloaded)
 
     init {
         load()

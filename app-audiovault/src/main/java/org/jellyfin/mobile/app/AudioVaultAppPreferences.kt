@@ -1,14 +1,12 @@
 package org.jellyfin.mobile.app
 
 import android.content.Context
-import android.os.Environment
 import androidx.core.content.edit
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.mediasegments.toMediaSegmentActionsString
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.model.api.MediaSegmentType
-import java.io.File
 
 class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
 
@@ -17,34 +15,6 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         set(value) {
             if (value != null) {
                 sharedPreferences.edit { putInt(Constants.PREF_DOWNLOAD_METHOD, value) }
-            }
-        }
-
-    var downloadLocation: String
-        get() {
-            val savedStorage = sharedPreferences.getString(Constants.PREF_DOWNLOAD_LOCATION, null)
-            if (savedStorage != null) {
-                if (File(savedStorage).parentFile?.isDirectory == true) {
-                    return savedStorage
-                } else {
-                    sharedPreferences.edit { remove(Constants.PREF_DOWNLOAD_LOCATION) }
-                }
-            }
-            return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-        }
-        set(value) {
-            sharedPreferences.edit {
-                if (File(value).parentFile?.isDirectory == true) {
-                    putString(Constants.PREF_DOWNLOAD_LOCATION, value)
-                }
-            }
-        }
-
-    var downloadToInternal: Boolean?
-        get() = sharedPreferences.getBoolean(Constants.PREF_DOWNLOAD_INTERNAL, true)
-        set(value) {
-            if (value != null) {
-                sharedPreferences.edit { putBoolean(Constants.PREF_DOWNLOAD_INTERNAL, value) }
             }
         }
 

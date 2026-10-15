@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,7 +23,7 @@ class DownloadButtonTest {
 
     private val events = mutableListOf<String>()
 
-    private fun show(status: DownloadStatus) {
+    private fun show(status: GroupStatus) {
         composeRule.setContent {
             DownloadButton(
                 status = status,
@@ -35,7 +36,7 @@ class DownloadButtonTest {
 
     @Test
     fun `not downloaded offers to download`() {
-        show(DownloadStatus.NotDownloaded)
+        show(GroupStatus.NotDownloaded)
 
         composeRule.onNodeWithContentDescription("Download").performClick()
 
@@ -44,7 +45,7 @@ class DownloadButtonTest {
 
     @Test
     fun `downloading shows how far it has got, and can be cancelled`() {
-        show(DownloadStatus.InProgress(done = 3, total = 12))
+        show(GroupStatus.InProgress(done = 3, total = 12))
 
         composeRule.onNodeWithText("Downloading 3 of 12").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Downloading 3 of 12").performClick()
@@ -55,14 +56,14 @@ class DownloadButtonTest {
 
     @Test
     fun `waiting for wi-fi says so`() {
-        show(DownloadStatus.Waiting(done = 0, total = 12))
+        show(GroupStatus.Waiting(done = 0, total = 12))
 
         composeRule.onNodeWithText("Waiting for Wi-Fi · 0 of 12").assertIsDisplayed()
     }
 
     @Test
     fun `a failed download says how many failed and retries`() {
-        show(DownloadStatus.Failed(failed = 2, total = 12))
+        show(GroupStatus.Failed(failed = 2, total = 12))
 
         composeRule.onNodeWithText("2 songs couldn't download").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Retry download").performClick()
@@ -72,7 +73,7 @@ class DownloadButtonTest {
 
     @Test
     fun `downloaded shows it, and can be removed`() {
-        show(DownloadStatus.Downloaded)
+        show(GroupStatus.Downloaded)
 
         composeRule.onNodeWithContentDescription("Downloaded").performClick()
         composeRule.onNodeWithText("Remove download").performClick()
@@ -82,7 +83,7 @@ class DownloadButtonTest {
 
     @Test
     fun `closing the menu removes nothing`() {
-        show(DownloadStatus.Downloaded)
+        show(GroupStatus.Downloaded)
 
         composeRule.onNodeWithContentDescription("Downloaded").performClick()
         composeRule.onNodeWithText("Remove download").assertIsDisplayed()

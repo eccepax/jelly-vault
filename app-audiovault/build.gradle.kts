@@ -51,6 +51,10 @@ android {
     room {
         schemaDirectory("$projectDir/schemas")
     }
+
+    // Migration tests load each exported schema from assets, and Robolectric only sees the app's
+    // own (debug) assets, so debug builds carry the schemas too; release builds don't.
+    sourceSets.getByName("debug").assets.directories.add("$projectDir/schemas")
 }
 
 base.archivesName.set("audiovault-v${project.getVersionName()}")
@@ -103,6 +107,7 @@ dependencies {
 
     // Common module
     implementation(project(":common"))
+    implementation(project(":common-downloads"))
     implementation(project(":common-media"))
 
     // Room
@@ -130,6 +135,9 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(project(":test-support"))
+    testImplementation(project(":common-testing"))
+    // Migration tests (see the debug assets above)
+    testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.fragment.testing)
     // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
     // into the debug variant, which is what unit tests actually run against.

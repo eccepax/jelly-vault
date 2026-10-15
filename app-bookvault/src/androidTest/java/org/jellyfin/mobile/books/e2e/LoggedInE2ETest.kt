@@ -13,6 +13,7 @@ import org.hamcrest.Matchers.not
 import org.jellyfin.mobile.books.BookMainActivity
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.data.BookDatabase
+import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 
@@ -24,6 +25,9 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
 
     override fun clearAppState() {
         koinGet<BookDatabase>().clearAllTables()
+        // Downloaded files outlive the database tables; without this a later test would find a
+        // book already downloaded by an earlier one.
+        onMain { koinGet<ItemDownloads>().run { downloads.value.keys.forEach(::remove) } }
     }
 
     /** Connects and logs in, returning once the library's item list is on screen. */

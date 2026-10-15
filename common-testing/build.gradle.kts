@@ -11,6 +11,8 @@ android {
 dependencies {
     // Only for common's resource ids (sign-in screens); the app under test supplies them at runtime.
     compileOnly(project(":common"))
+    // For the fake downloader; the app under test brings the real module.
+    compileOnly(project(":common-downloads"))
     implementation(libs.bundles.coroutines)
     api(libs.jellyfin.sdk)
     api(libs.kotlin.serialization.json)

@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.widget.SearchView
-import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
@@ -20,11 +19,9 @@ import coil3.request.fallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
-import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.mobile.databinding.FragmentLibraryBinding
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
-import org.jellyfin.mobile.events.DownloadFileSpec
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.utils.BackPressInterceptor
@@ -345,9 +342,16 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
     private fun showItemActionMenu(itemId: UUID, title: String, trackIds: List<UUID>) {
         val actions = buildList {
             if (trackIds.isNotEmpty()) {
-                val allDownloaded = allTracksDownloaded(trackIds, viewModel.downloadedIds.value)
-                val label = getString(if (allDownloaded) R.string.remove_download_action else R.string.download_action)
-                add(label to { requestDownloadForTracks(title, trackIds) })
+                val ids = trackIds.map(UUID::toString)
+                if (allTracksDownloaded(trackIds, viewModel.downloadedIds.value)) {
+                    add(
+                        getString(R.string.remove_download_action) to { activityEventHandler.emit(ActivityEvent.RemoveTracks(ids)) },
+                    )
+                } else {
+                    add(
+                        getString(R.string.download_action) to { activityEventHandler.emit(ActivityEvent.DownloadTracks(ids)) },
+                    )
+                }
             }
             val isHidden = itemId.toString() in viewModel.hiddenIds.value
             val label = getString(if (isHidden) R.string.unhide_action else R.string.hide_action)
@@ -357,21 +361,6 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
             .setTitle(title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
             .show()
-    }
-
-    /**
-     * Emits a single batched download request for all of [trackIds].
-     * [org.jellyfin.mobile.downloads.DownloadUtils.download] toggles per-item (removes if already
-     * downloaded, downloads otherwise), so this same call handles both the "Download" and
-     * "Remove Download" menu actions.
-     */
-    private fun requestDownloadForTracks(title: String, trackIds: List<UUID>) {
-        val baseUrl = apiClient.baseUrl ?: return
-        val files = trackIds.map { trackId ->
-            val url = itemDownloadUrl(baseUrl, trackId, apiClient.accessToken).toUri()
-            DownloadFileSpec(url, title)
-        }
-        activityEventHandler.emit(ActivityEvent.DownloadFiles(files))
     }
 
     private fun launchPlayer(queue: LibraryViewModel.AudioQueue) {

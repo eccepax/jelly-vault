@@ -25,6 +25,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.library.AlbumCover
 import org.koin.compose.viewmodel.koinViewModel
@@ -86,15 +87,15 @@ private fun DownloadedRow(item: DownloadedItem, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (item.status != DownloadStatus.Downloaded) {
+            if (item.status != GroupStatus.Downloaded) {
                 Text(
                     statusText(item.status),
                     style = MaterialTheme.typography.caption,
-                    color = if (item.status is DownloadStatus.Failed) MaterialTheme.colors.error else MaterialTheme.colors.primary,
+                    color = if (item.status is GroupStatus.Failed) MaterialTheme.colors.error else MaterialTheme.colors.primary,
                 )
             }
         }
-        if (item.status == DownloadStatus.Downloaded) DownloadedMark()
+        if (item.status == GroupStatus.Downloaded) DownloadedMark()
     }
 }
 

@@ -18,6 +18,7 @@ import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.extensions.addFragment
 import org.jellyfin.mobile.utils.extensions.replaceFragmentWithBackStack
 import org.jellyfin.mobile.utils.removeDownload
+import org.jellyfin.mobile.utils.removeTracks
 import org.jellyfin.mobile.utils.requestDownload
 import timber.log.Timber
 
@@ -58,9 +59,14 @@ class ActivityEventHandler {
                     Timber.e("openIntent: %s", e.message)
                 }
             }
-            is ActivityEvent.DownloadFiles -> {
+            is ActivityEvent.DownloadTracks -> {
                 lifecycleScope.launch {
-                    requestDownload(event.files)
+                    requestDownload(event.trackIds)
+                }
+            }
+            is ActivityEvent.RemoveTracks -> {
+                lifecycleScope.launch {
+                    removeTracks(event.trackIds)
                 }
             }
             is ActivityEvent.RemoveDownload -> {
