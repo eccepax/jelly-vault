@@ -22,10 +22,6 @@ import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.api.client.extensions.videosApi
-import org.jellyfin.sdk.api.operations.VideosApi
-import org.jellyfin.sdk.model.api.MediaProtocol
-import org.jellyfin.sdk.model.api.MediaStreamProtocol
 import org.jellyfin.sdk.model.api.PlayMethod
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import org.koin.core.component.KoinComponent
@@ -45,7 +41,6 @@ class QueueManager(
     private val viewModel: PlayerHost,
 ) : KoinComponent {
     private val apiClient: ApiClient = get()
-    private val videosApi: VideosApi = apiClient.videosApi
     private val mediaSourceResolver: MediaSourceResolver by inject()
     private val downloads: AudiobookDownloads by inject()
     private val deviceProfileBuilder: DeviceProfileBuilder by inject()
@@ -270,77 +265,18 @@ class QueueManager(
      */
     @CheckResult
     private fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
-        val (url, factory) = when (source.playMethod) {
-            PlayMethod.DIRECT_PLAY -> resolveDirectPlaySource(source)
-            PlayMethod.DIRECT_STREAM -> resolveDirectStreamSource(source)
-            PlayMethod.TRANSCODE -> resolveTranscodeSource(source)
+        val stream = apiClient.streamOf(source)
+        val factory = when (stream.format) {
+            StreamFormat.HLS -> get<HlsMediaSource.Factory>().setAllowChunklessPreparation(true)
+            StreamFormat.PROGRESSIVE -> get<ProgressiveMediaSource.Factory>()
         }
 
         val mediaItem = MediaItem.Builder()
             .setMediaId(source.itemId.toString())
-            .setUri(url)
+            .setUri(stream.url)
             .build()
 
         return factory.createMediaSource(mediaItem)
-    }
-
-    private fun resolveDirectPlaySource(source: JellyfinMediaSource) = when (source.sourceInfo.protocol) {
-        MediaProtocol.FILE -> {
-            val url = videosApi.getVideoStreamUrl(
-                itemId = source.itemId,
-                static = true,
-                playSessionId = source.playSessionId,
-                mediaSourceId = source.id,
-                deviceId = apiClient.deviceInfo.id,
-            )
-
-            url to get<ProgressiveMediaSource.Factory>()
-        }
-        MediaProtocol.HTTP -> {
-            val url = requireNotNull(source.sourceInfo.path)
-            // Jellyfin can return either an HLS manifest URL or a progressive HTTP URL here.
-            // Use a basic heuristic to pick the correct MediaSource type.
-            val factory = when {
-                url.contains(".m3u8", ignoreCase = true) ->
-                    get<HlsMediaSource.Factory>().setAllowChunklessPreparation(true)
-                else -> get<ProgressiveMediaSource.Factory>()
-            }
-
-            url to factory
-        }
-        else -> throw IllegalArgumentException("Unsupported protocol ${source.sourceInfo.protocol}")
-    }
-
-    private fun resolveDirectStreamSource(source: JellyfinMediaSource) = source.sourceInfo.let { sourceInfo ->
-        val container = requireNotNull(sourceInfo.container) { "Missing direct stream container" }
-        val url = videosApi.getVideoStreamByContainerUrl(
-            itemId = source.itemId,
-            container = container,
-            playSessionId = source.playSessionId,
-            mediaSourceId = source.id,
-            deviceId = apiClient.deviceInfo.id,
-        )
-
-        url to get<ProgressiveMediaSource.Factory>()
-    }
-
-    private fun resolveTranscodeSource(source: JellyfinMediaSource) = source.sourceInfo.let { sourceInfo ->
-        val transcodingPath = requireNotNull(sourceInfo.transcodingUrl) { "Missing transcode URL" }
-        val protocol = sourceInfo.transcodingSubProtocol
-        val transcodingUrl = apiClient.createUrl(transcodingPath)
-        val factory = when (protocol) {
-            MediaStreamProtocol.HLS -> get<HlsMediaSource.Factory>().setAllowChunklessPreparation(true)
-            // Some audio transcodes come back as progressive "http"
-            MediaStreamProtocol.HTTP,
-            null,
-            -> get<ProgressiveMediaSource.Factory>()
-            else -> {
-                // Be permissive: treat unknown sub-protocols as progressive URLs.
-                get<ProgressiveMediaSource.Factory>()
-            }
-        }
-
-        transcodingUrl to factory
     }
 
     /**
