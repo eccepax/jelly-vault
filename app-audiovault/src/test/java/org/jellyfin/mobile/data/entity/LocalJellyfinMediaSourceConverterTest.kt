@@ -10,6 +10,7 @@ import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaSourceType
 import org.jellyfin.sdk.model.api.MediaStreamProtocol
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.util.UUID
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -30,6 +31,28 @@ class LocalJellyfinMediaSourceConverterTest {
     }
 
     @Test
+    fun `listening the server hasn't heard about yet is kept, with when it happened`() {
+        val savedAt = Instant.parse("2026-10-15T08:30:00Z")
+        val source = source().apply {
+            positionSavedAt = savedAt
+            finished = true
+        }
+
+        val stored = converter.toLocalJellyfinMediaSource(converter.fromLocalJellyfinMediaSource(source))
+
+        stored.positionSavedAt shouldBe savedAt
+        stored.finished shouldBe true
+    }
+
+    @Test
+    fun `a track with nothing waiting for the server stays that way`() {
+        val stored = converter.toLocalJellyfinMediaSource(converter.fromLocalJellyfinMediaSource(source()))
+
+        stored.positionSavedAt shouldBe null
+        stored.finished shouldBe false
+    }
+
+    @Test
     fun `everything else about the track is kept too`() {
         val source = source()
 
@@ -46,9 +69,16 @@ class LocalJellyfinMediaSourceConverterTest {
     @Test
     fun `a track saved before positions were kept loads, starting from the beginning`() {
         val saved = Json.parseToJsonElement(converter.fromLocalJellyfinMediaSource(source())).jsonObject
-        val older = Json.encodeToString(JsonObject(saved.filterKeys { it != "startTime" }))
+        val older = Json.encodeToString(
+            JsonObject(
+                saved.filterKeys {
+                    it !in setOf("startTime", "positionSavedAt", "finished")
+                },
+            ),
+        )
 
         converter.toLocalJellyfinMediaSource(older).startTime shouldBe Duration.ZERO
+        converter.toLocalJellyfinMediaSource(older).positionSavedAt shouldBe null
     }
 
     private fun source() = LocalJellyfinMediaSource(

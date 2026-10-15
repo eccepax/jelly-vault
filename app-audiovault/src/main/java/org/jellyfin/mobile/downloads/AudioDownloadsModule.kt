@@ -89,6 +89,8 @@ val audioDownloadsModule = module {
                 }
         }
     }
+    // Listening saved on the device reaches the server once it can be reached
+    single { OfflineListeningSync(get<JellyfinDatabase>().downloadDao, JellyfinServerPositions(get())) }
     // Signing out keeps downloads unless the user asked otherwise in Settings
     single {
         val downloadsOnSignOut = DownloadsOnSignOut(get(), get<AudiobookDownloads>()::removeAll)

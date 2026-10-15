@@ -69,6 +69,7 @@ class LibraryViewModelTest {
     private val downloadedTrackIds = MutableStateFlow<Set<String>>(emptySet())
     private val hiddenItemDao = mockk<HiddenItemDao>(relaxed = true)
     private val downloads = mutableMapOf<UUID, LocalJellyfinMediaSource>()
+    private val events = mutableListOf<String>()
 
     private val serverUser = ServerUser(
         user = UserEntity(
@@ -115,6 +116,7 @@ class LibraryViewModelTest {
         downloadedTrackIds = downloadedTrackIds,
         hiddenItemDao = hiddenItemDao,
         downloadedTrack = { downloads[it] },
+        syncListening = { events += "sync" },
     )
 
     /**
@@ -545,6 +547,36 @@ class LibraryViewModelTest {
         val queue = viewModel.fetchBundleQueue(bundle)
 
         queue?.ids shouldBe listOf(trackId1, trackId2)
+    }
+
+    // --- Listening the server hasn't heard about ------------------------------------------------
+
+    @Test
+    fun `listening saved on the device reaches the server before a book's resume point is worked out`() = runTest {
+        val folderId = UUID.randomUUID()
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        events.clear()
+        coEvery {
+            itemsApi.getItems(
+                userId = any(),
+                parentId = any(),
+                includeItemTypes = any(),
+                fields = any(),
+                sortBy = any(),
+                sortOrder = any(),
+                recursive = any(),
+                limit = any(),
+                ids = any(),
+            )
+        } answers {
+            events += "resume point"
+            queryResult(listOf(audioFile(name = "Chapter 1")))
+        }
+
+        viewModel.fetchBundleQueue(bookOfThree(parentFolderId = folderId).first)
+
+        events shouldBe listOf("sync", "resume point")
     }
 
     // --- Offline (the server can't be reached) -------------------------------------------------

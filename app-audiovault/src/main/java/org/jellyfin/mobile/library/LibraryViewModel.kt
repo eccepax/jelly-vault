@@ -54,6 +54,11 @@ class LibraryViewModel(
     private val hiddenItemDao: HiddenItemDao,
     /** A track's download, ready to play, or null if it isn't downloaded (see AudiobookDownloads.playable). */
     private val downloadedTrack: suspend (UUID) -> LocalJellyfinMediaSource?,
+    /**
+     * Sends the server listening saved only on the device (see OfflineListeningSync), so resume
+     * points and progress reflect it. Gives up quietly when the server can't be reached.
+     */
+    private val syncListening: suspend () -> Unit,
 ) : ViewModel() {
 
     private val _rawItems = MutableStateFlow<List<LibraryItem>>(emptyList())
@@ -123,6 +128,7 @@ class LibraryViewModel(
      * a resume position fetched from Jellyfin for the clicked track.
      */
     suspend fun getAudioQueueWithResume(clickedId: UUID): AudioQueue {
+        syncListening()
         val audioItems = _rawItems.value.filterIsInstance<LibraryItem.AudioFile>()
         val audioIds = if (audioItems.isEmpty()) listOf(clickedId) else audioItems.map { it.id }
         val audioNames = if (audioItems.isEmpty()) listOf("Unknown") else audioItems.map { it.displayName }
@@ -209,6 +215,7 @@ class LibraryViewModel(
     suspend fun fetchAlbumQueue(albumId: UUID): AudioQueue? {
         _isLoading.update { true }
         return try {
+            syncListening()
             albumQueue(albumId)
         } catch (e: ApiClientException) {
             Timber.e(e, "Failed to fetch album tracks for $albumId")
@@ -250,6 +257,7 @@ class LibraryViewModel(
      *   (see [offlineQueue]).
      */
     suspend fun fetchBundleQueue(bundle: LibraryItem.AudiobookBundle): AudioQueue? {
+        syncListening()
         if (!bundle.isBundle || bundle.trackIds.size == 1) {
             val trackId = bundle.trackIds.firstOrNull() ?: return null
             val startPosition = fetchSingleTrackPosition(trackId)
@@ -429,6 +437,7 @@ class LibraryViewModel(
 
     /** Fetches every [CollectionType.BOOKS] library's audio files, flattens, and persists them. */
     private suspend fun refreshGlobalFlatFromServer(userId: UUID, serverId: Long?) {
+        syncListening()
         val views = withContext(Dispatchers.IO) {
             apiClient.userViewsApi.getUserViews(userId = userId, includeHidden = false).content
         }.items.orEmpty()
