@@ -21,6 +21,7 @@ import de.Maxr1998.modernpreferences.preferences.choice.SelectionItem
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.databinding.FragmentSettingsBinding
 import org.jellyfin.mobile.downloads.DownloadMethod
 import org.jellyfin.mobile.downloads.applyDownloadMethod
@@ -124,6 +125,11 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 get<DownloadManager>().applyDownloadMethod(method)
                 true
             }
+        }
+        checkBox(AppPreferences.PREF_REMOVE_DOWNLOADS_ON_SIGN_OUT) {
+            titleRes = CommonR.string.pref_remove_downloads_on_sign_out
+            summaryRes = CommonR.string.pref_remove_downloads_on_sign_out_summary
+            defaultValue = false
         }
 
         categoryHeader(PREF_CATEGORY_ACCOUNT) {

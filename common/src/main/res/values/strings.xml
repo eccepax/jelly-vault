@@ -29,4 +29,6 @@
     <string name="login_error_invalid_response">Login failed (invalid server response)</string>
     <string name="login_error_failed">Login failed</string>
     <string name="login_error_timeout">Connection timed out — check your server address and try again</string>
+    <string name="pref_remove_downloads_on_sign_out">Remove downloads on sign out</string>
+    <string name="pref_remove_downloads_on_sign_out_summary">Otherwise downloads stay on this device after signing out</string>
 </resources>

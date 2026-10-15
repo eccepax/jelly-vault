@@ -159,6 +159,18 @@ class AudiobookDownloadsTest {
     }
 
     @Test
+    fun `removing everything deletes every track's file and details`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+
+        downloads.removeAll()
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails().shouldBeEmpty()
+        downloads.downloadedIds.first().shouldBeEmpty()
+    }
+
+    @Test
     fun `nothing is fetched for an empty book`() = runTest {
         downloads.download(emptyList())
 

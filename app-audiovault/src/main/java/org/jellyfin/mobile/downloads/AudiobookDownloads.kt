@@ -56,6 +56,12 @@ class AudiobookDownloads(
             .forEach { dao.delete(it.itemId) }
     }
 
+    /** Deletes every downloaded track and its details. */
+    suspend fun removeAll() {
+        groups.removeAll()
+        dao.deleteAll()
+    }
+
     /** At launch: fetches again any downloaded track whose file is gone. */
     suspend fun repair() = groups.repair()
 }

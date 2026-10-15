@@ -45,6 +45,7 @@ class SettingsScreenTest {
                 downloads = DownloadSettingsActions(
                     onQuality = { events += "download quality $it" },
                     onWifiOnly = { events += "wifiOnly $it" },
+                    onRemoveOnSignOut = { events += "removeOnSignOut $it" },
                     onRemoveAll = { events += "removeAll" },
                 ),
             )
@@ -122,6 +123,15 @@ class SettingsScreenTest {
         downloadQualityOption("Data saver").performScrollTo().performClick()
 
         events shouldBe listOf("download quality LOW")
+    }
+
+    @Test
+    fun `downloads can be set to go when signing out`() {
+        show()
+
+        composeRule.onNodeWithText("Remove downloads on sign out").performScrollTo().performClick()
+
+        events shouldBe listOf("removeOnSignOut true")
     }
 
     @Test

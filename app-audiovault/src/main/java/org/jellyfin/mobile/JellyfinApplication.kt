@@ -5,7 +5,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import org.jellyfin.mobile.app.applicationModule
 import org.jellyfin.mobile.common.app.apiModule
-import org.jellyfin.mobile.common.app.plainSignOutModule
 import org.jellyfin.mobile.data.databaseModule
 import org.jellyfin.mobile.downloads.audioDownloadsModule
 import org.jellyfin.mobile.utils.JellyTree
@@ -33,7 +32,6 @@ class JellyfinApplication : Application() {
                 apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME)),
                 databaseModule,
                 audioDownloadsModule,
-                plainSignOutModule,
             )
         }
     }

@@ -16,6 +16,9 @@ interface DownloadDao {
     @Query("DELETE FROM $TABLE_NAME WHERE item_id LIKE :downloadId")
     suspend fun delete(downloadId: String)
 
+    @Query("DELETE FROM $TABLE_NAME")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM $TABLE_NAME ORDER BY item_id DESC")
     fun getAllDownloads(): Flow<List<DownloadEntity>>
 

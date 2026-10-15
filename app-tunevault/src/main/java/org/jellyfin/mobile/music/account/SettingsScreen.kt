@@ -49,6 +49,7 @@ import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.ui.formatBytes
 import org.koin.compose.viewmodel.koinViewModel
+import org.jellyfin.mobile.common.R as CommonR
 
 private val QUALITY_LABELS = mapOf(
     StreamingQuality.ORIGINAL to (R.string.quality_original to R.string.quality_original_detail),
@@ -61,6 +62,7 @@ private val QUALITY_LABELS = mapOf(
 data class DownloadSettingsActions(
     val onQuality: (StreamingQuality) -> Unit = {},
     val onWifiOnly: (Boolean) -> Unit = {},
+    val onRemoveOnSignOut: (Boolean) -> Unit = {},
     val onRemoveAll: () -> Unit = {},
 )
 
@@ -145,6 +147,11 @@ private fun DownloadsSection(state: SettingsUiState, actions: DownloadSettingsAc
     Note(R.string.download_quality_note)
     QualityOptions(state.downloadQuality, actions.onQuality)
     SwitchRow(R.string.download_wifi_only, state.downloadOnWifiOnly, actions.onWifiOnly)
+    SwitchRow(
+        CommonR.string.pref_remove_downloads_on_sign_out,
+        state.removeDownloadsOnSignOut,
+        actions.onRemoveOnSignOut,
+    )
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (state.downloadBytes == 0L) {
             Text(stringResource(R.string.nothing_downloaded))
@@ -281,6 +288,7 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
         downloads = DownloadSettingsActions(
             onQuality = viewModel::setDownloadQuality,
             onWifiOnly = viewModel::setDownloadOnWifiOnly,
+            onRemoveOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
             onRemoveAll = viewModel::removeAllDownloads,
         ),
     )

@@ -11,6 +11,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.common.account.DownloadsOnSignOut
+import org.jellyfin.mobile.common.account.SignOut
+import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
 import org.jellyfin.mobile.common.downloads.ItemDownloads
@@ -85,5 +88,10 @@ val audioDownloadsModule = module {
                     DownloadEntity(LocalJellyfinMediaSource(source, files.root.path, apiClient.trackUri(trackId), 0))
                 }
         }
+    }
+    // Signing out keeps downloads unless the user asked otherwise in Settings
+    single {
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<AudiobookDownloads>()::removeAll)
+        SignOut(get(), get<ApiClientController>()::logoutUser, forgetAccount = { downloadsOnSignOut() })
     }
 }
