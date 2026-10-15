@@ -3,17 +3,12 @@ package org.jellyfin.mobile.app
 import android.content.Context
 import androidx.core.net.toUri
 import androidx.media3.common.util.Util
-import androidx.media3.database.DatabaseProvider
-import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.datasource.cache.Cache
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.NoOpCacheEvictor
-import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -25,7 +20,11 @@ import coil3.ImageLoader
 import kotlinx.coroutines.channels.Channel
 import okhttp3.OkHttpClient
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
+import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.DownloadsViewModel
+import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.library.LibraryViewModel
@@ -37,7 +36,6 @@ import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.PermissionRequestHelper
-import org.jellyfin.mobile.utils.extractId
 import org.jellyfin.mobile.utils.isLowRamDevice
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
@@ -46,7 +44,6 @@ import org.koin.androidx.fragment.dsl.fragment
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
-import java.io.File
 
 const val PLAYER_EVENT_CHANNEL = "PlayerEventChannel"
 private const val TS_SEARCH_PACKETS = 1800
@@ -65,8 +62,8 @@ val applicationModule = module {
     single { ActivityEventHandler() }
 
     // ViewModels
-    viewModel { DownloadsViewModel() }
-    viewModel { LibraryViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { DownloadsViewModel(get<AudiobookDownloads>().finished) }
+    viewModel { LibraryViewModel(get(), get(), get(), get(), get<AudiobookDownloads>().downloadedIds, get()) }
     viewModel { AudiobookPlayerViewModel(get()) }
 
     // Fragments
@@ -81,19 +78,6 @@ val applicationModule = module {
     single { MediaSegmentRepository() }
 
     // ExoPlayer factories
-    single<DatabaseProvider> {
-        val dbProvider = StandaloneDatabaseProvider(get<Context>())
-        dbProvider
-    }
-    single<Cache> {
-        val downloadPath = File(get<Context>().filesDir, Constants.DOWNLOAD_PATH)
-        if (!downloadPath.exists()) {
-            downloadPath.mkdirs()
-        }
-        val cache = SimpleCache(downloadPath, NoOpCacheEvictor(), get())
-        cache
-    }
-
     single<DataSource.Factory> {
         val context: Context = get()
         val apiClient: ApiClient = get()
@@ -126,16 +110,14 @@ val applicationModule = module {
         }
     }
 
-    single<CacheDataSource.Factory> {
-        // Create a read-only cache data source factory using the download cache.
-        CacheDataSource.Factory()
-            .setCache(get())
-            .setUpstreamDataSourceFactory(get<DataSource.Factory>())
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            .setCacheWriteDataSinkFactory(null)
-            .setCacheKeyFactory { spec ->
-                spec.uri.extractId()
-            }
+    // Plays a downloaded track from its file and streams everything else
+    single {
+        DownloadAwareDataSource.Factory(
+            itemIdOf = ::audioItemIdOf,
+            fileFor = get<ItemDownloads>()::fileFor,
+            onDevice = FileDataSource.Factory(),
+            server = get<DataSource.Factory>(),
+        )
     }
 
     single<MediaSource.Factory> {
@@ -149,9 +131,9 @@ val applicationModule = module {
                 },
             )
         }
-        DefaultMediaSourceFactory(get<CacheDataSource.Factory>(), extractorsFactory)
+        DefaultMediaSourceFactory(get<DownloadAwareDataSource.Factory>(), extractorsFactory)
     }
-    single { ProgressiveMediaSource.Factory(get<CacheDataSource.Factory>()) }
-    single { HlsMediaSource.Factory(get<CacheDataSource.Factory>()) }
-    single { SingleSampleMediaSource.Factory(get<CacheDataSource.Factory>()) }
+    single { ProgressiveMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
+    single { HlsMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
+    single { SingleSampleMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
 }

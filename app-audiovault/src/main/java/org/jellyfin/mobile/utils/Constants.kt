@@ -19,8 +19,6 @@ object Constants {
     const val PREF_MUSIC_NOTIFICATION_ALWAYS_DISMISSIBLE = "pref_music_notification_always_dismissible"
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
     const val PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO = "pref_exoplayer_allow_background_audio"
-    const val PREF_DOWNLOAD_LOCATION = "pref_download_location"
-    const val PREF_DOWNLOAD_INTERNAL = "pref_download_internal"
     const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"
     const val PREF_LIBRARY_SORT_OPTION = "pref_library_sort_option"
     const val PREF_LIBRARY_GLOBAL_FLATTEN = "pref_library_global_flatten"
@@ -31,7 +29,6 @@ object Constants {
     // Notification
     const val PENDING_INTENT_FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     const val MEDIA_NOTIFICATION_CHANNEL_ID = "org.jellyfin.mobile.media.NOW_PLAYING"
-    const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "org.jellyfin.mobile.download.DOWNLOAD_PROGRESS"
 
     // Audiobook player constants
     const val SUPPORTED_AUDIOBOOK_PLAYBACK_ACTIONS: Long = PlaybackState.ACTION_PLAY_PAUSE or
@@ -61,7 +58,6 @@ object Constants {
     const val MAX_SKIP_TO_PREV_MS = 3000L
     const val HOLD_SPEEDUP_MULTIPLIER = 3f
     const val PLAYER_NOTIFICATION_ID = 99
-    const val DOWNLOAD_NOTIFICATION_ID = 80
     const val MAX_SKIP_TO_PREV_CHAPTER_MS = 10_000L
 
     // Video player intent extras
@@ -69,6 +65,5 @@ object Constants {
 
     // Misc
     const val PERCENT_MAX = 100
-    const val DOWNLOAD_PATH = "/MediaCache/"
     const val DOWNLOAD_THUMBNAIL_FILENAME = "thumbnail.jpg"
 }

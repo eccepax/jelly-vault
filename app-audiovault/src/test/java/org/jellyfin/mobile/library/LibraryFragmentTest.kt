@@ -132,7 +132,7 @@ class LibraryFragmentTest {
     }
 
     @Test
-    fun `tapping the download menu action emits a batched download request for the track`() {
+    fun `tapping the download menu action asks to download the item's tracks`() {
         val item = audioFile(name = "My Chapter")
 
         launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
@@ -144,9 +144,24 @@ class LibraryFragmentTest {
 
         val eventSlot = slot<ActivityEvent>()
         verify { activityEventHandler.emit(capture(eventSlot)) }
-        val files = (eventSlot.captured as ActivityEvent.DownloadFiles).files
-        files shouldBe listOf(files.single().copy(filename = "My Chapter"))
-        files.single().uri.toString() shouldBe "https://server/Items/${item.id.toString().replace("-", "")}/Download?api_key=token"
+        (eventSlot.captured as ActivityEvent.DownloadTracks).trackIds shouldBe listOf(item.id.toString())
+    }
+
+    @Test
+    fun `tapping remove download asks to remove the item's tracks`() {
+        val item = audioFile(name = "My Chapter")
+        downloadedIdsFlow.value = setOf(item.id.toString())
+
+        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
+
+            val dialog = ShadowAlertDialog.getLatestAlertDialog()
+            shadowOf(dialog).clickOnItem(0)
+        }
+
+        val eventSlot = slot<ActivityEvent>()
+        verify { activityEventHandler.emit(capture(eventSlot)) }
+        (eventSlot.captured as ActivityEvent.RemoveTracks).trackIds shouldBe listOf(item.id.toString())
     }
 
     @Test

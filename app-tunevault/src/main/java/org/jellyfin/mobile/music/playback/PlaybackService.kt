@@ -15,9 +15,10 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.music.TuneMainActivity
-import org.jellyfin.mobile.music.downloads.DownloadAwareDataSource
+import org.jellyfin.mobile.music.downloads.TrackCacheKey
 import org.koin.android.ext.android.inject
 
 /**
@@ -64,6 +65,7 @@ class PlaybackService : MediaSessionService() {
     private fun downloadAwareDataSource(): DataSource.Factory {
         val downloads: ItemDownloads by inject()
         return DownloadAwareDataSource.Factory(
+            itemIdOf = TrackCacheKey::trackIdOf,
             fileFor = downloads::fileFor,
             onDevice = FileDataSource.Factory(),
             server = DefaultDataSource.Factory(this),

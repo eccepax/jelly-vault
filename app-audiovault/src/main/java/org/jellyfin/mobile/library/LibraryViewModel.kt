@@ -3,6 +3,7 @@ package org.jellyfin.mobile.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
 import org.jellyfin.mobile.common.data.dao.UserDao
 import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
@@ -48,7 +48,8 @@ class LibraryViewModel(
     private val appPreferences: AudioVaultAppPreferences,
     private val userDao: UserDao,
     private val audiobookEntryDao: AudiobookEntryDao,
-    private val downloadRecordDao: DownloadRecordDao,
+    /** Tracks whose download is complete (see AudiobookDownloads). */
+    private val downloadedTrackIds: Flow<Set<String>>,
     private val hiddenItemDao: HiddenItemDao,
 ) : ViewModel() {
 
@@ -156,9 +157,7 @@ class LibraryViewModel(
 
     init {
         viewModelScope.launch {
-            downloadRecordDao.getAll().collect { records ->
-                _downloadedIds.value = records.map { it.itemId }.toSet()
-            }
+            downloadedTrackIds.collect { ids -> _downloadedIds.value = ids }
         }
         viewModelScope.launch {
             hiddenItemDao.getAll().collect { records ->

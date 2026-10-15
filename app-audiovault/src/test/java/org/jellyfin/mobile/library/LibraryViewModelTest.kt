@@ -12,15 +12,14 @@ import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
 import org.jellyfin.mobile.common.data.dao.UserDao
-import org.jellyfin.mobile.common.data.entity.DownloadRecord
 import org.jellyfin.mobile.common.data.entity.ServerEntity
 import org.jellyfin.mobile.common.data.entity.ServerUser
 import org.jellyfin.mobile.common.data.entity.UserEntity
@@ -63,7 +62,7 @@ class LibraryViewModelTest {
     private val appPreferences = mockk<AudioVaultAppPreferences>(relaxed = true)
     private val userDao = mockk<UserDao>(relaxed = true)
     private val audiobookEntryDao = mockk<AudiobookEntryDao>(relaxed = true)
-    private val downloadRecordDao = mockk<DownloadRecordDao>(relaxed = true)
+    private val downloadedTrackIds = MutableStateFlow<Set<String>>(emptySet())
     private val hiddenItemDao = mockk<HiddenItemDao>(relaxed = true)
 
     private val serverUser = ServerUser(
@@ -91,7 +90,6 @@ class LibraryViewModelTest {
         every { appPreferences.librarySortOption } returns "TITLE"
         every { appPreferences.libraryGlobalFlattened } returns false
 
-        every { downloadRecordDao.getAll() } returns flowOf(emptyList())
         every { hiddenItemDao.getAll() } returns flowOf(emptyList())
 
         stubItems(emptyList())
@@ -109,7 +107,7 @@ class LibraryViewModelTest {
         appPreferences = appPreferences,
         userDao = userDao,
         audiobookEntryDao = audiobookEntryDao,
-        downloadRecordDao = downloadRecordDao,
+        downloadedTrackIds = downloadedTrackIds,
         hiddenItemDao = hiddenItemDao,
     )
 
@@ -447,11 +445,9 @@ class LibraryViewModelTest {
     }
 
     @Test
-    fun `downloadedIds reflects the download record dao`() = runTest {
+    fun `downloadedIds are the tracks whose download is complete`() = runTest {
         val itemId = UUID.randomUUID().toString()
-        every { downloadRecordDao.getAll() } returns flowOf(
-            listOf(DownloadRecord(itemId, "Title", "/path", 1L, 0L, "AUDIO")),
-        )
+        downloadedTrackIds.value = setOf(itemId)
 
         val viewModel = createViewModel()
         viewModel.awaitSettled()

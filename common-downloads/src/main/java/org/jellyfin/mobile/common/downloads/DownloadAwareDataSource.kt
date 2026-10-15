@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.downloads
+package org.jellyfin.mobile.common.downloads
 
 import android.net.Uri
 import androidx.media3.common.util.UnstableApi
@@ -8,14 +8,16 @@ import androidx.media3.datasource.TransferListener
 import java.io.File
 
 /**
- * The player's data source: a song fully downloaded is read from its file, anything else from the
+ * A player's data source: an item fully downloaded is read from its file, anything else from the
  * server. Only complete downloads count: reading a partial file and streaming the rest could splice
  * two different encodings (download vs streaming quality) into one corrupt stream.
  */
 @UnstableApi
 class DownloadAwareDataSource private constructor(
-    /** A song's finished download, or null. */
-    private val fileFor: (trackId: String) -> File?,
+    /** The downloadable item a URL fetches, or null for anything else (artwork, subtitles...). */
+    private val itemIdOf: (Uri) -> String?,
+    /** An item's finished download, or null. */
+    private val fileFor: (itemId: String) -> File?,
     private val onDevice: DataSource,
     private val server: DataSource,
 ) : DataSource {
@@ -28,7 +30,7 @@ class DownloadAwareDataSource private constructor(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val file = TrackCacheKey.trackIdOf(dataSpec.uri)?.let(fileFor)
+        val file = itemIdOf(dataSpec.uri)?.let(fileFor)
         val source = if (file != null) onDevice else server
         current = source
         return source.open(if (file != null) dataSpec.withUri(Uri.fromFile(file)) else dataSpec)
@@ -50,11 +52,12 @@ class DownloadAwareDataSource private constructor(
     }
 
     class Factory(
-        private val fileFor: (trackId: String) -> File?,
+        private val itemIdOf: (Uri) -> String?,
+        private val fileFor: (itemId: String) -> File?,
         private val onDevice: DataSource.Factory,
         private val server: DataSource.Factory,
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource =
-            DownloadAwareDataSource(fileFor, onDevice.createDataSource(), server.createDataSource())
+            DownloadAwareDataSource(itemIdOf, fileFor, onDevice.createDataSource(), server.createDataSource())
     }
 }

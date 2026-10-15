@@ -7,34 +7,25 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Environment
 import androidx.core.content.getSystemService
-import androidx.media3.exoplayer.offline.DownloadService
+import androidx.media3.exoplayer.offline.DownloadManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.data.dao.DownloadDao
-import org.jellyfin.mobile.data.entity.DownloadEntity
+import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.DownloadMethod
-import org.jellyfin.mobile.downloads.DownloadUtils
-import org.jellyfin.mobile.downloads.JellyfinDownloadService
-import org.jellyfin.mobile.events.DownloadFileSpec
+import org.jellyfin.mobile.downloads.applyDownloadMethod
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
-import org.jellyfin.sdk.model.serializer.toUUID
 import org.koin.android.ext.android.get
-import timber.log.Timber
-import java.io.File
 import kotlin.coroutines.resume
 
 /**
- * Downloads all [files] as one batch. The network-type preference and notification permission are
- * each resolved once for the whole batch rather than once per file — asking N times concurrently
- * for a multi-track audiobook made every prompt reappear as soon as the previous one was dismissed.
+ * Downloads a book's tracks. The network preference (asked the first time, then kept) and the
+ * notification permission are settled once for the whole book, not once per track.
  */
-suspend fun MainActivity.requestDownload(files: List<DownloadFileSpec>) {
-    if (files.isEmpty()) return
+suspend fun MainActivity.requestDownload(trackIds: List<String>) {
+    if (trackIds.isEmpty()) return
 
     val appPreferences: AudioVaultAppPreferences = get()
 
@@ -43,19 +34,12 @@ suspend fun MainActivity.requestDownload(files: List<DownloadFileSpec>) {
             .setTitle(R.string.network_title)
             .setMessage(R.string.network_message)
             .setPositiveButton(R.string.wifi_only) { _, _ ->
-                val selectedDownloadMethod = DownloadMethod.WIFI_ONLY
-                appPreferences.downloadMethod = selectedDownloadMethod
-                continuation.resume(selectedDownloadMethod)
+                appPreferences.downloadMethod = DownloadMethod.WIFI_ONLY
+                continuation.resume(DownloadMethod.WIFI_ONLY)
             }
             .setNegativeButton(R.string.mobile_data) { _, _ ->
-                val selectedDownloadMethod = DownloadMethod.MOBILE_DATA
-                appPreferences.downloadMethod = selectedDownloadMethod
-                continuation.resume(selectedDownloadMethod)
-            }
-            .setNeutralButton(R.string.mobile_data_and_roaming) { _, _ ->
-                val selectedDownloadMethod = DownloadMethod.MOBILE_AND_ROAMING
-                appPreferences.downloadMethod = selectedDownloadMethod
-                continuation.resume(selectedDownloadMethod)
+                appPreferences.downloadMethod = DownloadMethod.MOBILE_DATA
+                continuation.resume(DownloadMethod.MOBILE_DATA)
             }
             .setOnDismissListener {
                 continuation.cancel(null)
@@ -76,27 +60,13 @@ suspend fun MainActivity.requestDownload(files: List<DownloadFileSpec>) {
 
     if (!permissionResult) return
 
-    downloadAllCatchingFailures(files) { file ->
-        DownloadUtils(this, file.filename, file.uri.toString(), downloadMethod).download()
-    }
+    get<DownloadManager>().applyDownloadMethod(downloadMethod)
+    get<AudiobookDownloads>().download(trackIds)
 }
 
-/**
- * Runs [downloadOne] for every file in [files], catching and logging any failure so that one
- * track's error (network hiccup, bad item id, etc.) doesn't abort the rest of the batch.
- */
-@Suppress("TooGenericExceptionCaught")
-internal suspend fun downloadAllCatchingFailures(
-    files: List<DownloadFileSpec>,
-    downloadOne: suspend (DownloadFileSpec) -> Unit,
-) {
-    for (file in files) {
-        try {
-            downloadOne(file)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to download %s", file.uri)
-        }
-    }
+suspend fun MainActivity.removeTracks(trackIds: List<String>) {
+    val downloads: AudiobookDownloads = get()
+    trackIds.forEach { downloads.remove(it) }
 }
 
 suspend fun MainActivity.removeDownload(download: LocalJellyfinMediaSource, force: Boolean = false) {
@@ -121,28 +91,7 @@ suspend fun MainActivity.removeDownload(download: LocalJellyfinMediaSource, forc
         if (!confirmation) return
     }
 
-    val downloadDao: DownloadDao = get()
-    val downloadEntity: DownloadEntity = requireNotNull(downloadDao.get(download.id))
-    val downloadDir = File(downloadEntity.mediaSource.localDirectoryUri)
-    downloadDao.delete(download.id)
-    downloadDir.deleteRecursively()
-
-    val contentId = download.itemId.toString()
-    DownloadService.sendRemoveDownload(
-        this,
-        JellyfinDownloadService::class.java,
-        contentId,
-        false,
-    )
-
-    download.externalSubtitleStreams.forEach {
-        DownloadService.sendRemoveDownload(
-            this,
-            JellyfinDownloadService::class.java,
-            "$contentId:${it.index}",
-            false,
-        )
-    }
+    get<AudiobookDownloads>().remove(download.itemId.toString())
 }
 
 fun Context.createMediaNotificationChannel(notificationManager: NotificationManager) {
@@ -156,40 +105,5 @@ fun Context.createMediaNotificationChannel(notificationManager: NotificationMana
     notificationManager.createNotificationChannel(notificationChannel)
 }
 
-fun Context.getDownloadsPaths(): List<String> = ArrayList<String>().apply {
-    for (directory in getExternalFilesDirs(null)) {
-        // Ignore currently unavailable shared storage
-        if (directory == null) continue
-
-        val path = directory.absolutePath
-        val androidFolderIndex = path.indexOf("/Android")
-        if (androidFolderIndex == -1) continue
-
-        val storageDirectory = File(path.substring(0, androidFolderIndex))
-        if (storageDirectory.isDirectory) {
-            add(File(storageDirectory, Environment.DIRECTORY_DOWNLOADS).absolutePath)
-        }
-    }
-    if (isEmpty()) {
-        add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)
-    }
-}
-
 val Context.isLowRamDevice: Boolean
     get() = getSystemService<ActivityManager>()!!.isLowRamDevice
-
-fun Uri.extractId(): String {
-    val uri = toString()
-    val idRegex = Regex("""/([a-f0-9]{32}|[a-f0-9-]{36})/""")
-    val idResult = idRegex.find(uri)
-    val itemId = idResult?.groups?.get(1)?.value.toString()
-    var item = itemId.toUUID().toString()
-
-    val subtitleRegex = Regex("""Subtitles/(\d+)/\d+/Stream.subrip|/(\d+).subrip""")
-    val subtitleResult = subtitleRegex.find(uri)
-    if (subtitleResult != null) {
-        item += ":${subtitleResult.groups[1]?.value ?: subtitleResult.groups[2]?.value}"
-    }
-
-    return item
-}

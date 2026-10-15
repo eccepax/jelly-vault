@@ -12,11 +12,13 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withStarted
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.player.cast.Chromecast
@@ -90,6 +92,12 @@ class MainActivity : AppCompatActivity() {
                     handleServerState(state)
                 }
             }
+        }
+
+        // Once there's a server, fetch again any downloaded track whose file has gone missing
+        lifecycleScope.launch {
+            mainViewModel.serverState.first { it is ServerState.Available }
+            get<AudiobookDownloads>().repair()
         }
 
         // Handle back presses

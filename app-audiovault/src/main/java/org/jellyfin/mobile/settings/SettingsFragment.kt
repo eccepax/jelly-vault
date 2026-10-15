@@ -1,12 +1,12 @@
 package org.jellyfin.mobile.settings
 
 import android.os.Bundle
-import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.exoplayer.offline.DownloadManager
 import de.Maxr1998.modernpreferences.Preference
 import de.Maxr1998.modernpreferences.PreferencesAdapter
 import de.Maxr1998.modernpreferences.helpers.categoryHeader
@@ -16,18 +16,20 @@ import de.Maxr1998.modernpreferences.helpers.pref
 import de.Maxr1998.modernpreferences.helpers.screen
 import de.Maxr1998.modernpreferences.helpers.singleChoice
 import de.Maxr1998.modernpreferences.preferences.CheckBoxPreference
+import de.Maxr1998.modernpreferences.preferences.choice.AbstractSingleChoiceDialogPreference
 import de.Maxr1998.modernpreferences.preferences.choice.SelectionItem
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.databinding.FragmentSettingsBinding
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.mobile.downloads.applyDownloadMethod
 import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.applyWindowInsetsAsMargins
 import org.jellyfin.mobile.utils.extensions.requireMainActivity
-import org.jellyfin.mobile.utils.getDownloadsPaths
 import org.jellyfin.mobile.utils.withThemedContext
+import org.koin.android.ext.android.get
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
@@ -114,32 +116,16 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 R.string.mobile_data,
                 R.string.mobile_data_summary,
             ),
-            SelectionItem(
-                DownloadMethod.MOBILE_AND_ROAMING,
-                R.string.mobile_data_and_roaming,
-                R.string.mobile_data_and_roaming_summary,
-            ),
         )
         singleChoice(Constants.PREF_DOWNLOAD_METHOD, downloadMethods) {
             titleRes = R.string.network_title
+            // Applies to downloads already waiting too, not just new ones
+            selectionChangeListener = AbstractSingleChoiceDialogPreference.OnSelectionChangeListener { _, method ->
+                get<DownloadManager>().applyDownloadMethod(method)
+                true
+            }
         }
 
-        val downloadsDirs = requireContext().getDownloadsPaths().map { path ->
-            SelectionItem(path, path, null)
-        }
-        singleChoice(Constants.PREF_DOWNLOAD_LOCATION, downloadsDirs) {
-            titleRes = R.string.pref_download_location
-            initialSelection = Environment
-                .getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                .absolutePath
-        }
-
-        checkBox(Constants.PREF_DOWNLOAD_INTERNAL) {
-            titleRes = R.string.store_videos_in_internal_storage
-            summaryRes = R.string.stored_videos_in_internal_storage_desc
-            defaultValue = true
-            // Note: String says "videos" but this applies to audiobooks too
-        }
         categoryHeader(PREF_CATEGORY_ACCOUNT) {
             titleRes = R.string.pref_category_account
         }

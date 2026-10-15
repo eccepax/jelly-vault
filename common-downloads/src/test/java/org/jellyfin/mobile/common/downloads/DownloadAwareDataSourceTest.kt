@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.downloads
+package org.jellyfin.mobile.common.downloads
 
 import android.app.Application
 import android.net.Uri
@@ -31,7 +31,9 @@ class DownloadAwareDataSourceTest {
 
     private fun read(uri: String = songUri, position: Long = 0): String {
         val source: DataSource = DownloadAwareDataSource.Factory(
-            fileFor = { trackId -> downloadedFile.takeIf { trackId in downloaded } },
+            // How an app finds the item in its URLs; here, a Jellyfin /Audio/{id}/... stream
+            itemIdOf = { uri -> uri.pathSegments.takeIf { it.firstOrNull() == "Audio" }?.getOrNull(1) },
+            fileFor = { itemId -> downloadedFile.takeIf { itemId in downloaded } },
             onDevice = FileDataSource.Factory(),
             server = server,
         ).createDataSource()
@@ -44,28 +46,28 @@ class DownloadAwareDataSourceTest {
     }
 
     @Test
-    fun `a downloaded song plays from the device`() {
+    fun `a downloaded item plays from the device`() {
         downloaded = setOf("a")
 
         read() shouldBe "downloaded"
     }
 
     @Test
-    fun `a song not fully downloaded streams, never mixing a partial file with the stream`() {
+    fun `an item not fully downloaded streams, never mixing a partial file with the stream`() {
         downloaded = emptySet()
 
         read() shouldBe "streamed"
     }
 
     @Test
-    fun `seeking in a downloaded song reads from that point of the file`() {
+    fun `seeking in a downloaded item reads from that point of the file`() {
         downloaded = setOf("a")
 
         read(position = 4) shouldBe "loaded"
     }
 
     @Test
-    fun `anything that isn't a song streams`() {
+    fun `anything that isn't a downloadable item streams`() {
         downloaded = setOf("a")
         serverData.setData("http://vault/Items/a/Images/Primary", "art".toByteArray())
 

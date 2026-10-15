@@ -3,7 +3,6 @@ package org.jellyfin.mobile.app
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Environment
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -15,11 +14,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.io.File
 
 /**
  * Runs against a real [AudioVaultAppPreferences] over an in-memory [FakeSharedPreferences].
- * Robolectric is needed only for [downloadLocation]'s use of [Environment].
+ * Robolectric provides the Android framework classes the preferences use.
  *
  * [downloadToInternal] must write `PREF_DOWNLOAD_INTERNAL`, not `PREF_DOWNLOAD_METHOD`; mixing them
  * up silently corrupts the download-method setting.
@@ -55,68 +53,6 @@ class AudioVaultAppPreferencesTest {
         preferences.downloadMethod = null
 
         preferences.downloadMethod shouldBe 2
-    }
-
-    // --- downloadToInternal (regression: used to write the wrong preference key) --------------
-
-    @Test
-    fun `downloadToInternal defaults to true`() {
-        preferences.downloadToInternal shouldBe true
-    }
-
-    @Test
-    fun `downloadToInternal round-trips through its own key, not PREF_DOWNLOAD_METHOD`() {
-        preferences.downloadToInternal = false
-
-        preferences.downloadToInternal shouldBe false
-        fakeSharedPreferences.getBoolean(Constants.PREF_DOWNLOAD_INTERNAL, true) shouldBe false
-        fakeSharedPreferences.contains(Constants.PREF_DOWNLOAD_METHOD) shouldBe false
-    }
-
-    @Test
-    fun `setting downloadToInternal to null does not clear a previously stored value`() {
-        preferences.downloadToInternal = false
-
-        preferences.downloadToInternal = null
-
-        preferences.downloadToInternal shouldBe false
-    }
-
-    // --- downloadLocation -----------------------------------------------------------------------
-
-    @Test
-    fun `downloadLocation defaults to the platform Downloads directory when never set`() {
-        preferences.downloadLocation shouldBe
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-    }
-
-    @Test
-    fun `downloadLocation round-trips a path whose parent directory exists`() {
-        val validPath = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "book.m4b")
-
-        preferences.downloadLocation = validPath.absolutePath
-
-        preferences.downloadLocation shouldBe validPath.absolutePath
-    }
-
-    @Test
-    fun `setting downloadLocation to a path whose parent doesn't exist is silently ignored`() {
-        preferences.downloadLocation = "/definitely/does/not/exist/book.m4b"
-
-        preferences.downloadLocation shouldBe
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-    }
-
-    @Test
-    fun `a stored downloadLocation whose parent no longer exists is cleared and falls back to the default`() {
-        fakeSharedPreferences.edit()
-            .putString(Constants.PREF_DOWNLOAD_LOCATION, "/no/longer/exists/book.m4b")
-            .apply()
-
-        val result = preferences.downloadLocation
-
-        result shouldBe Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-        fakeSharedPreferences.contains(Constants.PREF_DOWNLOAD_LOCATION) shouldBe false
     }
 
     // --- mediaSegmentActions --------------------------------------------------------------------
