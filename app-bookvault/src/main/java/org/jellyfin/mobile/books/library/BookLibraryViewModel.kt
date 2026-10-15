@@ -6,13 +6,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
-import org.jellyfin.mobile.books.downloads.BookDownloadManager
+import org.jellyfin.mobile.books.downloads.BookDownloads
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -29,8 +27,7 @@ class BookLibraryViewModel(
     private val apiClient: ApiClient,
     private val appPreferences: AppPreferences,
     private val bookProgressDao: BookProgressDao,
-    private val bookDownloadManager: BookDownloadManager,
-    private val downloadRecordDao: DownloadRecordDao,
+    private val bookDownloads: BookDownloads,
     private val libraryId: String?,
 ) : ViewModel() {
 
@@ -55,10 +52,10 @@ class BookLibraryViewModel(
 
     init {
         viewModelScope.launch {
-            downloadRecordDao.getAll()
-                .map { records -> records.map { it.itemId }.toSet() }
-                .collect { ids -> _downloadedIds.value = ids }
+            bookDownloads.downloadedIds.collect { ids -> _downloadedIds.value = ids }
         }
+        // Fetches again any downloaded book whose file has gone missing
+        viewModelScope.launch { bookDownloads.repair() }
         viewModelScope.launch {
             combine(
                 combine(_allBooks, sortOption, progressFilter, tagFilter) { books, sort, progress, tag ->
@@ -126,26 +123,15 @@ class BookLibraryViewModel(
         }
     }
 
-    /**
-     * [BookDownloadManager.downloadBook] can throw [java.io.IOException] (network/file I/O) or
-     * [IllegalStateException] (a non-2xx response) — both are just "this download attempt failed,"
-     * logged so the failure doesn't crash the screen.
-     */
-    @Suppress("TooGenericExceptionCaught")
+    /** Downloads [book] in the background; its progress shows in the downloads notification. */
     fun downloadBook(book: BaseItemDto) {
-        viewModelScope.launch {
-            try {
-                bookDownloadManager.downloadBook(book)
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to download book ${book.name}")
-            }
-        }
+        val bookId = book.id?.toString() ?: return
+        viewModelScope.launch { bookDownloads.download(bookId) }
     }
 
     fun deleteDownload(book: BaseItemDto) {
-        viewModelScope.launch {
-            book.id?.toString()?.let { bookDownloadManager.deleteDownload(it) }
-        }
+        val bookId = book.id?.toString() ?: return
+        viewModelScope.launch { bookDownloads.remove(bookId) }
     }
 
     private suspend fun applyFiltersAndSort(

@@ -16,6 +16,11 @@
     <string name="filter_downloaded_only">Downloaded only</string>
     <string name="remove_download">Remove download</string>
     <string name="downloading_book">Downloading…</string>
+    <string name="downloads_channel">Downloads</string>
+    <plurals name="downloading_books">
+        <item quantity="one">Downloading %d book</item>
+        <item quantity="other">Downloading %d books</item>
+    </plurals>
 
     <!-- Settings -->
     <string name="settings">Settings</string>

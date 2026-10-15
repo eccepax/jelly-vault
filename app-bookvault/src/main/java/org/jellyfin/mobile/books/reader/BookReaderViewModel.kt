@@ -6,19 +6,14 @@ import android.view.WindowManager
 import androidx.core.content.getSystemService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
-import org.jellyfin.mobile.books.downloads.BookDownloadManager
-import org.jellyfin.mobile.common.server.itemDownloadUrl
+import org.jellyfin.mobile.books.downloads.BookFiles
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.PlaybackStopInfo
@@ -26,16 +21,14 @@ import org.jellyfin.sdk.model.serializer.toUUID
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 enum class BookType { PDF, EPUB, UNKNOWN }
 
 class BookReaderViewModel(
     app: Application,
     private val apiClient: ApiClient,
-    private val httpClient: OkHttpClient,
     private val bookProgressDao: BookProgressDao,
-    private val bookDownloadManager: BookDownloadManager,
+    private val bookFiles: BookFiles,
     private val bookBookmarkDao: BookBookmarkDao,
 ) : AndroidViewModel(app) {
 
@@ -90,10 +83,7 @@ class BookReaderViewModel(
             _error.value = null
             try {
                 val savedProgress = bookProgressDao.getProgress(bookItemId)
-                val cachedFile = getCachedFile(bookItemId)
-                if (!cachedFile.exists()) {
-                    downloadBook(bookItemId, cachedFile)
-                }
+                val cachedFile = bookFiles.fileFor(bookItemId)
                 val type = detectBookType(cachedFile)
                 // Populate totalPages/currentPage BEFORE publishing bookType — the Fragment's
                 // bookType collector builds the pager adapter as soon as it sees the new type, and
@@ -214,32 +204,6 @@ class BookReaderViewModel(
         }
     }
 
-    private fun getCachedFile(bookItemId: String): File {
-        // Check for a persistent offline download first
-        val persistentFile = bookDownloadManager.getDownloadedFile(bookItemId)
-        if (persistentFile != null) return persistentFile
-        val cacheDir = File(getApplication<Application>().cacheDir, "books")
-        cacheDir.mkdirs()
-        return File(cacheDir, bookItemId)
-    }
-
-    private suspend fun downloadBook(bookItemId: String, destination: File) = withContext(Dispatchers.IO) {
-        val baseUrl = requireNotNull(apiClient.baseUrl) { "No base URL" }
-        val url = itemDownloadUrl(baseUrl, bookItemId.toUUID(), apiClient.accessToken)
-        val request = Request.Builder().url(url).build()
-        val client = httpClient.newBuilder()
-            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .build()
-        client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Download failed: ${response.code}" }
-            response.body!!.byteStream().use { input ->
-                destination.outputStream().use { output -> input.copyTo(output) }
-            }
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
         pdfCore.close()
@@ -254,10 +218,6 @@ class BookReaderViewModel(
         // "PK" — ZIP local file header signature (EPUB is a ZIP container).
         const val EPUB_MAGIC_BYTE_0: Byte = 0x50
         const val EPUB_MAGIC_BYTE_1: Byte = 0x4B
-
-        const val CONNECT_TIMEOUT_SECONDS = 15L
-        const val READ_TIMEOUT_SECONDS = 60L
-        const val CALL_TIMEOUT_SECONDS = 90L
 
         const val SIGNATURE_HEADER_BYTES = 4
     }

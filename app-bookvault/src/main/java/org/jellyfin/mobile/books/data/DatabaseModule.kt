@@ -14,6 +14,6 @@ val bookDatabaseModule = module {
     single { get<BookDatabase>().bookProgressDao }
     single { get<BookDatabase>().serverDao }
     single { get<BookDatabase>().userDao }
-    single { get<BookDatabase>().downloadRecordDao }
+    single { get<BookDatabase>().downloadGroupDao }
     single { get<BookDatabase>().bookBookmarkDao }
 }

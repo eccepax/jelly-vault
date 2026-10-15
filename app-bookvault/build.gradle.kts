@@ -32,6 +32,10 @@ android {
     room {
         schemaDirectory("$projectDir/schemas")
     }
+
+    // Migration tests load each exported schema from assets, and Robolectric only sees the app's
+    // own (debug) assets, so debug builds carry the schemas too; release builds don't.
+    sourceSets.getByName("debug").assets.directories.add("$projectDir/schemas")
 }
 
 base.archivesName.set("bookvault-v${project.getVersionName()}")
@@ -39,6 +43,7 @@ base.archivesName.set("bookvault-v${project.getVersionName()}")
 dependencies {
     // Common module
     implementation(project(":common"))
+    implementation(project(":common-downloads"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)
@@ -93,6 +98,9 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.mockwebserver)
+    testImplementation(project(":common-testing"))
+    // Migration tests (see the debug assets above)
+    testImplementation(libs.androidx.room.testing)
     // Robolectric shadows the Android framework for Fragment/Activity-level JVM tests. Robolectric
     // itself is still JUnit4-based, so its tests run through the JUnit5 platform's vintage engine
     // alongside the rest of the (JUnit5 Jupiter) suite.

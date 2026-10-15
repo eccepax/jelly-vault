@@ -1,8 +1,11 @@
 package org.jellyfin.mobile.books
 
 import android.app.Application
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import org.jellyfin.mobile.books.app.bookAppModule
 import org.jellyfin.mobile.books.data.bookDatabaseModule
+import org.jellyfin.mobile.books.downloads.bookDownloadsModule
 import org.jellyfin.mobile.books.utils.BookTree
 import org.jellyfin.mobile.common.app.apiModule
 import org.jellyfin.mobile.common.app.plainSignOutModule
@@ -13,6 +16,7 @@ import org.koin.core.context.startKoin
 import timber.log.Timber
 
 @Suppress("unused")
+@OptIn(UnstableApi::class)
 class BookVaultApplication : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -27,6 +31,7 @@ class BookVaultApplication : Application() {
                 bookAppModule,
                 apiModule(ClientInfo("BookVault", BuildConfig.VERSION_NAME)),
                 bookDatabaseModule,
+                bookDownloadsModule,
                 plainSignOutModule,
             )
         }
