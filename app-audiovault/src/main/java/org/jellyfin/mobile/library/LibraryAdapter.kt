@@ -115,7 +115,7 @@ class LibraryAdapter(
 
             val imageItemId = item.imageItemId
             val thumbnailUrl = if (imageItemId != null) getThumbnailUrl(itemView.context, imageItemId) else null
-            val fallbackIcon = if (imageItemId != null) R.drawable.ic_local_movies_white_64 else R.drawable.ic_folder_white_24dp
+            val fallbackIcon = if (imageItemId != null) R.drawable.ic_audiobook_white_64 else R.drawable.ic_folder_white_24dp
             binding.imageViewThumbnail.load(thumbnailUrl) {
                 fallback(fallbackIcon)
                 error(fallbackIcon)
