@@ -16,6 +16,7 @@ import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import timber.log.Timber
@@ -107,7 +108,8 @@ class BookLibraryViewModel(
                         sortBy = listOf(sortField),
                         sortOrder = listOf(SortOrder.ASCENDING),
                         recursive = true,
-                        fields = emptyList(),
+                        // The server leaves these out unless asked; sorting by date added and the tag filter read them.
+                        fields = listOf(ItemFields.DATE_CREATED, ItemFields.TAGS),
                         parentId = libraryId?.let {
                             runCatching { java.util.UUID.fromString(it) }.getOrNull()
                         },
