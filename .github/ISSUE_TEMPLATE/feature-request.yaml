@@ -12,6 +12,7 @@ body:
         - AudioVault
         - BookVault
         - TuneVault
+        - LiveVault
     validations:
       required: true
   - type: textarea

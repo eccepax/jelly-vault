@@ -24,7 +24,7 @@ fi
 # Java properties files treat backslashes as escapes, so store paths with forward slashes
 props_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 
-for name in AudioVault BookVault TuneVault; do
+for name in AudioVault BookVault TuneVault LiveVault; do
     app="$(tr '[:upper:]' '[:lower:]' <<< "$name")"
     keystore="$key_dir/$app.jks"
     if [ -e "$keystore" ]; then
