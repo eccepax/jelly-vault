@@ -1,11 +1,8 @@
 package org.jellyfin.mobile
 
-import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.Fragment
@@ -18,6 +15,7 @@ import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
@@ -76,9 +74,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         setupKoinFragmentFactory()
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        enableDarkEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 

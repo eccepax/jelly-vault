@@ -1,9 +1,6 @@
 package org.jellyfin.mobile.books
 
-import android.graphics.Color
 import android.os.Bundle
-import androidx.activity.SystemBarStyle
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.Fragment
@@ -17,6 +14,7 @@ import org.jellyfin.mobile.books.setup.BookConnectFragment
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -27,7 +25,7 @@ class BookMainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT))
+        enableDarkEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 

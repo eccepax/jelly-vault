@@ -50,7 +50,7 @@
                 android:layout_height="match_parent"
                 android:scaleType="fitCenter"
                 android:contentDescription="@string/album_cover"
-                tools:srcCompat="@drawable/ic_local_movies_white_64" />
+                tools:srcCompat="@drawable/ic_audiobook_white_64" />
 
             <ProgressBar
                 android:id="@+id/loading_indicator"

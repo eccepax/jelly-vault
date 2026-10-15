@@ -304,8 +304,8 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         )
 
         binding.albumCover.load(imageUrl) {
-            fallback(R.drawable.ic_local_movies_white_64)
-            error(R.drawable.ic_local_movies_white_64)
+            fallback(R.drawable.ic_audiobook_white_64)
+            error(R.drawable.ic_audiobook_white_64)
         }
     }
 
