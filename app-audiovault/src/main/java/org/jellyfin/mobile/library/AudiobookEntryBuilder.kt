@@ -22,20 +22,26 @@ import java.util.UUID
  */
 internal object AudiobookEntryBuilder {
 
+    /** The folder [item] is in, from its path or else its parent id; null when the server gave neither. */
+    fun parentDirOf(item: BaseItemDto): String? =
+        item.path?.replace('\\', '/')?.trimEnd('/')?.substringBeforeLast('/')?.takeIf { it.isNotEmpty() }
+            ?: item.parentId?.toString()
+
+    /** [item]'s album tag, which tells apart separate books stored in the same folder. */
+    fun albumKeyOf(item: BaseItemDto): String = item.album?.lowercase()?.trim() ?: ""
+
+    /** A book's tracks in play order: by track number, then name. */
+    val trackOrder: Comparator<BaseItemDto> = compareBy({ it.indexNumber ?: 0 }, { it.name.orEmpty() })
+
     fun build(allItems: List<BaseItemDto>, serverId: Long): List<AudiobookEntryEntity> {
         val result = mutableListOf<AudiobookEntryEntity>()
 
         // Primary grouping key: parent directory from path, falling back to parentId string
-        val byParentDir = allItems.groupBy { item ->
-            item.path?.replace('\\', '/')?.trimEnd('/')?.substringBeforeLast('/')
-                ?.takeIf { it.isNotEmpty() }
-                ?: item.parentId?.toString()
-                ?: "root"
-        }
+        val byParentDir = allItems.groupBy { item -> parentDirOf(item) ?: "root" }
 
         for ((parentDirKey, items) in byParentDir) {
             // Subgroup by album tag to detect multi-chapter books vs separate books in same dir
-            val byAlbum = items.groupBy { it.album?.lowercase()?.trim() ?: "" }
+            val byAlbum = items.groupBy(::albumKeyOf)
             for ((albumKey, albumItems) in byAlbum) {
                 val firstParentId = albumItems.firstOrNull()?.parentId
                 if (albumItems.size == 1) {
@@ -83,7 +89,7 @@ internal object AudiobookEntryBuilder {
         val title = first.album?.takeIf { it.isNotBlank() }
             ?: parentDirName
             ?: "Unknown"
-        val ordered = sortedWith(compareBy({ it.indexNumber ?: 0 }, { it.name.orEmpty() }))
+        val ordered = sortedWith(trackOrder)
         val trackIds = ordered.mapNotNull { it.id?.toString() }.joinToString(",")
         val totalTicks = ordered.sumOf { it.runTimeTicks ?: 0L }
         val playedPercentage = AudiobookProgress.playedPercentage(ordered)
