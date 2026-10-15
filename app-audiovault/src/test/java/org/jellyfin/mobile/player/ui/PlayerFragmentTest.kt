@@ -6,12 +6,14 @@ import android.os.Looper
 import android.view.Menu
 import android.view.View
 import android.widget.ListView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
@@ -38,6 +40,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -148,6 +151,27 @@ class PlayerFragmentTest {
 
         verify { playerViewModel.pause() }
         verify(exactly = 0) { playerViewModel.play() }
+    }
+
+    @Test
+    fun `the progress keeps updating after leaving and coming back while the book was still loading`() {
+        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
+        val player = requireNotNull(playerViewModel.playerOrNull)
+        every { playerViewModel.playerOrNull } returns null // still loading
+
+        launch(playerViewModel).use { scenario ->
+            scenario.moveToState(Lifecycle.State.STARTED) // left the screen
+            scenario.moveToState(Lifecycle.State.RESUMED) // came back, still loading
+            every { playerViewModel.playerOrNull } returns player // the book starts
+            every { playerViewModel.adjustedCurrentPosition } returns 65_000L
+            every { player.duration } returns 600_000L
+
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+
+            scenario.onFragment { fragment ->
+                (fragment.controlButton(R.id.exo_position) as TextView).text.toString() shouldBe "1:05"
+            }
+        }
     }
 
     @Test
