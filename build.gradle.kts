@@ -1,3 +1,28 @@
+// Kover merges every module's unit-test coverage into one report: ./gradlew koverHtmlReport
+plugins {
+    id("org.jetbrains.kotlinx.kover")
+}
+
+dependencies {
+    kover(project(":common"))
+    kover(project(":common-media"))
+    kover(project(":app-audiovault"))
+    kover(project(":app-bookvault"))
+    kover(project(":app-livevault"))
+    kover(project(":app-tunevault"))
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                // Generated code: view binding, Room DAOs/databases, BuildConfig, Compose lambdas
+                classes("*.databinding.*", "*_Impl", "*_Impl$*", "*.BuildConfig", "*.ComposableSingletons*")
+            }
+        }
+    }
+}
+
 allprojects {
     repositories {
         mavenCentral()

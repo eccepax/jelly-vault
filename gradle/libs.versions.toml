@@ -4,6 +4,7 @@ android-plugin = "8.13.2"
 kotlin = "2.2.21"
 kotlin-ksp = "2.3.4"
 detekt = "1.23.8"
+kover = "0.9.10"
 android-junit5 = "2.0.0"
 
 # KotlinX
@@ -91,6 +92,7 @@ android-gradle = { module = "com.android.tools.build:gradle", version.ref = "and
 # Gradle plugins on buildSrc's classpath, for the vault.* convention plugins
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
+kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
 android-junit5-gradle-plugin = { module = "de.mannodermaus.gradle.plugins:android-junit5", version.ref = "android-junit5" }
 androidx-core = { group = "androidx.core", name = "core", version.ref = "androidx-core" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
