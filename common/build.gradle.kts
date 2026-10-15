@@ -88,6 +88,9 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(project(":test-support"))
+    // Compose UI tests on Robolectric (e.g. the shared buttons' TV focus outline)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     testImplementation(libs.androidx.fragment.testing)
     // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
     // into the debug variant, which is what unit tests actually run against.

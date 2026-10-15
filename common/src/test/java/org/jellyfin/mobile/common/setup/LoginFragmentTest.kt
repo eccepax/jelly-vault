@@ -9,7 +9,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
+import androidx.test.platform.app.InstrumentationRegistry
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.every
@@ -116,6 +118,26 @@ class LoginFragmentTest {
 
     private fun await(signal: CompletableDeferred<Unit>) = runBlocking {
         withTimeout(SIGNAL_TIMEOUT_MS) { signal.await() }
+    }
+
+    @Test
+    fun `with a TV remote the focused button is outlined, and the others are not`() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.setInTouchMode(false)
+        try {
+            val scenario = launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme)
+            scenario.onFragment { fragment ->
+                val signIn = fragment.requireView().findViewById<Button>(R.id.buttonLogin)
+                val changeServer = fragment.requireView().findViewById<Button>(R.id.buttonChangeServer)
+
+                signIn.requestFocus() shouldBe true
+
+                signIn.foreground?.current.shouldNotBeNull()
+                changeServer.foreground?.current.shouldBeNull()
+            }
+        } finally {
+            instrumentation.setInTouchMode(true)
+        }
     }
 
     @Test

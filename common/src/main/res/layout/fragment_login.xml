@@ -64,6 +64,7 @@
 
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/buttonLogin"
+        android:foreground="@drawable/focus_outline"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
@@ -76,6 +77,7 @@
          spares a TV user typing a password with a remote. -->
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/buttonQuickConnect"
+        android:foreground="@drawable/focus_outline"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
@@ -111,6 +113,7 @@
 
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/buttonChangeServer"
+        android:foreground="@drawable/focus_outline"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
