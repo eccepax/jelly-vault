@@ -63,7 +63,10 @@ val applicationModule = module {
 
     // ViewModels
     viewModel { DownloadsViewModel(get<AudiobookDownloads>().finished) }
-    viewModel { LibraryViewModel(get(), get(), get(), get(), get<AudiobookDownloads>().downloadedIds, get()) }
+    viewModel {
+        val downloads = get<AudiobookDownloads>()
+        LibraryViewModel(get(), get(), get(), get(), downloads.downloadedIds, get(), downloads::playable)
+    }
     viewModel { AudiobookPlayerViewModel(get()) }
 
     // Fragments

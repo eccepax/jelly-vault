@@ -19,6 +19,7 @@ import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
 import org.jellyfin.mobile.data.entity.AudiobookEntryEntity
 import org.jellyfin.mobile.data.entity.HiddenItemEntity
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -51,6 +52,8 @@ class LibraryViewModel(
     /** Tracks whose download is complete (see AudiobookDownloads). */
     private val downloadedTrackIds: Flow<Set<String>>,
     private val hiddenItemDao: HiddenItemDao,
+    /** A track's download, ready to play, or null if it isn't downloaded (see AudiobookDownloads.playable). */
+    private val downloadedTrack: suspend (UUID) -> LocalJellyfinMediaSource?,
 ) : ViewModel() {
 
     private val _rawItems = MutableStateFlow<List<LibraryItem>>(emptyList())
@@ -206,27 +209,32 @@ class LibraryViewModel(
     suspend fun fetchAlbumQueue(albumId: UUID): AudioQueue? {
         _isLoading.update { true }
         return try {
-            val userId = resolveCurrentUserId() ?: return null
-            val result = withContext(Dispatchers.IO) {
-                apiClient.itemsApi.getItems(
-                    userId = userId,
-                    parentId = albumId,
-                    includeItemTypes = listOf(BaseItemKind.AUDIO, BaseItemKind.AUDIO_BOOK),
-                    sortBy = listOf(ItemSortBy.INDEX_NUMBER, ItemSortBy.NAME),
-                    sortOrder = listOf(SortOrder.ASCENDING),
-                    recursive = false,
-                ).content
-            }
-            val tracks = result.items.orEmpty()
-            if (tracks.isEmpty()) return null
-
-            buildResumeQueue(tracks)
+            albumQueue(albumId)
         } catch (e: ApiClientException) {
             Timber.e(e, "Failed to fetch album tracks for $albumId")
             null
         } finally {
             _isLoading.update { false }
         }
+    }
+
+    /** [albumId]'s tracks from the server, resuming where the server says; throws when it can't be reached. */
+    private suspend fun albumQueue(albumId: UUID): AudioQueue? {
+        val userId = resolveCurrentUserId() ?: return null
+        val result = withContext(Dispatchers.IO) {
+            apiClient.itemsApi.getItems(
+                userId = userId,
+                parentId = albumId,
+                includeItemTypes = listOf(BaseItemKind.AUDIO, BaseItemKind.AUDIO_BOOK),
+                sortBy = listOf(ItemSortBy.INDEX_NUMBER, ItemSortBy.NAME),
+                sortOrder = listOf(SortOrder.ASCENDING),
+                recursive = false,
+            ).content
+        }
+        val tracks = result.items.orEmpty()
+        if (tracks.isEmpty()) return null
+
+        return buildResumeQueue(tracks)
     }
 
     /**
@@ -236,8 +244,10 @@ class LibraryViewModel(
      * - Multi-track bundles with a known [LibraryItem.AudiobookBundle.parentFolderId] delegate to
      *   [fetchAlbumQueue] so resume position is computed from server-side UserData.
      * - Multi-track bundles without a parentFolderId (parentId was null from Jellyfin) fetch tracks
-     *   directly by ID via [fetchTracksByIds], which computes the same resume position from each
+     *   directly by ID via [tracksQueue], which computes the same resume position from each
      *   track's UserData.
+     * - When the server can't be reached, the bundle's cached tracks play from their downloads
+     *   (see [offlineQueue]).
      */
     suspend fun fetchBundleQueue(bundle: LibraryItem.AudiobookBundle): AudioQueue? {
         if (!bundle.isBundle || bundle.trackIds.size == 1) {
@@ -246,31 +256,48 @@ class LibraryViewModel(
             return AudioQueue(listOf(trackId), 0, listOf(bundle.displayName), startPosition)
         }
         val folderId = bundle.parentFolderId
-        return if (folderId != null) {
-            fetchAlbumQueue(folderId)
-        } else {
-            fetchTracksByIds(bundle.trackIds)
+        _isLoading.update { true }
+        return try {
+            if (folderId != null) albumQueue(folderId) else tracksQueue(bundle.trackIds)
+        } catch (e: ApiClientException) {
+            Timber.w(e, "Couldn't reach the server for %s; playing it from downloads", bundle.displayName)
+            offlineQueue(bundle.trackIds)
+        } finally {
+            _isLoading.update { false }
         }
     }
 
-    private suspend fun fetchTracksByIds(trackIds: List<UUID>): AudioQueue? {
+    /** [trackIds] from the server, resuming where the server says; throws when it can't be reached. */
+    private suspend fun tracksQueue(trackIds: List<UUID>): AudioQueue? {
         if (trackIds.isEmpty()) return null
-        return try {
-            val userId = resolveCurrentUserId() ?: return null
-            val result = withContext(Dispatchers.IO) {
-                apiClient.itemsApi.getItems(
-                    userId = userId,
-                    ids = trackIds,
-                    sortBy = listOf(ItemSortBy.INDEX_NUMBER, ItemSortBy.NAME),
-                    sortOrder = listOf(SortOrder.ASCENDING),
-                ).content
-            }
-            val tracks = result.items.orEmpty().ifEmpty { return null }
-            buildResumeQueue(tracks)
-        } catch (e: ApiClientException) {
-            Timber.e(e, "Failed to fetch track names for bundle")
-            AudioQueue(trackIds, 0, trackIds.indices.map { "Track ${it + 1}" })
+        val userId = resolveCurrentUserId() ?: return null
+        val result = withContext(Dispatchers.IO) {
+            apiClient.itemsApi.getItems(
+                userId = userId,
+                ids = trackIds,
+                sortBy = listOf(ItemSortBy.INDEX_NUMBER, ItemSortBy.NAME),
+                sortOrder = listOf(SortOrder.ASCENDING),
+            ).content
         }
+        val tracks = result.items.orEmpty().ifEmpty { return null }
+        return buildResumeQueue(tracks)
+    }
+
+    /**
+     * [trackIds] (cached in order) without the server: named from their downloads, resuming at the
+     * last downloaded track left partway through, or else at the first. The player plays them from
+     * the device.
+     */
+    private suspend fun offlineQueue(trackIds: List<UUID>): AudioQueue? {
+        if (trackIds.isEmpty()) return null
+        val downloads = trackIds.map { downloadedTrack(it) }
+        val resumeIndex = downloads.indexOfLast { (it?.startTime ?: Duration.ZERO) > Duration.ZERO }.coerceAtLeast(0)
+        return AudioQueue(
+            ids = trackIds,
+            startIndex = resumeIndex,
+            trackNames = downloads.mapIndexed { i, download -> download?.item?.name ?: "Track ${i + 1}" },
+            startPosition = downloads[resumeIndex]?.startTime?.takeIf { it > Duration.ZERO },
+        )
     }
 
     /**
