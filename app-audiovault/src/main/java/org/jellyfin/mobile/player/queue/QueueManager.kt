@@ -11,7 +11,6 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
-import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerHost
@@ -128,22 +127,6 @@ class QueueManager(
         _currentMediaSource.value = source
         viewModel.load(source, prepareStreams(source), playWhenReady = true)
         return true
-    }
-
-    private suspend fun startDownloadPlayback(
-        mediaSourceId: String,
-        startTime: Duration? = null,
-        audioStreamIndex: Int? = null,
-        subtitleStreamIndex: Int? = null,
-        playWhenReady: Boolean = true,
-    ): PlayerException? {
-        val jellyfinMediaSource = get<DownloadDao>()
-            .get(mediaSourceId)
-            ?.asMediaSource(startTime, audioStreamIndex, subtitleStreamIndex)
-            ?: return PlayerException.InvalidPlayOptions()
-        _currentMediaSource.value = jellyfinMediaSource
-        viewModel.load(jellyfinMediaSource, prepareStreams(jellyfinMediaSource), playWhenReady)
-        return null
     }
 
     /**
