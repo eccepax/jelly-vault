@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerHost
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -47,6 +48,7 @@ class QueueManager(
     private val apiClient: ApiClient = get()
     private val videosApi: VideosApi = apiClient.videosApi
     private val mediaSourceResolver: MediaSourceResolver by inject()
+    private val downloads: AudiobookDownloads by inject()
     private val deviceProfileBuilder: DeviceProfileBuilder by inject()
     private val deviceProfile = deviceProfileBuilder.getDeviceProfile()
 
@@ -80,23 +82,52 @@ class QueueManager(
             else -> playOptions.mediaSourceId?.toUUIDOrNull()
         } ?: return PlayerException.InvalidPlayOptions()
 
-        return when (playOptions.playFromDownloads) {
-            true -> playOptions.mediaSourceId?.let {
-                startDownloadPlayback(
-                    mediaSourceId = it,
-                    playWhenReady = true,
-                )
-            } ?: PlayerException.InvalidPlayOptions()
-            else -> startRemotePlayback(
-                itemId = itemId,
-                mediaSourceId = playOptions.mediaSourceId,
-                maxStreamingBitrate = null,
-                startTime = playOptions.startPosition,
-                audioStreamIndex = playOptions.audioStreamIndex,
-                subtitleStreamIndex = playOptions.subtitleStreamIndex,
-                playWhenReady = true,
-            )
-        }
+        return startItem(
+            itemId = itemId,
+            fromDevice = playOptions.playFromDownloads == true,
+            mediaSourceId = playOptions.mediaSourceId,
+            maxStreamingBitrate = null,
+            startTime = playOptions.startPosition,
+            audioStreamIndex = playOptions.audioStreamIndex,
+            subtitleStreamIndex = playOptions.subtitleStreamIndex,
+        )
+    }
+
+    /**
+     * Plays queue item [itemId]: from the device when [fromDevice] and it's downloaded, else
+     * streamed. When streaming fails and it's downloaded, the download plays instead, e.g. when the
+     * connection drops partway through a downloaded book.
+     *
+     * @return an error of type [PlayerException] or null on success.
+     */
+    @Suppress("LongParameterList")
+    private suspend fun startItem(
+        itemId: UUID,
+        fromDevice: Boolean,
+        mediaSourceId: String? = null,
+        maxStreamingBitrate: Int?,
+        startTime: Duration? = null,
+        audioStreamIndex: Int? = null,
+        subtitleStreamIndex: Int? = null,
+    ): PlayerException? {
+        if (fromDevice && playDownloaded(itemId)) return null
+        val error = startRemotePlayback(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            maxStreamingBitrate = maxStreamingBitrate,
+            startTime = startTime,
+            audioStreamIndex = audioStreamIndex,
+            subtitleStreamIndex = subtitleStreamIndex,
+        ) ?: return null
+        return if (!fromDevice && playDownloaded(itemId)) null else error
+    }
+
+    /** Plays [itemId]'s download from where it was left, if its file is on the device. */
+    private suspend fun playDownloaded(itemId: UUID): Boolean {
+        val source = downloads.playable(itemId) ?: return false
+        _currentMediaSource.value = source
+        viewModel.load(source, prepareStreams(source), playWhenReady = true)
+        return true
     }
 
     private suspend fun startDownloadPlayback(
@@ -106,15 +137,12 @@ class QueueManager(
         subtitleStreamIndex: Int? = null,
         playWhenReady: Boolean = true,
     ): PlayerException? {
-        get<DownloadDao>()
+        val jellyfinMediaSource = get<DownloadDao>()
             .get(mediaSourceId)
             ?.asMediaSource(startTime, audioStreamIndex, subtitleStreamIndex)
-            ?.also { jellyfinMediaSource ->
-                _currentMediaSource.value = jellyfinMediaSource
-
-                // Load new media source
-                viewModel.load(jellyfinMediaSource, prepareStreams(jellyfinMediaSource), playWhenReady)
-            }
+            ?: return PlayerException.InvalidPlayOptions()
+        _currentMediaSource.value = jellyfinMediaSource
+        viewModel.load(jellyfinMediaSource, prepareStreams(jellyfinMediaSource), playWhenReady)
         return null
     }
 
@@ -198,48 +226,28 @@ class QueueManager(
 
     fun hasNext(): Boolean = currentQueue.isNotEmpty() && currentQueueIndex < currentQueue.lastIndex
 
+    /** Plays the previous track the way the current one plays (from the device or streamed). */
     suspend fun previous(): Boolean {
         if (!hasPrevious()) return false
-
-        val currentMediaSource = getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource ?: return false
-
-        startRemotePlayback(
-            itemId = currentQueue[--currentQueueIndex],
-            mediaSourceId = null,
-            maxStreamingBitrate = currentMediaSource.maxStreamingBitrate,
-        )
-        return true
+        val current = getCurrentMediaSourceOrNull() ?: return false
+        return startItem(currentQueue[--currentQueueIndex], current.playsFromDevice, maxStreamingBitrate = current.bitrate) == null
     }
 
-    /**
-     * Only [RemoteJellyfinMediaSource] queues support advancing to a next track: [currentQueue]
-     * stores server item IDs, but a downloaded [LocalJellyfinMediaSource] can only be looked up by
-     * its own [DownloadDao]-keyed media source ID, which isn't derivable from the next item's ID
-     * alone. Mirrors [previous], which has the same restriction.
-     */
+    /** Plays the next track the way the current one plays (from the device or streamed). */
     suspend fun next(): Boolean {
         if (!hasNext()) return false
-
-        val currentMediaSource = getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource ?: return false
-
-        startRemotePlayback(
-            itemId = currentQueue[++currentQueueIndex],
-            mediaSourceId = null,
-            maxStreamingBitrate = currentMediaSource.maxStreamingBitrate,
-        )
-        return true
+        val current = getCurrentMediaSourceOrNull() ?: return false
+        return startItem(currentQueue[++currentQueueIndex], current.playsFromDevice, maxStreamingBitrate = current.bitrate) == null
     }
+
+    private val JellyfinMediaSource.playsFromDevice get() = this is LocalJellyfinMediaSource
+    private val JellyfinMediaSource.bitrate get() = (this as? RemoteJellyfinMediaSource)?.maxStreamingBitrate
 
     suspend fun skipToIndex(index: Int): Boolean {
         if (index < 0 || index >= currentQueue.size) return false
         currentQueueIndex = index
-        val bitrate = (getCurrentMediaSourceOrNull() as? RemoteJellyfinMediaSource)?.maxStreamingBitrate
-        startRemotePlayback(
-            itemId = currentQueue[index],
-            mediaSourceId = null,
-            maxStreamingBitrate = bitrate,
-        )
-        return true
+        val current = getCurrentMediaSourceOrNull()
+        return startItem(currentQueue[index], current?.playsFromDevice == true, maxStreamingBitrate = current?.bitrate) == null
     }
 
     /**

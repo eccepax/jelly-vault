@@ -3,6 +3,7 @@ package org.jellyfin.mobile.player
 import android.app.Application
 import android.os.Looper
 import androidx.lifecycle.MutableLiveData
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
@@ -26,12 +27,14 @@ import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.queue.QueueManager
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.Response
 import org.jellyfin.sdk.api.client.extensions.hlsSegmentApi
+import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.searchApi
 import org.jellyfin.sdk.api.client.extensions.videosApi
@@ -53,7 +56,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.util.UUID
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Regression coverage for [AudiobookPlayerViewModel] — the app's central playback state machine
@@ -95,6 +100,7 @@ class AudiobookPlayerViewModelTest {
         every { apiClient.hlsSegmentApi } returns mockk(relaxed = true)
         every { apiClient.videosApi } returns mockk(relaxed = true)
         every { apiClient.searchApi } returns searchApi
+        every { apiClient.imageApi } returns mockk(relaxed = true)
 
         startKoin {
             modules(
@@ -148,6 +154,38 @@ class AudiobookPlayerViewModelTest {
         val field = AudiobookPlayerViewModel::class.java.getDeclaredField("queueManager")
         field.isAccessible = true
         field.set(viewModel, queueManager)
+    }
+
+    // --- downloaded books: positions for the server ----------------------------------------------
+
+    @Test
+    fun `stopping a downloaded book saves where it stopped, for the server to hear about later`() {
+        val downloaded = mockk<LocalJellyfinMediaSource>(relaxed = true)
+        every { queueManager.getCurrentMediaSourceOrNull() } returns downloaded
+        every { mockedPlayer.playbackState } returns Player.STATE_READY
+        every { mockedPlayer.currentPosition } returns 95_000L
+
+        viewModel.stop()
+        idleUntilSettled()
+
+        verify { downloaded.startTime = 95.seconds }
+        verify { downloaded.positionSavedAt = isNull(inverse = true) }
+        verify { downloaded.finished = false }
+        coVerify { downloadDao.insert(any()) }
+    }
+
+    @Test
+    fun `finishing a downloaded track saves it as finished, for the server to hear about later`() {
+        val downloaded = mockk<LocalJellyfinMediaSource>(relaxed = true)
+        every { queueManager.getCurrentMediaSourceOrNull() } returns downloaded
+        every { mockedPlayer.playbackState } returns Player.STATE_ENDED
+
+        viewModel.onPlaybackStateChanged(Player.STATE_ENDED)
+        idleUntilSettled()
+
+        verify { downloaded.startTime = Duration.ZERO }
+        verify { downloaded.positionSavedAt = isNull(inverse = true) }
+        verify { downloaded.finished = true }
     }
 
     // --- rewind / fastForward -------------------------------------------------------------------

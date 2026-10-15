@@ -58,11 +58,13 @@ class DownloadsFragment : Fragment() {
         return binding.root
     }
 
+    /** Plays [download]'s whole downloaded book, starting at [download]. */
     internal fun onDownloadItemClick(download: DownloadEntity) {
+        val book = downloadedBookOf(download, viewModel.downloads.value)
         val playOptions = PlayOptions(
-            ids = listOf(download.mediaSource.itemId),
+            ids = book.map { it.mediaSource.itemId },
             mediaSourceId = download.mediaSource.id,
-            startIndex = 0,
+            startIndex = book.indexOf(download).coerceAtLeast(0),
             startPosition = null,
             audioStreamIndex = 1,
             subtitleStreamIndex = -1,

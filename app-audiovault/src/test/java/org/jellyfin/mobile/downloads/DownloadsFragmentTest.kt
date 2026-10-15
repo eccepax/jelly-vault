@@ -5,7 +5,9 @@ import androidx.fragment.app.testing.launchFragmentInContainer
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.slot
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.R
@@ -14,6 +16,9 @@ import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.imageApi
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +44,9 @@ class DownloadsFragmentTest {
     @Before
     fun setUp() {
         every { downloadsViewModel.downloads } returns downloadsFlow
+        // The list shows each download's cover; apiClient.imageApi is an extension with real logic
+        mockkStatic("org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt")
+        every { apiClient.imageApi } returns mockk(relaxed = true)
 
         startKoin {
             modules(
@@ -54,30 +62,47 @@ class DownloadsFragmentTest {
     @After
     fun tearDown() {
         stopKoin()
+        unmockkStatic("org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt")
     }
 
-    private fun downloadEntity(itemId: UUID = UUID.randomUUID(), mediaSourceId: String = "source-1"): DownloadEntity {
+    private fun downloadEntity(
+        itemId: UUID = UUID.randomUUID(),
+        mediaSourceId: String = "source-1",
+        item: BaseItemDto? = null,
+    ): DownloadEntity {
         val mediaSource = mockk<LocalJellyfinMediaSource>(relaxed = true)
-        every { mediaSource.itemId } returns itemId
+        every { mediaSource.itemId } returns (item?.id ?: itemId)
         every { mediaSource.id } returns mediaSourceId
+        every { mediaSource.item } returns item
         return DownloadEntity(itemId = itemId.toString(), mediaSource = mediaSource)
     }
 
     @Test
-    fun `clicking a downloaded item launches the player from downloads`() {
-        val download = downloadEntity()
+    fun `clicking a downloaded track plays its downloaded book from that track`() {
+        val chapter1 = downloadEntity(item = chapter(1))
+        val chapter2 = downloadEntity(item = chapter(2))
+        downloadsFlow.value = listOf(chapter2, chapter1)
 
         launchFragmentInContainer<DownloadsFragment>(themeResId = R.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onDownloadItemClick(download) }
+            scenario.onFragment { fragment -> fragment.onDownloadItemClick(chapter2) }
         }
 
         val eventSlot = slot<ActivityEvent>()
         verify { activityEventHandler.emit(capture(eventSlot)) }
         val playOptions = (eventSlot.captured as ActivityEvent.LaunchNativePlayer).playOptions
-        playOptions.ids shouldBe listOf(download.mediaSource.itemId)
-        playOptions.mediaSourceId shouldBe download.mediaSource.id
+        playOptions.ids shouldBe listOf(chapter1.mediaSource.itemId, chapter2.mediaSource.itemId)
+        playOptions.startIndex shouldBe 1
         playOptions.playFromDownloads shouldBe true
     }
+
+    private fun chapter(index: Int) =
+        BaseItemDto(
+            id = UUID.randomUUID(),
+            type = BaseItemKind.AUDIO,
+            indexNumber = index,
+            path = "/books/Dune/$index.mp3",
+            album = "Dune",
+        )
 
     @Test
     fun `holding a downloaded item requests its removal`() {

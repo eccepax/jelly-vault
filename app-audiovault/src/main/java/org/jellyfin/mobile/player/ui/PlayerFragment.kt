@@ -454,9 +454,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
     override fun onResume() {
         super.onResume()
-        if (viewModel.playerOrNull != null) {
-            startProgressUpdates()
-        }
+        // Always restart: a book still loading when the screen was left has no player yet, and the
+        // loop waits for one; skipping it here left the progress frozen once playback started.
+        startProgressUpdates()
     }
 
     /**

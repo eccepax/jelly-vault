@@ -14,7 +14,10 @@ import kotlinx.serialization.encoding.encodeStructure
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.serializer.toUUID
+import java.time.Instant
 import java.util.UUID
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalSerializationApi::class)
 class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
@@ -26,6 +29,11 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
         element<String>("downloadFolderUri")
         element<String>("downloadedFileUri")
         element<Long>("downloadSize")
+        // Where the listener left the track, in milliseconds; missing from rows saved before it was kept
+        element<Long>("startTime", isOptional = true)
+        // Listening the server hasn't heard about yet (epoch milliseconds); missing when there's none
+        element<Long>("positionSavedAt", isOptional = true)
+        element<Boolean>("finished", isOptional = true)
     }
 
     @SuppressWarnings("MagicNumber")
@@ -38,6 +46,9 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
             encodeStringElement(descriptor, 4, value.localDirectoryUri)
             encodeStringElement(descriptor, 5, value.remoteFileUri)
             encodeLongElement(descriptor, 6, value.downloadSize)
+            encodeLongElement(descriptor, 7, value.startTime.inWholeMilliseconds)
+            value.positionSavedAt?.let { encodeLongElement(descriptor, 8, it.toEpochMilli()) }
+            encodeBooleanElement(descriptor, 9, value.finished)
         }
 
     @SuppressWarnings("MagicNumber")
@@ -50,6 +61,9 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
             var downloadFolderUri: String? = null
             var downloadedFileUri: String? = null
             var downloadSize: Long? = null
+            var startTime = Duration.ZERO
+            var positionSavedAt: Instant? = null
+            var finished = false
 
             while (true) {
                 when (val index = decodeElementIndex(descriptor)) {
@@ -60,6 +74,9 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
                     4 -> downloadFolderUri = decodeStringElement(descriptor, 4)
                     5 -> downloadedFileUri = decodeStringElement(descriptor, 5)
                     6 -> downloadSize = decodeLongElement(descriptor, 6)
+                    7 -> startTime = decodeLongElement(descriptor, 7).milliseconds
+                    8 -> positionSavedAt = Instant.ofEpochMilli(decodeLongElement(descriptor, 8))
+                    9 -> finished = decodeBooleanElement(descriptor, 9)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> throw SerializationException("Unknown index $index")
                 }
@@ -70,9 +87,13 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
                 item = item,
                 sourceInfo = requireNotNull(sourceInfo) { "Media source has no source info" },
                 playSessionId = requireNotNull(playSessionId) { "Media source has no play session id" },
+                playbackDetails = PlaybackDetails(startTime, audioStreamIndex = null, subtitleStreamIndex = null),
                 localDirectoryUri = requireNotNull(downloadFolderUri) { "Media source has no download folder uri" },
                 remoteFileUri = requireNotNull(downloadedFileUri) { "Media source has no downloaded file uri" },
                 downloadSize = requireNotNull(downloadSize) { "Media source has no download size" },
-            )
+            ).also {
+                it.positionSavedAt = positionSavedAt
+                it.finished = finished
+            }
         }
 }

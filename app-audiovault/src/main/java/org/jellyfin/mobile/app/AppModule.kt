@@ -24,6 +24,7 @@ import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.DownloadsViewModel
+import org.jellyfin.mobile.downloads.OfflineListeningSync
 import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
@@ -63,7 +64,19 @@ val applicationModule = module {
 
     // ViewModels
     viewModel { DownloadsViewModel(get<AudiobookDownloads>().finished) }
-    viewModel { LibraryViewModel(get(), get(), get(), get(), get<AudiobookDownloads>().downloadedIds, get()) }
+    viewModel {
+        val downloads = get<AudiobookDownloads>()
+        LibraryViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            downloads.downloadedIds,
+            get(),
+            downloads::playable,
+            get<OfflineListeningSync>()::sync,
+        )
+    }
     viewModel { AudiobookPlayerViewModel(get()) }
 
     // Fragments

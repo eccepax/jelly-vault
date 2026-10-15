@@ -86,6 +86,7 @@ import org.koin.core.component.get
 import org.koin.core.component.inject
 import org.koin.core.qualifier.named
 import timber.log.Timber
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
@@ -419,8 +420,15 @@ class AudiobookPlayerViewModel(application: Application) :
      * Persists the current playback position for a downloaded item locally, since local sources
      * have no server-side [org.jellyfin.sdk.model.api.UserItemDataDto] to resume from.
      */
-    private suspend fun persistLocalPlaybackPosition(mediaSource: LocalJellyfinMediaSource, position: Duration) {
+    private suspend fun persistLocalPlaybackPosition(
+        mediaSource: LocalJellyfinMediaSource,
+        position: Duration,
+        finished: Boolean = false,
+    ) {
         mediaSource.startTime = position
+        // The server hasn't heard about this listening; OfflineListeningSync tells it later
+        mediaSource.positionSavedAt = Instant.now()
+        mediaSource.finished = finished
         withContext(Dispatchers.IO) {
             downloadDao.insert(DownloadEntity(mediaSource))
         }
@@ -482,7 +490,7 @@ class AudiobookPlayerViewModel(application: Application) :
             }
             reportStopJob?.cancel()
             reportStopJob = cleanupScope.launch {
-                persistLocalPlaybackPosition(localSource, lastPosition)
+                persistLocalPlaybackPosition(localSource, lastPosition, finished = hasFinished)
             }
             return
         }

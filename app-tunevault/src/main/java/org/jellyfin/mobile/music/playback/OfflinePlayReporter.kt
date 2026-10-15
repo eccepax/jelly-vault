@@ -1,7 +1,7 @@
 package org.jellyfin.mobile.music.playback
 
 import kotlinx.coroutines.CancellationException
-import org.jellyfin.mobile.music.offline.isNetworkFailure
+import org.jellyfin.mobile.common.server.isNetworkFailure
 import timber.log.Timber
 import java.time.Instant
 
