@@ -1,5 +1,6 @@
 plugins {
     id("vault.android.library")
+    alias(libs.plugins.kotlin.ksp)
 }
 
 // Downloads shared by the vault apps: Media3's DownloadManager queues them, waits for Wi-Fi and keeps
@@ -18,6 +19,9 @@ dependencies {
     implementation(libs.bundles.coroutines)
     api(libs.androidx.media3.exoplayer)
     api(libs.androidx.media3.database)
+    // The download-group tables and DAO; each app adds them to its own Room database
+    api(libs.bundles.androidx.room)
+    implementation(libs.androidx.room.ktx)
 
     // Testing
     testImplementation(libs.junit.api)
@@ -33,4 +37,5 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testRuntimeOnly(libs.junit.vintage.engine)
+    kspTest(libs.androidx.room.compiler)
 }
