@@ -29,4 +29,11 @@
     <string name="login_error_invalid_response">Login failed (invalid server response)</string>
     <string name="login_error_failed">Login failed</string>
     <string name="login_error_timeout">Connection timed out — check your server address and try again</string>
+
+    <!-- Shared components (ui/components); vault_ so they never override an app's own strings -->
+    <string name="vault_retry">Retry</string>
+    <string name="vault_cancel">Cancel</string>
+    <string name="vault_downloaded">Downloaded</string>
+    <string name="vault_search_clear">Clear search</string>
+    <string name="vault_offline_banner">Offline · showing your downloads</string>
 </resources>

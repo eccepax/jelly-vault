@@ -65,6 +65,7 @@ dependencies {
         }
     }
     implementation(libs.bundles.coil)
+    implementation(libs.coil.compose)
 
     // Room
     implementation(libs.bundles.androidx.room)
