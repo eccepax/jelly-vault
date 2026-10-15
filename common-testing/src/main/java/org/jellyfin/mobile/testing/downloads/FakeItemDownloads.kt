@@ -1,7 +1,9 @@
-package org.jellyfin.mobile.common.downloads
+package org.jellyfin.mobile.testing.downloads
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import org.jellyfin.mobile.common.downloads.ItemDownload
+import org.jellyfin.mobile.common.downloads.ItemDownloads
 import java.io.File
 
 /** Records what it's asked to fetch; tests move each item through its states by hand. */

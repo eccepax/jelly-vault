@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.jellyfin.mobile.common.downloads.ItemDownload.State
+import org.jellyfin.mobile.testing.downloads.FakeItemDownloads
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith

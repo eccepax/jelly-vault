@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.domain.track
 import org.junit.Rule
 import org.junit.Test
@@ -48,8 +49,8 @@ class DownloadedScreenTest {
     fun `each download says what it is and how far it has got`() {
         show(
             listOf(
-                DownloadedItem(album, DownloadStatus.Downloaded),
-                DownloadedItem(playlist, DownloadStatus.InProgress(0, 1)),
+                DownloadedItem(album, GroupStatus.Downloaded),
+                DownloadedItem(playlist, GroupStatus.InProgress(0, 1)),
             ),
         )
 
@@ -62,8 +63,8 @@ class DownloadedScreenTest {
     fun `tapping opens the album or playlist`() {
         show(
             listOf(
-                DownloadedItem(album, DownloadStatus.Downloaded),
-                DownloadedItem(playlist, DownloadStatus.Downloaded),
+                DownloadedItem(album, GroupStatus.Downloaded),
+                DownloadedItem(playlist, GroupStatus.Downloaded),
             ),
         )
 
@@ -75,7 +76,7 @@ class DownloadedScreenTest {
 
     @Test
     fun `shuffle all plays the downloads`() {
-        show(listOf(DownloadedItem(album, DownloadStatus.Downloaded)))
+        show(listOf(DownloadedItem(album, GroupStatus.Downloaded)))
 
         composeRule.onNodeWithText("Shuffle downloads").performClick()
 

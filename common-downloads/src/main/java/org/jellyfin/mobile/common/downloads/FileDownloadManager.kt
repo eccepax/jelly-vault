@@ -13,6 +13,12 @@ import androidx.media3.exoplayer.scheduler.Requirements
 
 private const val PARALLEL_DOWNLOADS = 2
 
+/**
+ * Media3's download index table for these downloads. Not the default one: older builds kept
+ * Media3-cache downloads there, which would read as finished files that don't exist.
+ */
+private const val INDEX_NAME = "files"
+
 /** Wi-Fi only means any unmetered network; otherwise any network at all. */
 @UnstableApi
 fun downloadRequirements(wifiOnly: Boolean) =
@@ -47,7 +53,7 @@ fun fileDownloadManager(
     requirements: Requirements = downloadRequirements(wifiOnly = false),
 ): DownloadManager = DownloadManager(
     context,
-    DefaultDownloadIndex(databaseProvider),
+    DefaultDownloadIndex(databaseProvider, INDEX_NAME),
     FileDownloaderFactory(files, dataSourceFactory),
 ).apply {
     maxParallelDownloads = PARALLEL_DOWNLOADS

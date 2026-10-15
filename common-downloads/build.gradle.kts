@@ -29,6 +29,7 @@ dependencies {
     testImplementation(libs.bundles.kotest)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(project(":common-testing"))
     testImplementation(libs.mockwebserver)
     testImplementation(libs.androidx.media3.test.utils)
     testImplementation(libs.androidx.media3.test.utils.robolectric)

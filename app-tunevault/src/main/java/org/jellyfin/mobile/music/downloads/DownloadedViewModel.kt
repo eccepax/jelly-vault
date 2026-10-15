@@ -6,9 +6,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.playback.PlaybackController
 
-data class DownloadedItem(val collection: DownloadedCollection, val status: DownloadStatus)
+data class DownloadedItem(val collection: DownloadedCollection, val status: GroupStatus)
 
 /** The Downloaded tab: what's kept on the device, and shuffling all of it. */
 class DownloadedViewModel(
@@ -18,7 +19,7 @@ class DownloadedViewModel(
 
     val items: StateFlow<List<DownloadedItem>> =
         combine(downloads.collections, downloads.statuses) { collections, statuses ->
-            collections.map { DownloadedItem(it, statuses[it.id] ?: DownloadStatus.NotDownloaded) }
+            collections.map { DownloadedItem(it, statuses[it.id] ?: GroupStatus.NotDownloaded) }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val downloaded: StateFlow<Set<String>> =

@@ -8,10 +8,14 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.GroupStatus
+import org.jellyfin.mobile.common.downloads.ItemDownload
 import org.jellyfin.mobile.music.data.TuneDatabase
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Playlist
 import org.jellyfin.mobile.music.domain.track
+import org.jellyfin.mobile.testing.downloads.FakeItemDownloads
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,7 +32,7 @@ class DownloadRepositoryTest {
     )
         .allowMainThreadQueries()
         .build()
-    private val downloader = FakeTrackDownloader()
+    private val downloader = FakeItemDownloads()
 
     private val album = Album("pb", "The Purple Bird", "Bonnie \"Prince\" Billy", 2025)
     private val a = track("a").copy(albumId = "pb", trackNumber = 1)
@@ -37,9 +41,8 @@ class DownloadRepositoryTest {
     private val playlist = Playlist("road", "Road trip", 2)
 
     private fun repository() = DownloadRepository(
-        downloader = downloader,
+        groups = DownloadGroups(downloader, database.downloadGroupDao, uriOf = { "uri($it)" }),
         dao = database.downloadDao,
-        downloadUri = { "uri($it)" },
     )
 
     @After
@@ -58,18 +61,18 @@ class DownloadRepositoryTest {
     fun `an album counts up as its songs finish, then is downloaded`() = runTest {
         val repository = repository()
         repository.downloadAlbum(album, listOf(a, b))
-        repository.statusOf("pb") shouldBe DownloadStatus.InProgress(done = 0, total = 2)
+        repository.statusOf("pb") shouldBe GroupStatus.InProgress(done = 0, total = 2)
 
         downloader.complete("a")
-        repository.statusOf("pb") shouldBe DownloadStatus.InProgress(done = 1, total = 2)
+        repository.statusOf("pb") shouldBe GroupStatus.InProgress(done = 1, total = 2)
 
         downloader.complete("b")
-        repository.statusOf("pb") shouldBe DownloadStatus.Downloaded
+        repository.statusOf("pb") shouldBe GroupStatus.Downloaded
     }
 
     @Test
     fun `something never downloaded says so`() = runTest {
-        repository().statusOf("pb") shouldBe DownloadStatus.NotDownloaded
+        repository().statusOf("pb") shouldBe GroupStatus.NotDownloaded
     }
 
     @Test
@@ -81,7 +84,7 @@ class DownloadRepositoryTest {
         repository.downloadAlbum(album, listOf(a, b))
 
         downloader.requests.size shouldBe 2
-        repository.statusOf("pb") shouldBe DownloadStatus.Downloaded
+        repository.statusOf("pb") shouldBe GroupStatus.Downloaded
     }
 
     @Test
@@ -93,7 +96,7 @@ class DownloadRepositoryTest {
         repository.downloadPlaylist(playlist, listOf(b, other))
 
         downloader.requests shouldBe listOf("a <- uri(a)", "b <- uri(b)", "x <- uri(x)")
-        repository.statusOf("road") shouldBe DownloadStatus.InProgress(done = 1, total = 2)
+        repository.statusOf("road") shouldBe GroupStatus.InProgress(done = 1, total = 2)
     }
 
     @Test
@@ -106,8 +109,8 @@ class DownloadRepositoryTest {
         repository.remove("road")
 
         downloader.removals shouldBe listOf("x")
-        repository.statusOf("road") shouldBe DownloadStatus.NotDownloaded
-        repository.statusOf("pb") shouldBe DownloadStatus.Downloaded
+        repository.statusOf("road") shouldBe GroupStatus.NotDownloaded
+        repository.statusOf("pb") shouldBe GroupStatus.Downloaded
     }
 
     @Test
@@ -125,8 +128,8 @@ class DownloadRepositoryTest {
         val repository = repository()
         repository.downloadAlbum(album, listOf(a, b))
         downloader.complete("a")
-        downloader.set("b", TrackDownload.State.FAILED)
-        repository.statusOf("pb") shouldBe DownloadStatus.Failed(failed = 1, total = 2)
+        downloader.set("b", ItemDownload.State.FAILED)
+        repository.statusOf("pb") shouldBe GroupStatus.Failed(failed = 1, total = 2)
 
         repository.retry("pb")
 
@@ -138,9 +141,9 @@ class DownloadRepositoryTest {
     fun `songs waiting for wi-fi say so`() = runTest {
         val repository = repository()
         repository.downloadAlbum(album, listOf(a, b))
-        downloader.set("a", TrackDownload.State.WAITING)
+        downloader.set("a", ItemDownload.State.WAITING)
 
-        repository.statusOf("pb") shouldBe DownloadStatus.Waiting(done = 0, total = 2)
+        repository.statusOf("pb") shouldBe GroupStatus.Waiting(done = 0, total = 2)
     }
 
     @Test
@@ -148,7 +151,7 @@ class DownloadRepositoryTest {
         repository().downloadAlbum(album, listOf(a, b))
         downloader.complete("a", "b")
 
-        repository().statusOf("pb") shouldBe DownloadStatus.Downloaded
+        repository().statusOf("pb") shouldBe GroupStatus.Downloaded
     }
 
     @Test

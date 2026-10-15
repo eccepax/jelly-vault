@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.downloads
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.DownloadManager
 import kotlinx.coroutines.flow.Flow
+import org.jellyfin.mobile.common.downloads.downloadRequirements
 
 /** The parts of downloading that Settings controls. */
 interface DownloadSettings {

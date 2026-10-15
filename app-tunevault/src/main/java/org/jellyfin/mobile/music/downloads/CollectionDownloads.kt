@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.music.downloads
 
 import kotlinx.coroutines.flow.Flow
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Playlist
 import org.jellyfin.mobile.music.domain.Track
@@ -13,9 +14,9 @@ interface CollectionDownloads {
     val collections: Flow<List<DownloadedCollection>>
 
     /** Every downloaded album's and playlist's status, by id. */
-    val statuses: Flow<Map<String, DownloadStatus>>
+    val statuses: Flow<Map<String, GroupStatus>>
 
-    fun status(collectionId: String): Flow<DownloadStatus>
+    fun status(collectionId: String): Flow<GroupStatus>
 
     suspend fun downloadAlbum(album: Album, tracks: List<Track>)
 

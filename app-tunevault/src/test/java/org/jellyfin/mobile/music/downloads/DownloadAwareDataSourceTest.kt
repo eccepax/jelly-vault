@@ -5,10 +5,13 @@ import android.net.Uri
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceUtil
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.test.utils.FakeDataSet
 import androidx.media3.test.utils.FakeDataSource
 import io.kotest.matchers.shouldBe
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -17,19 +20,22 @@ import org.robolectric.annotation.Config
 @Config(application = Application::class)
 class DownloadAwareDataSourceTest {
 
+    @get:Rule
+    val folder = TemporaryFolder()
+
     private val songUri = "http://vault/Audio/a/universal?api_key=t"
     private val serverData = FakeDataSet().setData(songUri, "streamed".toByteArray())
-    private val onDevice = FakeDataSource.Factory().setFakeDataSet(
-        FakeDataSet().setData(songUri, "downloaded".toByteArray()),
-    )
     private val server = FakeDataSource.Factory().setFakeDataSet(serverData)
+    private val downloadedFile by lazy { folder.newFile("a").apply { writeText("downloaded") } }
     private var downloaded = setOf<String>()
 
-    private fun read(uri: String = songUri): String {
-        val source: DataSource =
-            DownloadAwareDataSource.Factory(isDownloaded = { it in downloaded }, onDevice = onDevice, server = server)
-                .createDataSource()
-        source.open(DataSpec(Uri.parse(uri)))
+    private fun read(uri: String = songUri, position: Long = 0): String {
+        val source: DataSource = DownloadAwareDataSource.Factory(
+            fileFor = { trackId -> downloadedFile.takeIf { trackId in downloaded } },
+            onDevice = FileDataSource.Factory(),
+            server = server,
+        ).createDataSource()
+        source.open(DataSpec.Builder().setUri(Uri.parse(uri)).setPosition(position).build())
         return try {
             String(DataSourceUtil.readToEnd(source))
         } finally {
@@ -49,6 +55,13 @@ class DownloadAwareDataSourceTest {
         downloaded = emptySet()
 
         read() shouldBe "streamed"
+    }
+
+    @Test
+    fun `seeking in a downloaded song reads from that point of the file`() {
+        downloaded = setOf("a")
+
+        read(position = 4) shouldBe "loaded"
     }
 
     @Test

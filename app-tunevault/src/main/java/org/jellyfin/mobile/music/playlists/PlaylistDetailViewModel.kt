@@ -11,12 +11,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.music.catalog.PlaylistStore
 import org.jellyfin.mobile.music.domain.Playlist
 import org.jellyfin.mobile.music.domain.PlaylistEntry
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.CollectionDownloads
-import org.jellyfin.mobile.music.downloads.DownloadStatus
 import org.jellyfin.mobile.music.playback.PlaybackController
 import timber.log.Timber
 
@@ -37,8 +37,8 @@ class PlaylistDetailViewModel(
     private val _state = MutableStateFlow<PlaylistDetailUiState>(PlaylistDetailUiState.Loading)
     val state: StateFlow<PlaylistDetailUiState> = _state.asStateFlow()
 
-    val downloadStatus: StateFlow<DownloadStatus> =
-        downloads.status(playlistId).stateIn(viewModelScope, SharingStarted.Eagerly, DownloadStatus.NotDownloaded)
+    val downloadStatus: StateFlow<GroupStatus> =
+        downloads.status(playlistId).stateIn(viewModelScope, SharingStarted.Eagerly, GroupStatus.NotDownloaded)
 
     init {
         refresh()

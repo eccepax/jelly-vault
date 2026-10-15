@@ -22,6 +22,10 @@ android {
     room {
         schemaDirectory("$projectDir/schemas")
     }
+
+    // Migration tests load each exported schema from assets, and Robolectric only sees the app's
+    // own (debug) assets, so debug builds carry the schemas too; release builds don't.
+    sourceSets.getByName("debug").assets.directories.add("$projectDir/schemas")
 }
 
 base.archivesName.set("tunevault-v${project.getVersionName()}")
@@ -29,6 +33,7 @@ base.archivesName.set("tunevault-v${project.getVersionName()}")
 dependencies {
     // Common module
     implementation(project(":common"))
+    implementation(project(":common-downloads"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)
@@ -81,6 +86,8 @@ dependencies {
 
     // Testing
     testImplementation(project(":common-testing"))
+    // Migration tests (see the debug assets above)
+    testImplementation(libs.androidx.room.testing)
     testImplementation(libs.junit.api)
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)
