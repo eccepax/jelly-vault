@@ -25,6 +25,18 @@ class AudioItemIdsTest {
     }
 
     @Test
+    fun `a track streamed as it is on the server (direct play or stream) is its track`() {
+        idOf("http://vault/Videos/$hexId/stream?static=true&mediaSourceId=$hexId") shouldBe id
+        idOf("http://vault/Videos/$id/stream.m4b?playSessionId=s") shouldBe id
+    }
+
+    @Test
+    fun `a track's subtitles and other files aren't the track`() {
+        idOf("http://vault/Videos/$hexId/$hexId/Subtitles/0/Stream.srt") shouldBe null
+        idOf("http://vault/Videos/$hexId/Attachments/0") shouldBe null
+    }
+
+    @Test
     fun `a track's download url is its track`() {
         idOf("http://vault/Items/$hexId/Download") shouldBe id
     }
