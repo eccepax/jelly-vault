@@ -19,8 +19,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
+import org.jellyfin.mobile.books.downloads.BookDownloads
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -47,8 +47,7 @@ class BookLibraryContractTest {
                 every { currentUserId } returns 1L
             },
             bookProgressDao = mockk<BookProgressDao> { coEvery { getAllProgress() } returns emptyList() },
-            bookDownloadManager = mockk(relaxed = true),
-            downloadRecordDao = mockk<DownloadRecordDao> { every { getAll() } returns flowOf(emptyList()) },
+            bookDownloads = mockk<BookDownloads>(relaxed = true) { every { downloadedIds } returns flowOf(emptySet()) },
             libraryId = null,
         )
     }

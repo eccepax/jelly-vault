@@ -20,10 +20,8 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
-import org.jellyfin.mobile.books.downloads.BookDownloadManager
+import org.jellyfin.mobile.books.downloads.BookDownloads
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.data.dao.DownloadRecordDao
-import org.jellyfin.mobile.common.data.entity.DownloadRecord
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.Response
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
@@ -34,7 +32,6 @@ import org.jellyfin.sdk.model.api.BaseItemDtoQueryResult
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.IOException
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -44,8 +41,8 @@ class BookLibraryViewModelTest {
     private val apiClient = mockk<ApiClient>()
     private val itemsApi = mockk<ItemsApi>()
     private val appPreferences = mockk<AppPreferences>(relaxed = true)
-    private val bookDownloadManager = mockk<BookDownloadManager>(relaxed = true)
-    private val downloads = MutableStateFlow<List<DownloadRecord>>(emptyList())
+    private val downloads = MutableStateFlow<Set<String>>(emptySet())
+    private val bookDownloads = mockk<BookDownloads>(relaxed = true) { every { downloadedIds } returns downloads }
 
     private val dune = book("Dune", author = "Frank Herbert", series = "Dune Chronicles")
     private val emma = book("Emma", author = "Jane Austen")
@@ -121,24 +118,24 @@ class BookLibraryViewModelTest {
 
     @Test
     fun `downloaded only shows just the books on the device, and follows new downloads`() = runBlocking<Unit> {
-        downloads.value = listOf(downloaded(emma))
+        downloads.value = setOf(emma.id.toString())
         val viewModel = loadedViewModel()
 
         viewModel.showDownloadedOnly.value = true
         viewModel.filteredBooks.shouldBecome(listOf(emma))
 
-        downloads.value = listOf(downloaded(emma), downloaded(ubik))
+        downloads.value = setOf(emma.id.toString(), ubik.id.toString())
         viewModel.filteredBooks.shouldBecome(listOf(emma, ubik))
     }
 
     @Test
-    fun `a failed download doesn't crash the library`() = runBlocking<Unit> {
-        coEvery { bookDownloadManager.downloadBook(any()) } throws IOException("disk full")
+    fun `downloading a book hands it to the downloads`() = runBlocking<Unit> {
         val viewModel = loadedViewModel()
+        val duneId = dune.id.toString()
 
         viewModel.downloadBook(dune)
 
-        coVerify { bookDownloadManager.downloadBook(dune) }
+        coVerify { bookDownloads.download(duneId) }
     }
 
     @Test
@@ -148,15 +145,14 @@ class BookLibraryViewModelTest {
 
         viewModel.deleteDownload(dune)
 
-        coVerify { bookDownloadManager.deleteDownload(duneId) }
+        coVerify { bookDownloads.remove(duneId) }
     }
 
     private suspend fun loadedViewModel(libraryId: String? = null) = BookLibraryViewModel(
         apiClient = apiClient,
         appPreferences = appPreferences,
         bookProgressDao = mockk<BookProgressDao> { coEvery { getAllProgress() } returns emptyList() },
-        bookDownloadManager = bookDownloadManager,
-        downloadRecordDao = mockk<DownloadRecordDao> { every { getAll() } returns downloads },
+        bookDownloads = bookDownloads,
         libraryId = libraryId,
     ).also { viewModel -> withTimeout(5.seconds) { viewModel.loading.first { !it } } }
 
@@ -191,9 +187,5 @@ class BookLibraryViewModelTest {
         every { seriesName } returns series
         every { tags } returns emptyList()
         every { dateCreated } returns null
-    }
-
-    private fun downloaded(book: BaseItemDto) = mockk<DownloadRecord>(relaxed = true) {
-        every { itemId } returns book.id.toString()
     }
 }
