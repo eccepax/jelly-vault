@@ -31,13 +31,16 @@ object VaultTestServer {
     val username: String = System.getProperty("contract.username").orEmpty()
     private val password = System.getProperty("contract.password").orEmpty()
 
+    /** This test task's own device (see `useVaultContractServer`), so parallel tasks don't sign each other out. */
+    private val deviceId = System.getProperty("contract.deviceId") ?: "vault-contract-tests"
+
     val apiClient: ApiClient by lazy { newSignedInClient() }
 
     /**
      * A client signed in as its own device. The server keys sessions by device, so a test that ends
      * a session must use its own [deviceId], never [apiClient]'s, or it signs every other test out.
      */
-    fun newSignedInClient(deviceId: String = "vault-contract-tests"): ApiClient =
+    fun newSignedInClient(deviceId: String = this.deviceId): ApiClient =
         newSignedOutClient(deviceId).apply {
             val auth = runBlocking { userApi.authenticateUserByName(username, password).content }
             update(accessToken = auth.accessToken)
