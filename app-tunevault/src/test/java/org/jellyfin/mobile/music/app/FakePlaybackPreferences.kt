@@ -8,4 +8,5 @@ class FakePlaybackPreferences : PlaybackPreferences {
     override var downloadOnWifiOnly = true
     override var showSleepTimer = true
     override var volumeLevelling = true
+    override var removeDownloadsOnSignOut = false
 }

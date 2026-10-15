@@ -65,6 +65,18 @@ class BookDownloadsTest {
     }
 
     @Test
+    fun `removing everything deletes every book's file`() = runTest {
+        downloads.download("b1")
+        downloads.download("b2")
+        items.complete("b1", "b2")
+
+        downloads.removeAll()
+
+        items.removals.toSet() shouldBe setOf("b1", "b2")
+        downloads.downloadedIds.first().shouldBeEmpty()
+    }
+
+    @Test
     fun `a book whose file was lost is fetched again at launch`() = runTest {
         downloads.download("b1")
         items.complete("b1")

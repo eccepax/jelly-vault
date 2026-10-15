@@ -24,6 +24,9 @@ interface PlaybackPreferences {
 
     /** Whether songs play at a similar loudness (see VolumeLeveller). */
     var volumeLevelling: Boolean
+
+    /** Off by default: downloads stay on the device when signing out (shared with the other apps). */
+    var removeDownloadsOnSignOut: Boolean
 }
 
 class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPreferences, PlaybackPreferences {

@@ -143,6 +143,17 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `downloads stay on sign-out by default, and that can be changed`() {
+        val viewModel = viewModel()
+        viewModel.state.value.removeDownloadsOnSignOut shouldBe false
+
+        viewModel.setRemoveDownloadsOnSignOut(true)
+
+        preferences.removeDownloadsOnSignOut shouldBe true
+        viewModel.state.value.removeDownloadsOnSignOut shouldBe true
+    }
+
+    @Test
     fun `turning wi-fi only off saves it and lets waiting downloads go`() {
         val viewModel = viewModel()
 
