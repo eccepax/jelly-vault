@@ -12,6 +12,14 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
+/** The Koin modules the app starts with. */
+val tuneVaultModules = listOf(
+    tuneAppModule,
+    apiModule(ClientInfo("TuneVault", BuildConfig.VERSION_NAME)),
+    tuneDatabaseModule,
+    downloadsModule,
+)
+
 @Suppress("unused")
 class TuneVaultApplication : Application() {
     override fun onCreate() {
@@ -22,12 +30,7 @@ class TuneVaultApplication : Application() {
         val koin = startKoin {
             androidContext(this@TuneVaultApplication)
 
-            modules(
-                tuneAppModule,
-                apiModule(ClientInfo("TuneVault", BuildConfig.VERSION_NAME)),
-                tuneDatabaseModule,
-                downloadsModule,
-            )
+            modules(tuneVaultModules)
         }.koin
 
         // Reports what's played to the server for the life of the process (which the playback
