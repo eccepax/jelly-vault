@@ -61,7 +61,6 @@ import org.jellyfin.mobile.utils.extensions.start
 import org.jellyfin.mobile.utils.extensions.width
 import org.jellyfin.mobile.utils.getVolumeLevelPercent
 import org.jellyfin.mobile.utils.getVolumeRange
-import org.jellyfin.mobile.utils.logTracks
 import org.jellyfin.mobile.utils.setPlaybackState
 import org.jellyfin.mobile.utils.toMediaMetadata
 import org.jellyfin.sdk.api.client.ApiClient
@@ -746,10 +745,6 @@ class AudiobookPlayerViewModel(application: Application) :
         val position = (player.contentPosition + transcodingStartOffset).milliseconds
 
         return PlayState(playWhenReady, position)
-    }
-
-    override fun logTracks() {
-        playerOrNull?.logTracks(analyticsCollector)
     }
 
     /**

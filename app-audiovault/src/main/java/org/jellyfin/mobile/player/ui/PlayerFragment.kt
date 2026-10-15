@@ -428,15 +428,6 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     /**
-     * @param callback called if track selection was successful and UI needs to be updated
-     */
-    fun onAudioTrackSelected(index: Int, callback: TrackSelectionCallback): Job = lifecycleScope.launch {
-        if (viewModel.trackSelectionHelper.selectAudioTrack(index)) {
-            callback.onTrackSelected(true)
-        }
-    }
-
-    /**
      * @return true if the playback speed was changed
      */
     fun onSpeedSelected(speed: Float): Boolean {
