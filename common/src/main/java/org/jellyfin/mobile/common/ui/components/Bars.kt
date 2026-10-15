@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.common.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,7 +44,8 @@ fun VaultTopBar(
 /** The tabs along the bottom of an app, over the navigation bar; fill it with [VaultBottomBarItem]s. */
 @Composable
 fun VaultBottomBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Column(modifier = modifier) {
+    // Opaque under the hairline too, so it blends to the same grey over whatever is behind the bar
+    Column(modifier = modifier.background(MaterialTheme.colors.background)) {
         // On the same background as the screen, a hairline is what sets the tabs apart from it
         Divider(color = MaterialTheme.colors.onBackground.copy(alpha = DIVIDER_ALPHA))
         BottomNavigation(

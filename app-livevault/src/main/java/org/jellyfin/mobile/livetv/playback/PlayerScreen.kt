@@ -57,6 +57,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.channels.channelDisplayName
 import org.jellyfin.mobile.livetv.channels.displayName
@@ -190,7 +191,7 @@ private fun LoginInUseMessage(loginInUse: LoginInUse) {
     )
     Text(
         stringResource(R.string.player_login_in_use_detail),
-        color = Color.White.copy(alpha = DIM_ALPHA),
+        color = Color.White.copy(alpha = VaultAlpha.SECONDARY),
         textAlign = TextAlign.Center,
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
     )
@@ -216,7 +217,9 @@ private fun Overlay(channel: LiveChannel?, onZap: (Int) -> Unit, onExit: () -> U
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = SCRIM_ALPHA), Color.Transparent)))
+                .background(
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = VaultAlpha.SCRIM), Color.Transparent)),
+                )
                 .safeDrawingPadding()
                 .padding(8.dp),
         ) {
@@ -263,7 +266,7 @@ private fun ChannelInfo(channel: LiveChannel, modifier: Modifier) {
         channel.nowPlaying?.let { program ->
             Text(
                 program.title,
-                color = Color.White.copy(alpha = DIM_ALPHA),
+                color = Color.White.copy(alpha = VaultAlpha.SECONDARY),
                 style = MaterialTheme.typography.body2,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -273,8 +276,6 @@ private fun ChannelInfo(channel: LiveChannel, modifier: Modifier) {
 }
 
 private const val OVERLAY_TIMEOUT_MS = 4_000L
-private const val SCRIM_ALPHA = 0.7f
-private const val DIM_ALPHA = 0.8f
 
 /**
  * The player for [viewModel]'s channel: full screen, back returns to the channels. Leaving the app

@@ -6,7 +6,6 @@
     <string name="signing_out">Signing out…</string>
     <string name="sign_out_question">Sign out of the Vault?</string>
     <string name="sign_out_confirm">Yes, sign out</string>
-    <string name="cancel">Cancel</string>
     <string name="retry">Retry</string>
     <string name="channels_error">Couldn\'t load channels</string>
     <string name="channels_search">Search channels</string>

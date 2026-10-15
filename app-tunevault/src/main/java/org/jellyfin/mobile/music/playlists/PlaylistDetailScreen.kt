@@ -13,14 +13,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -32,11 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.EmptyState
+import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.downloads.CollectionDownloadUi
 import org.jellyfin.mobile.music.downloads.DownloadButton
 import org.jellyfin.mobile.music.downloads.rememberAskForNotificationsOnce
-import org.jellyfin.mobile.music.library.Centered
 import org.jellyfin.mobile.music.library.SongRow
 import org.jellyfin.mobile.music.library.TrackListActions
 import org.jellyfin.mobile.music.library.trackListActions
@@ -56,8 +57,8 @@ fun PlaylistDetailScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(
-                title = { if (state is PlaylistDetailUiState.Loaded) Text(state.playlist.name) },
+            VaultTopBar(
+                title = if (state is PlaylistDetailUiState.Loaded) state.playlist.name else "",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
@@ -65,9 +66,9 @@ fun PlaylistDetailScreen(
                 },
             )
             when (state) {
-                PlaylistDetailUiState.Loading -> Centered { CircularProgressIndicator() }
-                PlaylistDetailUiState.NotFound -> Centered { Text(stringResource(R.string.playlist_not_found)) }
-                PlaylistDetailUiState.Error -> Centered { Text(stringResource(R.string.playlist_error)) }
+                PlaylistDetailUiState.Loading -> LoadingState()
+                PlaylistDetailUiState.NotFound -> EmptyState(stringResource(R.string.playlist_not_found))
+                PlaylistDetailUiState.Error -> EmptyState(stringResource(R.string.playlist_error))
                 is PlaylistDetailUiState.Loaded -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                     item { Header(state, onPlay, onShuffle, download) }
                     itemsIndexed(state.entries, key = { index, entry -> "${entry.entryId}:$index" }) { index, entry ->
@@ -99,7 +100,7 @@ private fun Header(
         Text(
             text = pluralStringResource(R.plurals.song_count, state.entries.size, state.entries.size),
             style = MaterialTheme.typography.caption,
-            color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+            color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
         )
         if (state.entries.isEmpty()) {
             Text(stringResource(R.string.playlist_empty), modifier = Modifier.padding(top = 16.dp))

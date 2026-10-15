@@ -14,13 +14,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
@@ -32,11 +30,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.ErrorState
+import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.SectionTitle
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.library.AlbumCard
-import org.jellyfin.mobile.music.library.Centered
 import org.jellyfin.mobile.music.offline.ServerConnectivity
 import org.jellyfin.mobile.music.ui.artistOrUnknown
 import org.koin.compose.koinInject
@@ -54,8 +56,8 @@ fun HomeScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(
-                title = { Text(stringResource(R.string.home_title)) },
+            VaultTopBar(
+                title = stringResource(R.string.home_title),
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title))
@@ -63,18 +65,8 @@ fun HomeScreen(
                 },
             )
             when (state) {
-                HomeUiState.Loading -> Centered {
-                    CircularProgressIndicator(
-                        modifier = Modifier.testTag(HomeScreenTags.LOADING),
-                    )
-                }
-                HomeUiState.Error -> Centered {
-                    Text(stringResource(R.string.home_error))
-                    Button(
-                        onClick = onRetry,
-                        modifier = Modifier.padding(top = 16.dp),
-                    ) { Text(stringResource(R.string.retry)) }
-                }
+                HomeUiState.Loading -> LoadingState(Modifier.testTag(HomeScreenTags.LOADING))
+                HomeUiState.Error -> ErrorState(stringResource(R.string.home_error), onRetry = onRetry)
                 is HomeUiState.Loaded -> if (isOffline) {
                     OfflineShelves(state, onAlbumClick, onShuffleAll)
                 } else {
@@ -129,7 +121,7 @@ private fun Shelves(
                 Text(
                     text = stringResource(R.string.recently_played_empty),
                     style = MaterialTheme.typography.body2,
-                    color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                    color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             } else {
@@ -153,11 +145,7 @@ private fun Shelves(
 
 @Composable
 private fun ShelfTitle(title: Int) {
-    Text(
-        text = stringResource(title),
-        style = MaterialTheme.typography.h6,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-    )
+    SectionTitle(stringResource(title))
 }
 
 @Composable

@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
+import org.jellyfin.mobile.common.ui.components.OfflineBanner
 import org.jellyfin.mobile.common.ui.startOver
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.account.SettingsRoute
@@ -31,7 +32,6 @@ import org.jellyfin.mobile.music.navigation.MainBottomBar
 import org.jellyfin.mobile.music.navigation.MainTab
 import org.jellyfin.mobile.music.navigation.MainTabs
 import org.jellyfin.mobile.music.nowplaying.PlayerShell
-import org.jellyfin.mobile.music.offline.OfflineBanner
 import org.jellyfin.mobile.music.offline.ServerConnectivity
 import org.jellyfin.mobile.music.playback.OfflinePlayReporter
 import org.jellyfin.mobile.music.playlists.AddToPlaylistHost

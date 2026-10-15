@@ -14,14 +14,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -38,11 +36,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.DownloadedMark
+import org.jellyfin.mobile.common.ui.components.EmptyState
+import org.jellyfin.mobile.common.ui.components.ErrorState
+import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.CollectionDownloadUi
 import org.jellyfin.mobile.music.downloads.DownloadButton
-import org.jellyfin.mobile.music.downloads.DownloadedMark
 import org.jellyfin.mobile.music.downloads.rememberAskForNotificationsOnce
 import org.jellyfin.mobile.music.ui.artistOrUnknown
 import org.jellyfin.mobile.music.ui.formatDuration
@@ -63,8 +66,8 @@ fun AlbumDetailScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(
-                title = {},
+            VaultTopBar(
+                title = "",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
@@ -72,16 +75,9 @@ fun AlbumDetailScreen(
                 },
             )
             when (state) {
-                AlbumDetailUiState.Loading -> Centered {
-                    CircularProgressIndicator(modifier = Modifier.testTag(AlbumDetailScreenTags.LOADING))
-                }
-                AlbumDetailUiState.NotFound -> Centered { Text(stringResource(R.string.album_not_found)) }
-                AlbumDetailUiState.Error -> Centered {
-                    Text(stringResource(R.string.album_error))
-                    Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+                AlbumDetailUiState.Loading -> LoadingState(Modifier.testTag(AlbumDetailScreenTags.LOADING))
+                AlbumDetailUiState.NotFound -> EmptyState(stringResource(R.string.album_not_found))
+                AlbumDetailUiState.Error -> ErrorState(stringResource(R.string.album_error), onRetry = onRetry)
                 is AlbumDetailUiState.Loaded -> AlbumContent(
                     state = state,
                     onPlay = onPlay,
@@ -149,7 +145,7 @@ private fun AlbumHeader(
         Text(
             text = details.joinToString(" · "),
             style = MaterialTheme.typography.caption,
-            color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+            color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -197,7 +193,7 @@ private fun TrackRow(
             Text(
                 text = number.toString(),
                 style = MaterialTheme.typography.body2,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.6f),
+                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
                 modifier = Modifier.width(32.dp),
             )
         }
@@ -213,7 +209,7 @@ private fun TrackRow(
         Text(
             text = if (track.durationMs > 0) formatDuration(track.durationMs) else "",
             style = MaterialTheme.typography.body2,
-            color = MaterialTheme.colors.onBackground.copy(alpha = 0.6f),
+            color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
             modifier = Modifier.padding(start = 12.dp),
         )
         TrackActionsMenu(menu, onPlayNext = onPlayNext, onAddToQueue = onAddToQueue, onAddToPlaylist = onAddToPlaylist)

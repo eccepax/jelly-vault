@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.RepeatMode
 import org.jellyfin.mobile.music.library.AlbumCover
@@ -83,7 +84,7 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
             Text(
                 text = track?.albumTitle.orEmpty(),
                 style = MaterialTheme.typography.body2,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
             )
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
@@ -157,7 +158,11 @@ private fun ShuffleButton(isShuffled: Boolean, onClick: () -> Unit) {
         Icon(
             Icons.Filled.Shuffle,
             contentDescription = stringResource(if (isShuffled) R.string.shuffle_on else R.string.shuffle_off),
-            tint = if (isShuffled) MaterialTheme.colors.primary else LocalContentColor.current.copy(alpha = 0.6f),
+            tint = if (isShuffled) {
+                MaterialTheme.colors.primary
+            } else {
+                LocalContentColor.current.copy(alpha = VaultAlpha.SECONDARY)
+            },
         )
     }
 }
@@ -174,7 +179,7 @@ private fun RepeatButton(repeatMode: RepeatMode, onClick: () -> Unit) {
             if (repeatMode == RepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
             contentDescription = stringResource(description),
             tint = if (repeatMode == RepeatMode.OFF) {
-                LocalContentColor.current.copy(alpha = 0.6f)
+                LocalContentColor.current.copy(alpha = VaultAlpha.SECONDARY)
             } else {
                 MaterialTheme.colors.primary
             },

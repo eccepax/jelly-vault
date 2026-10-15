@@ -16,7 +16,6 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -35,6 +34,8 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.library.AlbumCover
 import org.jellyfin.mobile.music.library.NowPlayingIndicator
@@ -53,8 +54,8 @@ fun QueueScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(
-                title = { Text(stringResource(R.string.queue_title)) },
+            VaultTopBar(
+                title = stringResource(R.string.queue_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
@@ -167,7 +168,7 @@ private fun QueueTrack(
             Text(
                 text = artistOrUnknown(row.track.artist),
                 style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
