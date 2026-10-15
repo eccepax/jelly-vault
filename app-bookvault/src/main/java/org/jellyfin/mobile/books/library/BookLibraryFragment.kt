@@ -104,6 +104,10 @@ class BookLibraryFragment : Fragment() {
             showProgressFilterDialog()
             true
         }
+        R.id.action_filter_tag -> {
+            showTagFilterDialog()
+            true
+        }
         R.id.action_filter_downloaded -> {
             viewModel.showDownloadedOnly.value = !viewModel.showDownloadedOnly.value
             item.isChecked = viewModel.showDownloadedOnly.value
@@ -214,6 +218,24 @@ class BookLibraryFragment : Fragment() {
             .setTitle(R.string.sort_by)
             .setSingleChoiceItems(options, currentIndex) { dialog, which ->
                 viewModel.sortOption.value = BookSortOption.entries[which]
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /** "All tags", then each tag a loaded book has; just a note when no book has any. */
+    private fun showTagFilterDialog() {
+        val tags = viewModel.getAvailableTags()
+        val builder = AlertDialog.Builder(requireContext()).setTitle(R.string.filter_tag)
+        if (tags.isEmpty()) {
+            builder.setMessage(R.string.filter_no_tags).setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        val options = arrayOf(getString(R.string.filter_all_tags)) + tags
+        val currentIndex = viewModel.tagFilter.value?.let { tags.indexOf(it) + 1 } ?: 0
+        builder
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                viewModel.tagFilter.value = tags.getOrNull(which - 1)
                 dialog.dismiss()
             }
             .show()

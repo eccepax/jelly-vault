@@ -11,10 +11,14 @@ fun Project.vaultLocalProperties(): Properties = Properties().apply {
 /**
  * Points contract tests (common-testing's VaultTestServer) at the real Vault. They run on the JVM,
  * so the host is localhost, not the emulator's 10.0.2.2 alias that e2e.hostname defaults to. They
- * are skipped, not failed, when the Vault is unreachable or the credentials are missing.
+ * are skipped when the credentials are missing, and fail when the Vault is unreachable.
+ *
+ * Each test task signs in as its own device: test tasks run in parallel, and signing in again as a
+ * device ends that device's earlier sign-in, so a shared device made them sign each other out.
  */
 fun Test.useVaultContractServer(localProperties: Properties) {
     systemProperty("contract.hostname", localProperties.getProperty("contract.hostname", "http://localhost:8096"))
     systemProperty("contract.username", localProperties.getProperty("e2e.username", ""))
     systemProperty("contract.password", localProperties.getProperty("e2e.password", ""))
+    systemProperty("contract.deviceId", "vault-contract-tests" + path.replace(':', '-'))
 }

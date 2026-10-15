@@ -9,6 +9,13 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
+/** The Koin modules the app starts with. */
+val liveVaultModules = listOf(
+    liveAppModule,
+    apiModule(ClientInfo("LiveVault", BuildConfig.VERSION_NAME)),
+    liveDatabaseModule,
+)
+
 @Suppress("unused")
 class LiveVaultApplication : Application() {
     override fun onCreate() {
@@ -18,11 +25,7 @@ class LiveVaultApplication : Application() {
 
         startKoin {
             androidContext(this@LiveVaultApplication)
-            modules(
-                liveAppModule,
-                apiModule(ClientInfo("LiveVault", BuildConfig.VERSION_NAME)),
-                liveDatabaseModule,
-            )
+            modules(liveVaultModules)
         }
     }
 }

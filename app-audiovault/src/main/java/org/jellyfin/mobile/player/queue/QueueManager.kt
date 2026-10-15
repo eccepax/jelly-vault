@@ -25,9 +25,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.videosApi
 import org.jellyfin.sdk.api.operations.VideosApi
 import org.jellyfin.sdk.model.api.MediaProtocol
-import org.jellyfin.sdk.model.api.MediaStream
 import org.jellyfin.sdk.model.api.MediaStreamProtocol
-import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.PlayMethod
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import org.koin.core.component.KoinComponent
@@ -415,7 +413,7 @@ class QueueManager(
      * segments beyond what Jellyfin has transcoded so far, causing Jellyfin to restart the
      * transcode session whose timestamps start at 0, resetting the reported position.
      * Instead, we restart `startRemotePlayback` with the target position as `startTime` —
-     * the same approach used by `changeBitrate` and `selectAudioStreamAndRestartPlayback`.
+     * the same approach used by `changeBitrate`.
      *
      * For direct-play and direct-stream sources, native ExoPlayer seeking is sufficient.
      *
@@ -440,37 +438,6 @@ class QueueManager(
                     viewModel.playerOrNull?.seekTo(position.inWholeMilliseconds)
                 }
             }
-            null -> return false
-        }
-        return true
-    }
-
-    /**
-     * Switch to the specified [audio stream][stream] and restart playback, for example while transcoding.
-     *
-     * @return true if playback was restarted with the new selection.
-     */
-    suspend fun selectAudioStreamAndRestartPlayback(stream: MediaStream): Boolean {
-        require(stream.type == MediaStreamType.AUDIO)
-        val currentPlayState = viewModel.getStateAndPause() ?: return false
-
-        when (val currentMediaSource = getCurrentMediaSourceOrNull()) {
-            is LocalJellyfinMediaSource -> startDownloadPlayback(
-                mediaSourceId = currentMediaSource.id,
-                startTime = currentPlayState.position,
-                audioStreamIndex = stream.index,
-                subtitleStreamIndex = currentMediaSource.selectedSubtitleStreamIndex,
-                playWhenReady = currentPlayState.playWhenReady,
-            )
-            is RemoteJellyfinMediaSource -> startRemotePlayback(
-                itemId = currentMediaSource.itemId,
-                mediaSourceId = currentMediaSource.id,
-                maxStreamingBitrate = currentMediaSource.maxStreamingBitrate,
-                startTime = currentPlayState.position,
-                audioStreamIndex = stream.index,
-                subtitleStreamIndex = currentMediaSource.selectedSubtitleStreamIndex,
-                playWhenReady = currentPlayState.playWhenReady,
-            )
             null -> return false
         }
         return true

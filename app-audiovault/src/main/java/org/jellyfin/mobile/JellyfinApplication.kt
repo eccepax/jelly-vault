@@ -14,6 +14,15 @@ import org.koin.androidx.fragment.koin.fragmentFactory
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
+/** The Koin modules the app starts with. */
+@OptIn(UnstableApi::class)
+val audioVaultModules = listOf(
+    applicationModule,
+    apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME)),
+    databaseModule,
+    audioDownloadsModule,
+)
+
 @Suppress("unused")
 @OptIn(UnstableApi::class)
 class JellyfinApplication : Application() {
@@ -27,12 +36,7 @@ class JellyfinApplication : Application() {
             androidContext(this@JellyfinApplication)
             fragmentFactory()
 
-            modules(
-                applicationModule,
-                apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME)),
-                databaseModule,
-                audioDownloadsModule,
-            )
+            modules(audioVaultModules)
         }
     }
 }

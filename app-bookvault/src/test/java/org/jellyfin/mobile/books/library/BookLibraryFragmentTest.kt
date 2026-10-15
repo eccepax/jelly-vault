@@ -4,10 +4,13 @@ import android.app.Application
 import android.content.DialogInterface
 import android.os.Looper
 import android.view.View
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.Toolbar
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
@@ -51,6 +54,8 @@ class BookLibraryFragmentTest {
     private val libraryViewModel = mockk<BookLibraryViewModel>(relaxed = true)
     private val bookAppPreferences = mockk<BookAppPreferences>(relaxed = true)
     private val downloadedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val tagFilter = MutableStateFlow<String?>(null)
+    private var scenario: FragmentScenario<BookLibraryFragment>? = null
 
     @Before
     fun setUp() {
@@ -59,6 +64,7 @@ class BookLibraryFragmentTest {
         every { libraryViewModel.error } returns MutableStateFlow(null)
         every { libraryViewModel.downloadedIds } returns downloadedIdsFlow
         every { libraryViewModel.showDownloadedOnly } returns MutableStateFlow(false)
+        every { libraryViewModel.tagFilter } returns tagFilter
         every { bookAppPreferences.getLibraryViewMode(any()) } returns LibraryViewMode.LIST
 
         startKoin {
@@ -73,6 +79,7 @@ class BookLibraryFragmentTest {
 
     @After
     fun tearDown() {
+        scenario?.close()
         stopKoin()
         ShadowDialog.reset()
     }
@@ -129,5 +136,65 @@ class BookLibraryFragmentTest {
         }
 
         verify { libraryViewModel.deleteDownload(target) }
+    }
+
+    // --- Filter by tag ----------------------------------------------------------------------------
+
+    @Test
+    fun `filtering by tag offers every tag in the library, after all tags, with the current one checked`() {
+        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
+        tagFilter.value = "Sci-Fi"
+
+        val dialog = openTagFilter()
+
+        dialog.items() shouldBe listOf(string(R.string.filter_all_tags), "Fantasy", "Sci-Fi")
+        dialog.listView.checkedItemPosition shouldBe 2
+    }
+
+    @Test
+    fun `choosing a tag narrows the library to it`() {
+        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
+
+        openTagFilter().choose(1)
+
+        tagFilter.value shouldBe "Fantasy"
+    }
+
+    @Test
+    fun `choosing all tags shows every book again`() {
+        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
+        tagFilter.value = "Fantasy"
+
+        openTagFilter().choose(0)
+
+        tagFilter.value shouldBe null
+    }
+
+    @Test
+    fun `with no tags in the library, filtering by tag says so`() {
+        every { libraryViewModel.getAvailableTags() } returns emptyList()
+
+        val dialog = openTagFilter()
+
+        dialog.listView shouldBe null
+        dialog.findViewById<TextView>(android.R.id.message)?.text?.toString() shouldBe string(R.string.filter_no_tags)
+    }
+
+    private fun openTagFilter(): AlertDialog {
+        scenario = launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme)
+        scenario?.onFragment { fragment ->
+            fragment.requireView().findViewById<Toolbar>(
+                R.id.toolbar,
+            ).menu.performIdentifierAction(R.id.action_filter_tag, 0)
+        }
+        shadowOf(Looper.getMainLooper()).idle()
+        return ShadowDialog.getLatestDialog() as AlertDialog
+    }
+
+    private fun AlertDialog.items() = (0 until listView.adapter.count).map { listView.adapter.getItem(it).toString() }
+
+    private fun AlertDialog.choose(position: Int) {
+        shadowOf(listView).performItemClick(position)
+        shadowOf(Looper.getMainLooper()).idle()
     }
 }

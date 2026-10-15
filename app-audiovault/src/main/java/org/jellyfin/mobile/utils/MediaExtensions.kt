@@ -9,7 +9,6 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.analytics.AnalyticsCollector
 import org.jellyfin.mobile.common.ui.content.ImageProvider
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.utils.extensions.width
@@ -86,8 +85,4 @@ inline fun Player.applyDefaultAudioAttributes(@C.AudioContentType contentType: I
         .setContentType(contentType)
         .build()
     setAudioAttributes(audioAttributes, true)
-}
-
-fun Player.logTracks(analyticsCollector: AnalyticsCollector) {
-    analyticsCollector.onTracksChanged(currentTracks)
 }

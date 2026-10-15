@@ -26,6 +26,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_filter_tag"
+        android:title="@string/filter_tag"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_filter_downloaded"
         android:title="@string/filter_downloaded_only"
         android:checkable="true"
