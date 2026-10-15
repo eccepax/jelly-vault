@@ -2,7 +2,7 @@
 # Collects signed release APKs into build/release/<app>/ under their public names, with SHA-256
 # checksums and the signing certificate's fingerprint. Run after the release builds, e.g.:
 #
-#   ./gradlew :app-audiovault:assembleLibreRelease :app-bookvault:assembleRelease :app-tunevault:assembleRelease
+#   ./gradlew :app-audiovault:assembleLibreRelease :app-bookvault:assembleRelease :app-tunevault:assembleRelease \n#       :app-livevault:assembleRelease
 #   scripts/package-release.sh
 #
 # Fails if any APK is missing or unsigned, so an unsigned build can't be released by mistake.
@@ -43,6 +43,8 @@ v="$(version_of bookvault)"
 package bookvault "release/bookvault-v$v-release.apk" "BookVault-$v.apk"
 v="$(version_of tunevault)"
 package tunevault "release/tunevault-v$v-release.apk" "TuneVault-$v.apk"
+v="$(version_of livevault)"
+package livevault "release/livevault-v$v-release.apk" "LiveVault-$v.apk"
 
 echo
 echo "Packaged into $out"
