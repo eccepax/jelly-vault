@@ -1,8 +1,10 @@
 package org.jellyfin.mobile.player.ui
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
@@ -23,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.databinding.ExoPlayerControlViewBinding
 import org.jellyfin.mobile.databinding.FragmentPlayerBinding
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
@@ -57,6 +60,7 @@ private const val LOG_EVERY_N_TICKS = 8
 @Suppress("TooManyFunctions")
 class PlayerFragment : Fragment(), BackPressInterceptor {
     private val apiClient: ApiClient by inject()
+    private val appPreferences: AudioVaultAppPreferences by inject()
 
     // Use activityViewModel() so the ViewModel (and ExoPlayer) outlives this Fragment.
     // This allows audio to keep playing when back is pressed, and the mini player bar on the
@@ -261,6 +265,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             Timber.d("fastForward clicked")
             viewModel.fastForward()
         }
+        setupHoldToSpeedUp(playerControlsBinding.nextButton)
         playerControlsBinding.previousChapterButton.setOnClickListener {
             Timber.d("previousChapter clicked")
             viewModel.previousChapter()
@@ -268,6 +273,33 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerControlsBinding.nextChapterButton.setOnClickListener {
             Timber.d("nextChapter clicked")
             viewModel.nextChapter()
+        }
+    }
+
+    /**
+     * Holding [button] plays at [Constants.HOLD_SPEEDUP_MULTIPLIER] until the finger lifts or slides
+     * off, when the "Hold to speed up" setting is on; a tap keeps doing what the button does. The
+     * lift that ends a hold is consumed, so it doesn't also count as a tap (taps still go through
+     * performClick, hence the suppression).
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupHoldToSpeedUp(button: View) {
+        var holding = false
+        button.setOnLongClickListener {
+            holding = appPreferences.exoPlayerAllowPressSpeedUp
+            if (holding) onPressSpeedUp(true)
+            holding
+        }
+        button.setOnTouchListener { view, event ->
+            val released = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
+            if (holding && released) {
+                holding = false
+                onPressSpeedUp(false)
+                view.isPressed = false
+                true
+            } else {
+                false
+            }
         }
     }
 
@@ -422,18 +454,9 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
     override fun onResume() {
         super.onResume()
-        if (viewModel.playerOrNull != null) {
-            startProgressUpdates()
-        }
-    }
-
-    /**
-     * @param callback called if track selection was successful and UI needs to be updated
-     */
-    fun onAudioTrackSelected(index: Int, callback: TrackSelectionCallback): Job = lifecycleScope.launch {
-        if (viewModel.trackSelectionHelper.selectAudioTrack(index)) {
-            callback.onTrackSelected(true)
-        }
+        // Always restart: a book still loading when the screen was left has no player yet, and the
+        // loop waits for one; skipping it here left the progress frozen once playback started.
+        startProgressUpdates()
     }
 
     /**

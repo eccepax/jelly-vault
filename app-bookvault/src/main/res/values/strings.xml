@@ -9,6 +9,9 @@
     <string name="sort_author">Author</string>
     <string name="sort_date_added">Date Added</string>
     <string name="filter_progress">Filter by progress</string>
+    <string name="filter_tag">Filter by tag</string>
+    <string name="filter_all_tags">All tags</string>
+    <string name="filter_no_tags">None of your books have tags yet. Add tags to books in Jellyfin to filter by them here.</string>
     <string name="filter_all">All</string>
     <string name="filter_unread">Unread</string>
     <string name="filter_in_progress">In Progress</string>

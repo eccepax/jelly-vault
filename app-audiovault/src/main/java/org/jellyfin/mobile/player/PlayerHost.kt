@@ -42,7 +42,6 @@ interface PlayerHost {
     fun playFromSearch(query: String)
 
     fun load(jellyfinMediaSource: JellyfinMediaSource, exoMediaSource: MediaSource, playWhenReady: Boolean)
-    fun logTracks()
 
     fun getStateAndPause(): PlayState?
     suspend fun stopTranscoding(mediaSource: RemoteJellyfinMediaSource)

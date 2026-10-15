@@ -23,6 +23,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.UUID
+import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -116,6 +117,30 @@ class AudiobookDownloadsTest {
     }
 
     @Test
+    fun `a finished track is ready to play from the device, from where it was left`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        database.downloadDao.insert(details(chapter1)!!.apply { mediaSource.startTime = 95.seconds })
+
+        val playable = downloads.playable(UUID.fromString(chapter1))
+
+        playable?.itemId shouldBe UUID.fromString(chapter1)
+        playable?.startTime shouldBe 95.seconds
+    }
+
+    @Test
+    fun `a track still downloading isn't ready to play from the device`() = runTest {
+        downloads.download(listOf(chapter1))
+
+        downloads.playable(UUID.fromString(chapter1)) shouldBe null
+    }
+
+    @Test
+    fun `a track that was never downloaded isn't ready to play from the device`() = runTest {
+        downloads.playable(UUID.fromString(chapter1)) shouldBe null
+    }
+
+    @Test
     fun `the downloads list shows only finished tracks`() = runTest {
         downloads.download(listOf(chapter1, chapter2))
         items.complete(chapter2)
@@ -156,6 +181,18 @@ class AudiobookDownloadsTest {
         downloads.repair()
 
         items.requests shouldBe listOf("$chapter1 <- uri($chapter1)")
+    }
+
+    @Test
+    fun `removing everything deletes every track's file and details`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+
+        downloads.removeAll()
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails().shouldBeEmpty()
+        downloads.downloadedIds.first().shouldBeEmpty()
     }
 
     @Test

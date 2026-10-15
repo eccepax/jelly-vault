@@ -5,6 +5,7 @@ import io.kotest.matchers.ints.shouldNotBeExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldStartWith
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
@@ -106,6 +107,20 @@ class JellyfinLiveStreamsContractTest {
     }
 
     @Test
+    fun `a channel left a second after opening it plays again when you come straight back`() = runBlocking<Unit> {
+        // A quick zap: the viewer lands on a channel and leaves while it's still starting up. The
+        // tuner proxy used to refuse that channel for 30-45 s afterwards.
+        val first = openFree()
+        get(rawStreamUrl(first))
+        delay(QUICK_ZAP_MS)
+        streams.close(first.ticket)
+
+        val again = openFree()
+
+        get(rawStreamUrl(again)).first shouldBe 200
+    }
+
+    @Test
     fun `closing an already closed stream is fine`() = runBlocking<Unit> {
         // A ledger entry from a crashed run may already have been closed (or timed out) server-side.
         val stream = openFree()
@@ -136,3 +151,4 @@ class JellyfinLiveStreamsContractTest {
 
 private const val READ_TIMEOUT_MS = 30_000
 private const val PEEK_BYTES = 2_000
+private const val QUICK_ZAP_MS = 1_000L

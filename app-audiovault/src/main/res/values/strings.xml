@@ -59,7 +59,7 @@
     <string name="pref_music_notification_always_dismissible_summary_off">The notification can only be dismissed when playback is paused</string>
     <string name="pref_music_notification_always_dismissible_summary_on">The notification can always be dismissed, even when playing media</string>
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
-    <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the screen to temporarily speed up playback</string>
+    <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the fast-forward button to play faster until you let go</string>
     <string name="pref_exoplayer_allow_background_audio">Background audio</string>
     <string name="pref_exoplayer_allow_background_audio_summary">Allow playing videos in the background with audio-only</string>
     <string name="pref_skip_silence_title">Skip silence</string>

@@ -7,10 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.jellyfin.sdk.api.client.exception.ApiClientException
-import org.jellyfin.sdk.api.client.exception.InvalidStatusException
+import org.jellyfin.mobile.common.server.isNetworkFailure
 import timber.log.Timber
-import java.io.IOException
 
 /**
  * Whether the Vault can be reached. Reads go to the server until one fails for want of a network;
@@ -58,11 +56,4 @@ class ServerConnectivity(
     companion object {
         const val RETRY_INTERVAL_MS = 15_000L
     }
-}
-
-/** No route to the server, as opposed to the server answering with an error. */
-fun Throwable.isNetworkFailure(): Boolean = when (this) {
-    is InvalidStatusException -> false
-    is IOException, is ApiClientException -> true
-    else -> false
 }

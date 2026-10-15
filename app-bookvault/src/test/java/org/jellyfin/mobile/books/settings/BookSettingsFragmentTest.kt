@@ -3,16 +3,23 @@ package org.jellyfin.mobile.books.settings
 import android.app.Application
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.children
 import androidx.fragment.app.testing.launchFragmentInContainer
+import androidx.recyclerview.widget.RecyclerView
+import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.shouldBe
 import io.mockk.mockk
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.app.AppPreferences
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -46,6 +53,27 @@ class BookSettingsFragmentTest {
     fun tearDown() {
         stopKoin()
     }
+
+    @Test
+    fun `downloads are kept on sign-out unless the user turns on removing them`() {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        AppPreferences(context).removeDownloadsOnSignOut shouldBe false
+
+        launchFragmentInContainer<BookSettingsFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val list = fragment.requireView().findViewById<RecyclerView>(R.id.recycler_view)
+                val title = fragment.getString(CommonR.string.pref_remove_downloads_on_sign_out)
+                val row = (0 until list.childCount).map(list::getChildAt).single { row -> row.hasText(title) }
+                row.performClick()
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+
+        AppPreferences(context).removeDownloadsOnSignOut shouldBe true
+    }
+
+    private fun View.hasText(text: String): Boolean =
+        (this as? TextView)?.text?.toString() == text || (this as? ViewGroup)?.children?.any { it.hasText(text) } == true
 
     @Test
     fun `the settings screen stays clear of the status and navigation bars`() {

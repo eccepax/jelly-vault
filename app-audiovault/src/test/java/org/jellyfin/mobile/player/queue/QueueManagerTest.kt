@@ -17,7 +17,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerHost
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -56,7 +56,7 @@ class QueueManagerTest {
     private val videosApi = mockk<VideosApi>(relaxed = true)
     private val mediaSourceResolver = mockk<MediaSourceResolver>(relaxed = true)
     private val deviceProfileBuilder = mockk<DeviceProfileBuilder>(relaxed = true)
-    private val downloadDao = mockk<DownloadDao>(relaxed = true)
+    private val downloads = mockk<AudiobookDownloads> { coEvery { playable(any()) } returns null }
     private val progressiveFactory = mockk<ProgressiveMediaSource.Factory>(relaxed = true)
     private val hlsFactory = mockk<HlsMediaSource.Factory>(relaxed = true)
     private val subtitleFactory = mockk<SingleSampleMediaSource.Factory>(relaxed = true)
@@ -77,7 +77,7 @@ class QueueManagerTest {
                     single { apiClient }
                     single { mediaSourceResolver }
                     single { deviceProfileBuilder }
-                    single { downloadDao }
+                    single { downloads }
                     single { progressiveFactory }
                     single { hlsFactory }
                     single { subtitleFactory }
@@ -128,6 +128,39 @@ class QueueManagerTest {
         return source
     }
 
+    /** A track whose file is on the device, ready to play. */
+    private fun downloaded(itemId: UUID): LocalJellyfinMediaSource {
+        val source = mockk<LocalJellyfinMediaSource>(relaxed = true)
+        every { source.itemId } returns itemId
+        every { source.externalSubtitleStreams } returns emptyList()
+        coEvery { downloads.playable(itemId) } returns source
+        return source
+    }
+
+    private fun stubFailedResolve(error: PlayerException = PlayerException.NetworkFailure()) {
+        coEvery {
+            mediaSourceResolver.resolveMediaSource(
+                itemId = any(),
+                mediaSourceId = any(),
+                deviceProfile = any(),
+                maxStreamingBitrate = any(),
+                startTime = any(),
+                audioStreamIndex = any(),
+                subtitleStreamIndex = any(),
+            )
+        } returns Result.failure(error)
+    }
+
+    private fun fromDownloads(ids: List<UUID>, startIndex: Int) = PlayOptions(
+        ids = ids,
+        mediaSourceId = null,
+        startIndex = startIndex,
+        startPosition = null,
+        audioStreamIndex = null,
+        subtitleStreamIndex = null,
+        playFromDownloads = true,
+    )
+
     private fun stubSuccessfulResolve(result: RemoteJellyfinMediaSource) {
         coEvery {
             mediaSourceResolver.resolveMediaSource(
@@ -155,23 +188,6 @@ class QueueManagerTest {
                 audioStreamIndex = null,
                 subtitleStreamIndex = null,
                 playFromDownloads = null,
-            ),
-        )
-
-        error should beInstanceOf<PlayerException.InvalidPlayOptions>()
-    }
-
-    @Test
-    fun `returns InvalidPlayOptions when playing from downloads with no mediaSourceId`() = runTest {
-        val error = queueManager.initializePlaybackQueue(
-            PlayOptions(
-                ids = listOf(UUID.randomUUID()),
-                mediaSourceId = null,
-                startIndex = 0,
-                startPosition = null,
-                audioStreamIndex = null,
-                subtitleStreamIndex = null,
-                playFromDownloads = true,
             ),
         )
 
@@ -243,6 +259,111 @@ class QueueManagerTest {
         verify(exactly = 0) { viewModel.load(any(), any(), any()) }
     }
 
+    // --- Downloads ---------------------------------------------------------------------------------
+
+    @Test
+    fun `playing from downloads plays the chosen track from the device`() = runTest {
+        val ids = List(3) { UUID.randomUUID() }
+        val chapter2 = downloaded(ids[1])
+
+        val error = queueManager.initializePlaybackQueue(fromDownloads(ids, startIndex = 1))
+
+        error shouldBe null
+        queueManager.currentIndex shouldBe 1
+        verify { viewModel.load(chapter2, any(), true) }
+        coVerify(
+            exactly = 0,
+        ) { mediaSourceResolver.resolveMediaSource(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `playing from downloads streams a track whose download is gone`() = runTest {
+        val id = UUID.randomUUID()
+        val streamed = remoteSource(id)
+        stubSuccessfulResolve(streamed)
+
+        val error = queueManager.initializePlaybackQueue(fromDownloads(listOf(id), startIndex = 0))
+
+        error shouldBe null
+        verify { viewModel.load(streamed, any(), true) }
+    }
+
+    @Test
+    fun `a download that's gone, with no connection, is an error rather than nothing happening`() = runTest {
+        stubFailedResolve(PlayerException.NetworkFailure())
+
+        val error = queueManager.initializePlaybackQueue(fromDownloads(listOf(UUID.randomUUID()), startIndex = 0))
+
+        error should beInstanceOf<PlayerException.NetworkFailure>()
+    }
+
+    @Test
+    fun `while playing from the device, next plays the next downloaded track`() = runTest {
+        val ids = List(3) { UUID.randomUUID() }
+        setQueue(ids, index = 0)
+        setCurrentMediaSource(downloaded(ids[0]))
+        val chapter2 = downloaded(ids[1])
+
+        queueManager.next() shouldBe true
+
+        queueManager.currentIndex shouldBe 1
+        verify { viewModel.load(chapter2, any(), true) }
+        coVerify(
+            exactly = 0,
+        ) { mediaSourceResolver.resolveMediaSource(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `while playing from the device, previous plays the previous downloaded track`() = runTest {
+        val ids = List(3) { UUID.randomUUID() }
+        setQueue(ids, index = 2)
+        setCurrentMediaSource(downloaded(ids[2]))
+        val chapter2 = downloaded(ids[1])
+
+        queueManager.previous() shouldBe true
+
+        queueManager.currentIndex shouldBe 1
+        verify { viewModel.load(chapter2, any(), true) }
+    }
+
+    @Test
+    fun `while playing from the device, a next track that isn't downloaded is streamed`() = runTest {
+        val ids = List(2) { UUID.randomUUID() }
+        setQueue(ids, index = 0)
+        setCurrentMediaSource(downloaded(ids[0]))
+        val streamed = remoteSource(ids[1])
+        stubSuccessfulResolve(streamed)
+
+        queueManager.next() shouldBe true
+
+        verify { viewModel.load(streamed, any(), true) }
+    }
+
+    @Test
+    fun `when the next track can't be streamed, it plays from its download`() = runTest {
+        // The connection dropped partway through a downloaded book that was being streamed.
+        val ids = List(2) { UUID.randomUUID() }
+        setQueue(ids, index = 0)
+        setCurrentMediaSource(remoteSource(ids[0]))
+        stubFailedResolve(PlayerException.NetworkFailure())
+        val chapter2 = downloaded(ids[1])
+
+        queueManager.next() shouldBe true
+
+        queueManager.currentIndex shouldBe 1
+        verify { viewModel.load(chapter2, any(), true) }
+    }
+
+    @Test
+    fun `next reports failure when the next track can't be streamed and isn't downloaded`() = runTest {
+        val ids = List(2) { UUID.randomUUID() }
+        setQueue(ids, index = 0)
+        setCurrentMediaSource(remoteSource(ids[0]))
+        stubFailedResolve(PlayerException.NetworkFailure())
+
+        queueManager.next() shouldBe false
+    }
+
     // --- hasPrevious / hasNext ----------------------------------------------------------------------
 
     @Test
@@ -279,16 +400,6 @@ class QueueManagerTest {
 
         queueManager.previous() shouldBe false
         queueManager.currentIndex shouldBe 0
-    }
-
-    @Test
-    fun `previous does not move the index when the current source isn't a remote source`() = runTest {
-        val ids = List(2) { UUID.randomUUID() }
-        setQueue(ids, index = 1)
-        setCurrentMediaSource(null)
-
-        queueManager.previous() shouldBe false
-        queueManager.currentIndex shouldBe 1
     }
 
     @Test
@@ -356,27 +467,6 @@ class QueueManagerTest {
                 subtitleStreamIndex = null,
             )
         }
-    }
-
-    /**
-     * Regression coverage: [currentQueue] stores server item IDs, but a downloaded source can only
-     * be looked up by its own media source ID, which isn't derivable from the next item's ID alone
-     * — `next()` used to silently replay the *current* download forever (via
-     * `startDownloadPlayback(mediaSourceId = currentMediaSource.id, ...)`) without ever advancing
-     * [QueueManager.currentIndex], instead of the queue simply not supporting this. Now mirrors
-     * [previous], which already declines to move for anything but a remote source.
-     */
-    @Test
-    fun `next does not advance for a local (downloaded) current source, even if the queue has more entries`() = runTest {
-        val ids = List(2) { UUID.randomUUID() }
-        setQueue(ids, index = 0)
-        val localSource = mockk<LocalJellyfinMediaSource>(relaxed = true)
-        setCurrentMediaSource(localSource)
-
-        queueManager.next() shouldBe false
-
-        queueManager.currentIndex shouldBe 0
-        verify(exactly = 0) { viewModel.load(any(), any(), any()) }
     }
 
     // --- skipToIndex --------------------------------------------------------------------------------

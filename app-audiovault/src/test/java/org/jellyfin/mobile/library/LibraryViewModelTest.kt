@@ -27,9 +27,11 @@ import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
 import org.jellyfin.mobile.data.entity.AudiobookEntryEntity
 import org.jellyfin.mobile.data.entity.HiddenItemEntity
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.Response
 import org.jellyfin.sdk.api.client.exception.ApiClientException
+import org.jellyfin.sdk.api.client.exception.TimeoutException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
 import org.jellyfin.sdk.api.operations.ItemsApi
@@ -42,6 +44,8 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.UUID
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Tests [LibraryViewModel]'s own orchestration: root/folder loading, the global-flat
@@ -64,6 +68,8 @@ class LibraryViewModelTest {
     private val audiobookEntryDao = mockk<AudiobookEntryDao>(relaxed = true)
     private val downloadedTrackIds = MutableStateFlow<Set<String>>(emptySet())
     private val hiddenItemDao = mockk<HiddenItemDao>(relaxed = true)
+    private val downloads = mutableMapOf<UUID, LocalJellyfinMediaSource>()
+    private val events = mutableListOf<String>()
 
     private val serverUser = ServerUser(
         user = UserEntity(
@@ -109,6 +115,8 @@ class LibraryViewModelTest {
         audiobookEntryDao = audiobookEntryDao,
         downloadedTrackIds = downloadedTrackIds,
         hiddenItemDao = hiddenItemDao,
+        downloadedTrack = { downloads[it] },
+        syncListening = { events += "sync" },
     )
 
     /**
@@ -539,5 +547,122 @@ class LibraryViewModelTest {
         val queue = viewModel.fetchBundleQueue(bundle)
 
         queue?.ids shouldBe listOf(trackId1, trackId2)
+    }
+
+    // --- Listening the server hasn't heard about ------------------------------------------------
+
+    @Test
+    fun `listening saved on the device reaches the server before a book's resume point is worked out`() = runTest {
+        val folderId = UUID.randomUUID()
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        events.clear()
+        coEvery {
+            itemsApi.getItems(
+                userId = any(),
+                parentId = any(),
+                includeItemTypes = any(),
+                fields = any(),
+                sortBy = any(),
+                sortOrder = any(),
+                recursive = any(),
+                limit = any(),
+                ids = any(),
+            )
+        } answers {
+            events += "resume point"
+            queryResult(listOf(audioFile(name = "Chapter 1")))
+        }
+
+        viewModel.fetchBundleQueue(bookOfThree(parentFolderId = folderId).first)
+
+        events shouldBe listOf("sync", "resume point")
+    }
+
+    // --- Offline (the server can't be reached) -------------------------------------------------
+
+    @Test
+    fun `offline, a book plays from its downloads, resuming at the track left partway through`() = runTest {
+        val (bundle, tracks) = bookOfThree(parentFolderId = UUID.randomUUID())
+        downloaded(tracks[0], "Chapter 1", left = Duration.ZERO)
+        downloaded(tracks[1], "Chapter 2", left = 5.minutes)
+        downloaded(tracks[2], "Chapter 3", left = Duration.ZERO)
+        val viewModel = offlineViewModel()
+
+        val queue = viewModel.fetchBundleQueue(bundle)
+
+        queue?.ids shouldBe tracks
+        queue?.startIndex shouldBe 1
+        queue?.startPosition shouldBe 5.minutes
+        queue?.trackNames shouldBe listOf("Chapter 1", "Chapter 2", "Chapter 3")
+    }
+
+    @Test
+    fun `offline, a book not yet started plays from its first track`() = runTest {
+        val (bundle, tracks) = bookOfThree(parentFolderId = UUID.randomUUID())
+        tracks.forEachIndexed { i, id -> downloaded(id, "Chapter ${i + 1}", left = Duration.ZERO) }
+        val viewModel = offlineViewModel()
+
+        val queue = viewModel.fetchBundleQueue(bundle)
+
+        queue?.ids shouldBe tracks
+        queue?.startIndex shouldBe 0
+        queue?.startPosition shouldBe null
+    }
+
+    @Test
+    fun `offline, a book without a known folder plays from its downloads too`() = runTest {
+        val (bundle, tracks) = bookOfThree(parentFolderId = null)
+        downloaded(tracks[2], "Chapter 3", left = 1.minutes)
+        val viewModel = offlineViewModel()
+
+        val queue = viewModel.fetchBundleQueue(bundle)
+
+        queue?.ids shouldBe tracks
+        queue?.startIndex shouldBe 2
+        queue?.trackNames shouldBe listOf("Track 1", "Track 2", "Chapter 3")
+    }
+
+    private suspend fun offlineViewModel(): LibraryViewModel {
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        coEvery {
+            itemsApi.getItems(
+                userId = any(),
+                parentId = any(),
+                includeItemTypes = any(),
+                fields = any(),
+                sortBy = any(),
+                sortOrder = any(),
+                recursive = any(),
+                limit = any(),
+                ids = any(),
+            )
+        } throws TimeoutException("Vault unreachable")
+        return viewModel
+    }
+
+    private fun bookOfThree(parentFolderId: UUID?): Pair<LibraryItem.AudiobookBundle, List<UUID>> {
+        val tracks = List(3) { UUID.randomUUID() }
+        val bundle = LibraryItem.AudiobookBundle(
+            id = parentFolderId ?: UUID.randomUUID(),
+            displayName = "Dune",
+            description = "",
+            imageItemId = null,
+            imageTag = null,
+            runTimeTicks = null,
+            progressPercent = null,
+            trackIds = tracks,
+            isBundle = true,
+            parentFolderId = parentFolderId,
+        )
+        return bundle to tracks
+    }
+
+    private fun downloaded(id: UUID, name: String, left: Duration) {
+        downloads[id] = mockk(relaxed = true) {
+            every { item } returns BaseItemDto(id = id, type = BaseItemKind.AUDIO, name = name)
+            every { startTime } returns left
+        }
     }
 }

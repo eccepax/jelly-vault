@@ -22,6 +22,9 @@ class BookDownloads(private val groups: DownloadGroups) {
 
     suspend fun remove(bookId: String) = groups.remove(bookId)
 
+    /** Deletes every downloaded book. */
+    suspend fun removeAll() = groups.removeAll()
+
     /** At launch: fetches again any downloaded book whose file is gone. */
     suspend fun repair() = groups.repair()
 }

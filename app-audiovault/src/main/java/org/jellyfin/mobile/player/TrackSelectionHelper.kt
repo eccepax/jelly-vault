@@ -7,7 +7,6 @@ import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.utils.clearSelectionAndDisableRendererByType
 import org.jellyfin.mobile.utils.selectTrackByTypeAndGroup
 import org.jellyfin.sdk.model.api.MediaStream
-import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.PlayMethod
 import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
 
@@ -25,27 +24,6 @@ class TrackSelectionHelper(
             selectPlayerAudioTrack(mediaSource, stream, initial = true)
         }
         selectSubtitleTrack(mediaSource, mediaSource.selectedSubtitleStream, initial = true)
-    }
-
-    /**
-     * Select an audio track in the media source and apply changes to the current player, if necessary and possible.
-     *
-     * @param mediaStreamIndex the [MediaStream.index] that should be selected
-     * @return true if the audio track was changed
-     */
-    suspend fun selectAudioTrack(mediaStreamIndex: Int): Boolean {
-        val mediaSource = mediaSourceOrNull ?: return false
-        val selectedMediaStream = mediaSource.mediaStreams[mediaStreamIndex]
-        require(selectedMediaStream.type == MediaStreamType.AUDIO)
-
-        // For transcoding and external streams, we need to restart playback
-        if (mediaSource.playMethod == PlayMethod.TRANSCODE || selectedMediaStream.isExternal) {
-            return viewModel.queueManager.selectAudioStreamAndRestartPlayback(selectedMediaStream)
-        }
-
-        return selectPlayerAudioTrack(mediaSource, selectedMediaStream, initial = false).also { success ->
-            if (success) viewModel.logTracks()
-        }
     }
 
     /**

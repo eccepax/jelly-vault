@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import de.Maxr1998.modernpreferences.PreferencesAdapter
 import de.Maxr1998.modernpreferences.helpers.categoryHeader
+import de.Maxr1998.modernpreferences.helpers.checkBox
 import de.Maxr1998.modernpreferences.helpers.defaultOnClick
 import de.Maxr1998.modernpreferences.helpers.pref
 import de.Maxr1998.modernpreferences.helpers.screen
@@ -24,10 +25,12 @@ import org.jellyfin.mobile.books.reader.formatFontFamilyLabel
 import org.jellyfin.mobile.books.reader.formatFontScaleLabel
 import org.jellyfin.mobile.books.reader.formatLineSpacingLabel
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.utils.padForNavigationBar
 import org.jellyfin.mobile.common.ui.utils.padForStatusBar
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
+import org.jellyfin.mobile.common.R as CommonR
 
 class BookSettingsFragment : Fragment() {
 
@@ -79,6 +82,11 @@ class BookSettingsFragment : Fragment() {
         }
         categoryHeader("pref_category_account") {
             titleRes = R.string.pref_category_account
+        }
+        checkBox(AppPreferences.PREF_REMOVE_DOWNLOADS_ON_SIGN_OUT) {
+            titleRes = CommonR.string.pref_remove_downloads_on_sign_out
+            summaryRes = CommonR.string.pref_remove_downloads_on_sign_out_summary
+            defaultValue = false
         }
         pref("pref_sign_out") {
             titleRes = R.string.pref_sign_out

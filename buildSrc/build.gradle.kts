@@ -14,5 +14,6 @@ dependencies {
     implementation(libs.android.gradle)
     implementation(libs.kotlin.gradle.plugin)
     implementation(libs.detekt.gradle.plugin)
+    implementation(libs.kover.gradle.plugin)
     implementation(libs.android.junit5.gradle.plugin)
 }

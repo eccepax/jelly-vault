@@ -13,6 +13,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.jellyfin.mobile.books.data.BookDatabase
+import org.jellyfin.mobile.common.account.DownloadsOnSignOut
+import org.jellyfin.mobile.common.account.SignOut
+import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
 import org.jellyfin.mobile.common.downloads.ItemDownloads
@@ -76,5 +79,10 @@ val bookDownloadsModule = module {
     single {
         val apiClient = get<ApiClient>()
         BookFiles(get(), androidContext().cacheDir, get(), uriOf = apiClient::bookUri)
+    }
+    // Signing out keeps downloads unless the user asked otherwise in Settings
+    single {
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<BookDownloads>()::removeAll)
+        SignOut(get(), get<ApiClientController>()::logoutUser, forgetAccount = { downloadsOnSignOut() })
     }
 }

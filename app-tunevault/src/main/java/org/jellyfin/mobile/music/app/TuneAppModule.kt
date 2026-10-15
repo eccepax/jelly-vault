@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
@@ -156,7 +157,7 @@ val tuneAppModule = module {
             clearAccountData = {
                 withTimeoutOrNull(SYNC_TIMEOUT_MS) { offlinePlays.sync() }
                 offlinePlays.clear()
-                downloads.removeAll()
+                DownloadsOnSignOut(get(), downloads::removeAll)()
             },
             logout = apiClientController::logoutUser,
         )

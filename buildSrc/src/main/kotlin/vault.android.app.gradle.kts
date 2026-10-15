@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("io.gitlab.arturbosch.detekt")
+    id("org.jetbrains.kotlinx.kover")
     id("de.mannodermaus.android-junit5")
 }
 

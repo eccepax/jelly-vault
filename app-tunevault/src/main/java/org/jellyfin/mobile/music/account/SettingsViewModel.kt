@@ -25,6 +25,7 @@ data class SettingsUiState(
     val signingOut: Boolean = false,
     val downloadQuality: StreamingQuality = StreamingQuality.ORIGINAL,
     val downloadOnWifiOnly: Boolean = true,
+    val removeDownloadsOnSignOut: Boolean = false,
     val downloadBytes: Long = 0L,
     val showSleepTimer: Boolean = true,
     val volumeLevelling: Boolean = true,
@@ -46,6 +47,7 @@ class SettingsViewModel(
             appVersion = appVersion,
             downloadQuality = preferences.downloadQuality,
             downloadOnWifiOnly = preferences.downloadOnWifiOnly,
+            removeDownloadsOnSignOut = preferences.removeDownloadsOnSignOut,
             showSleepTimer = preferences.showSleepTimer,
             volumeLevelling = preferences.volumeLevelling,
         ),
@@ -87,6 +89,11 @@ class SettingsViewModel(
     fun setDownloadQuality(quality: StreamingQuality) {
         preferences.downloadQuality = quality
         _state.update { it.copy(downloadQuality = quality) }
+    }
+
+    fun setRemoveDownloadsOnSignOut(remove: Boolean) {
+        preferences.removeDownloadsOnSignOut = remove
+        _state.update { it.copy(removeDownloadsOnSignOut = remove) }
     }
 
     fun setDownloadOnWifiOnly(wifiOnly: Boolean) {

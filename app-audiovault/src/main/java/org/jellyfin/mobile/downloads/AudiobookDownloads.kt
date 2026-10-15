@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.first
 import org.jellyfin.mobile.common.downloads.DownloadGroups
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
+import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import timber.log.Timber
+import java.util.UUID
 
 /**
  * Audiobook tracks kept on the device. Each track is its own download group of one file (see
@@ -26,6 +28,12 @@ class AudiobookDownloads(
     /** Downloaded tracks' details, for the downloads screen: only those whose file is complete. */
     val finished: Flow<List<DownloadEntity>> = combine(dao.getAllDownloads(), downloadedIds) { all, done ->
         all.filter { it.mediaSource.itemId.toString() in done }
+    }
+
+    /** [trackId] played from the device, from where it was left, if its file is fully downloaded. */
+    suspend fun playable(trackId: UUID): LocalJellyfinMediaSource? {
+        if (trackId.toString() !in downloadedIds.first()) return null
+        return dao.getAllDownloads().first().firstOrNull { it.mediaSource.itemId == trackId }?.asMediaSource()
     }
 
     /** Downloads [trackIds], or tries again those whose download failed. One track failing never stops the rest. */
@@ -54,6 +62,12 @@ class AudiobookDownloads(
         dao.getAllDownloads().first()
             .filter { it.mediaSource.itemId.toString() == trackId }
             .forEach { dao.delete(it.itemId) }
+    }
+
+    /** Deletes every downloaded track and its details. */
+    suspend fun removeAll() {
+        groups.removeAll()
+        dao.deleteAll()
     }
 
     /** At launch: fetches again any downloaded track whose file is gone. */

@@ -134,6 +134,7 @@ dependencies {
     // alongside the rest of the (JUnit5 Jupiter) suite.
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(project(":common-testing"))
     testImplementation(project(":test-support"))
     testImplementation(project(":common-testing"))
     // Migration tests (see the debug assets above)

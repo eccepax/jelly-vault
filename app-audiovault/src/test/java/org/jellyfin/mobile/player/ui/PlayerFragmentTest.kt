@@ -4,14 +4,17 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Looper
 import android.view.Menu
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ListView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
@@ -21,6 +24,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.interaction.PlayOptions
@@ -38,6 +42,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -66,12 +71,18 @@ class PlayerFragmentTest {
     private fun launch(
         viewModel: AudiobookPlayerViewModel,
         fragmentArgs: Bundle? = null,
+        holdToSpeedUp: Boolean = true,
     ): FragmentScenario<PlayerFragment> {
         startKoin {
             modules(
                 module {
                     single { mockk<ApiClient>(relaxed = true) }
                     single { mockk<AppPreferences>(relaxed = true) }
+                    single {
+                        mockk<AudioVaultAppPreferences>(relaxed = true) {
+                            every { exoPlayerAllowPressSpeedUp } returns holdToSpeedUp
+                        }
+                    }
                     viewModel { viewModel }
                 },
             )
@@ -151,6 +162,27 @@ class PlayerFragmentTest {
     }
 
     @Test
+    fun `the progress keeps updating after leaving and coming back while the book was still loading`() {
+        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
+        val player = requireNotNull(playerViewModel.playerOrNull)
+        every { playerViewModel.playerOrNull } returns null // still loading
+
+        launch(playerViewModel).use { scenario ->
+            scenario.moveToState(Lifecycle.State.STARTED) // left the screen
+            scenario.moveToState(Lifecycle.State.RESUMED) // came back, still loading
+            every { playerViewModel.playerOrNull } returns player // the book starts
+            every { playerViewModel.adjustedCurrentPosition } returns 65_000L
+            every { player.duration } returns 600_000L
+
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+
+            scenario.onFragment { fragment ->
+                (fragment.controlButton(R.id.exo_position) as TextView).text.toString() shouldBe "1:05"
+            }
+        }
+    }
+
+    @Test
     fun `the rewind button skips backward`() {
         val playerViewModel = mockedPlayerViewModelForPlayerFragment()
 
@@ -174,6 +206,66 @@ class PlayerFragmentTest {
         }
 
         verify { playerViewModel.fastForward() }
+        verify(exactly = 0) { playerViewModel.setPressSpeedUp(any(), any()) }
+    }
+
+    @Test
+    fun `holding the fast-forward button plays faster until it's let go, without skipping`() {
+        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
+
+        launch(playerViewModel).use { scenario ->
+            scenario.onFragment { fragment ->
+                val button = fragment.controlButton(R.id.next_button)
+                button.press(MotionEvent.ACTION_DOWN)
+                button.performLongClick()
+
+                verify { playerViewModel.setPressSpeedUp(true, Constants.HOLD_SPEEDUP_MULTIPLIER) }
+                verify(exactly = 0) { playerViewModel.setPressSpeedUp(false, any()) }
+
+                button.press(MotionEvent.ACTION_UP)
+            }
+        }
+
+        verify { playerViewModel.setPressSpeedUp(false, Constants.HOLD_SPEEDUP_MULTIPLIER) }
+        verify(exactly = 0) { playerViewModel.fastForward() }
+    }
+
+    @Test
+    fun `a hold that slides off the fast-forward button still goes back to the normal speed`() {
+        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
+
+        launch(playerViewModel).use { scenario ->
+            scenario.onFragment { fragment ->
+                val button = fragment.controlButton(R.id.next_button)
+                button.press(MotionEvent.ACTION_DOWN)
+                button.performLongClick()
+                button.press(MotionEvent.ACTION_CANCEL)
+            }
+        }
+
+        verify { playerViewModel.setPressSpeedUp(false, Constants.HOLD_SPEEDUP_MULTIPLIER) }
+    }
+
+    @Test
+    fun `with hold to speed up turned off in settings, holding the fast-forward button leaves the speed alone`() {
+        val playerViewModel = mockedPlayerViewModelForPlayerFragment()
+
+        launch(playerViewModel, holdToSpeedUp = false).use { scenario ->
+            scenario.onFragment { fragment ->
+                val button = fragment.controlButton(R.id.next_button)
+                button.press(MotionEvent.ACTION_DOWN)
+                button.performLongClick()
+                button.press(MotionEvent.ACTION_UP)
+            }
+        }
+
+        verify(exactly = 0) { playerViewModel.setPressSpeedUp(any(), any()) }
+    }
+
+    private fun View.press(action: Int) {
+        val event = MotionEvent.obtain(0L, 0L, action, width / 2f, height / 2f, 0)
+        dispatchTouchEvent(event)
+        event.recycle()
     }
 
     @Test
