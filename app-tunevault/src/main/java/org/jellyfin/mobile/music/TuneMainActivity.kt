@@ -6,7 +6,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.jellyfin.mobile.music.ui.TuneVaultRoot
 import org.koin.android.ext.android.inject
@@ -27,7 +28,7 @@ class TuneMainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppTheme {
+            AppTheme(VaultBrand.TuneVault) {
                 TuneVaultRoot(mainViewModel, appPreferences)
             }
         }

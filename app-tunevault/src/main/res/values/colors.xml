@@ -3,4 +3,7 @@
     <!-- Launcher icon background: deep indigo -->
     <color name="ic_launcher_background">#1A237E</color>
     <color name="splash_fill">#fafafa</color>
+
+    <!-- The app's accent, matching VaultBrand -->
+    <color name="vault_accent">@color/vault_accent_tunevault</color>
 </resources>

@@ -2,4 +2,7 @@
 <resources>
     <!-- Launcher icon and TV banner background -->
     <color name="ic_launcher_background">#101820</color>
+
+    <!-- The app's accent, matching VaultBrand -->
+    <color name="vault_accent">@color/vault_accent_livevault</color>
 </resources>

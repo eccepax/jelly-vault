@@ -7,7 +7,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.jellyfin.mobile.livetv.ui.LiveSignedIn
 import org.koin.android.ext.android.inject
@@ -26,7 +27,7 @@ class LiveMainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppTheme {
+            AppTheme(VaultBrand.LiveVault) {
                 VaultRoot(mainViewModel, appPreferences, logoRes = R.drawable.live_logo) { LiveSignedIn() }
             }
         }
