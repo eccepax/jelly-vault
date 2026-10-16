@@ -32,6 +32,9 @@ object VaultAlpha {
 
     /** A scrim laid over artwork or video so text on top of it stays readable. */
     const val SCRIM = 0.7f
+
+    /** The hairline that sets a bar apart from a screen of the same background. */
+    const val DIVIDER = 0.12f
 }
 
 /** The WCAG contrast ratio between two colors, from 1 (none) to 21 (black on white). */

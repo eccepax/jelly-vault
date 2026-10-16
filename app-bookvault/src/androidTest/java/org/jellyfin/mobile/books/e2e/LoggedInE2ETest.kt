@@ -1,12 +1,9 @@
 package org.jellyfin.mobile.books.e2e
 
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.hamcrest.Matchers.not
+import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.books.BookMainActivity
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.data.BookDatabase
@@ -44,8 +41,8 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
 
     /**
      * Taps the library item at [position] (default: the first) and waits for the reader screen to
-     * finish loading it (the progress bar disappearing is the reader's own loading signal — see
-     * `BookReaderFragment`'s `loading` collector).
+     * finish loading it (its spinner going is the reader's own loading signal — see
+     * `BookReaderViewModel.loading`).
      */
     protected fun openBookAtPosition(position: Int = 0) {
         libraryItems()[position].performClick()
@@ -53,10 +50,16 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
         waitForReaderToFinishLoading()
     }
 
-    /** Waits for `BookReaderFragment`'s progress bar to hide, meaning a page/chapter has rendered. */
+    /**
+     * Waits for the reader to open and its spinner to go, meaning a page/chapter has rendered. The
+     * library has no spinner either, so the reader's own mode button has to show first.
+     */
     protected fun waitForReaderToFinishLoading(timeoutMillis: Long = WAIT_TIMEOUT_MS) {
+        val pageMode = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getString(R.string.reader_page_mode)
         composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching { onView(withId(R.id.progress_bar)).check(matches(not(isDisplayed()))) }.isSuccess
+            composeRule.onAllNodesWithContentDescription(pageMode).fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag(VaultTestTags.LOADING).fetchSemanticsNodes().isEmpty()
         }
     }
 }

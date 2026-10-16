@@ -64,5 +64,13 @@
     <string name="add_bookmark_note_hint">Note (optional)</string>
     <string name="add_bookmark_action">Add bookmark</string>
     <string name="no_bookmarks_yet">No bookmarks yet</string>
-    <string name="delete">Delete</string>
+    <string name="bookmark_save">Save</string>
+    <string name="delete_bookmark">Delete bookmark %1$s</string>
+
+    <!-- Reader top bar: each button says what tapping it does -->
+    <string name="reader_page_mode">Read page by page</string>
+    <string name="reader_scroll_mode">Read as one scroll</string>
+    <string name="reader_night_mode_on">Night mode</string>
+    <string name="reader_night_mode_off">Turn off night mode</string>
+    <string name="contents_empty">This book has no table of contents</string>
 </resources>

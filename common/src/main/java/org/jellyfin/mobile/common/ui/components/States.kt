@@ -21,17 +21,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.common.R
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 
 /** A screen waiting for its content. */
 @Composable
 fun LoadingState(modifier: Modifier = Modifier) {
-    Centered(modifier) { CircularProgressIndicator() }
+    Centered(modifier.testTag(VaultTestTags.LOADING)) { CircularProgressIndicator() }
 }
 
 /** A screen with nothing to show yet, saying why. */

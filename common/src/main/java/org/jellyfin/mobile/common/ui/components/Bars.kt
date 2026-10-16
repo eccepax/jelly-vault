@@ -47,7 +47,7 @@ fun VaultBottomBar(modifier: Modifier = Modifier, content: @Composable RowScope.
     // Opaque under the hairline too, so it blends to the same grey over whatever is behind the bar
     Column(modifier = modifier.background(MaterialTheme.colors.background)) {
         // On the same background as the screen, a hairline is what sets the tabs apart from it
-        Divider(color = MaterialTheme.colors.onBackground.copy(alpha = DIVIDER_ALPHA))
+        Divider(color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.DIVIDER))
         BottomNavigation(
             windowInsets = WindowInsets.navigationBars,
             backgroundColor = MaterialTheme.colors.background,
@@ -70,5 +70,3 @@ fun RowScope.VaultBottomBarItem(selected: Boolean, onClick: () -> Unit, icon: Im
         unselectedContentColor = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
     )
 }
-
-private const val DIVIDER_ALPHA = 0.12f

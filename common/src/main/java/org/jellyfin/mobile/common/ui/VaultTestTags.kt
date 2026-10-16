@@ -22,4 +22,7 @@ object VaultTestTags {
 
     /** The "downloaded only" switch in a library's menu. */
     const val DOWNLOADED_ONLY = "downloaded_only"
+
+    /** A screen's spinner while its content loads. */
+    const val LOADING = "loading"
 }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -18,10 +19,14 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.junit.Rule
@@ -200,5 +205,63 @@ class ComponentsTest {
         composeRule.onNodeWithText("OK").performClick()
 
         composeRule.onNodeWithText("No tags yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a text field dialog hands over what was typed`() {
+        var entered: String? = null
+        show {
+            TextFieldDialog(
+                title = "Go to page",
+                label = "Page number",
+                confirmLabel = "Go",
+                onConfirm = { entered = it },
+                onDismiss = {},
+            )
+        }
+
+        composeRule.onNodeWithText("Page number").performTextInput("42")
+        composeRule.onNodeWithText("Go").performClick()
+
+        entered shouldBe "42"
+    }
+
+    @Test
+    fun `cancelling a text field dialog hands over nothing`() {
+        var entered: String? = null
+        var dismissed = false
+        show {
+            TextFieldDialog(
+                title = "Add bookmark",
+                label = "Note (optional)",
+                confirmLabel = "Add bookmark",
+                onConfirm = { entered = it },
+                onDismiss = { dismissed = true },
+            )
+        }
+
+        composeRule.onNodeWithText("Note (optional)").performTextInput("Great line")
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        entered shouldBe null
+        dismissed shouldBe true
+    }
+
+    @Test
+    fun `a long list of choices scrolls to the last`() {
+        val chapters = (1..60).map { Choice(it, "Chapter $it") }
+        show { ChoiceDialog(title = "Contents", choices = chapters, selected = 1, onSelect = {}, onDismiss = {}) }
+
+        composeRule.onNodeWithText("Chapter 60").performScrollTo().assertIsDisplayed()
+
+        // Only the list scrolls: the dialog stays put, with its title showing
+        composeRule.onNodeWithText("Contents").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a loading state can be found by its tag`() {
+        show { LoadingState() }
+
+        composeRule.onNodeWithTag(VaultTestTags.LOADING).assertExists()
     }
 }

@@ -4,21 +4,23 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Looper
-import android.view.View
-import android.widget.EditText
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.Toolbar
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
+import androidx.test.core.app.ApplicationProvider
 import androidx.viewpager2.widget.ViewPager2
-import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.floats.shouldBeLessThanOrEqual
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -30,6 +32,7 @@ import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.startKoin
@@ -39,16 +42,19 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowDialog
 import org.jellyfin.mobile.common.R as CommonR
 
 /**
- * Tests two easy-to-silently-break behaviors: the reading position must be saved when the reader
- * leaves the screen, and the night-mode toggle must actually reach the ViewModel.
+ * The reader screen wired to its ViewModel: each action reaches it, the reading position is saved
+ * on leaving, and jumps that don't come from a swipe still move the pages (the screen's own
+ * behavior is in [BookReaderScreenTest]).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class BookReaderFragmentTest {
+
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
 
     private val readerViewModel = mockk<BookReaderViewModel>(relaxed = true)
     private val appPreferences = mockk<BookAppPreferences>(relaxed = true)
@@ -63,6 +69,7 @@ class BookReaderFragmentTest {
         every { readerViewModel.error } returns MutableStateFlow(null)
         every { readerViewModel.nightMode } returns MutableStateFlow(false)
         every { readerViewModel.bookmarks } returns MutableStateFlow(emptyList())
+        every { readerViewModel.getTableOfContents() } returns emptyList()
 
         every { appPreferences.epubFontScale } returns 1.0f
         every { appPreferences.epubFontFamily } returns EpubFontFamily.SERIF
@@ -83,11 +90,26 @@ class BookReaderFragmentTest {
         stopKoin()
     }
 
-    private fun args() = Bundle().apply { putString(BookReaderFragment.ARG_BOOK_ITEM_ID, "book-1") }
+    private fun launch() = launchFragmentInContainer<BookReaderFragment>(
+        Bundle().apply { putString(BookReaderFragment.ARG_BOOK_ITEM_ID, "book-1") },
+        themeResId = CommonR.style.AppTheme,
+    )
+
+    private fun epub(chapters: Int = 19) {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.totalPages } returns MutableStateFlow(chapters)
+    }
+
+    private fun string(resId: Int) = ApplicationProvider.getApplicationContext<Application>().getString(resId)
+
+    private fun openMenuItem(resId: Int) {
+        composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(string(resId)).performClick()
+    }
 
     @Test
     fun `leaving the reader reports the current playback position`() {
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+        launch().use { scenario ->
             scenario.moveToState(Lifecycle.State.CREATED) // RESUMED -> CREATED crosses onStop()
         }
 
@@ -95,74 +117,62 @@ class BookReaderFragmentTest {
     }
 
     @Test
-    fun `the chapter bar shows the chapter's name and position`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.totalPages } returns MutableStateFlow(19)
+    fun `the chapter bar names the chapter being read`() {
+        epub()
         every { readerViewModel.getChapterTitle(6) } returns "Introduction"
         currentPageFlow.value = 6
 
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                val root = fragment.requireView()
-                root.findViewById<TextView>(R.id.chapter_title).text.toString() shouldBe "Introduction"
-                root.findViewById<TextView>(R.id.chapter_position).text.toString() shouldBe "Chapter 7 of 19"
-                root.findViewById<View>(R.id.btn_prev_chapter).isEnabled shouldBe true
-                root.findViewById<View>(R.id.btn_next_chapter).isEnabled shouldBe true
-            }
+        launch().use {
+            composeRule.onNodeWithText("Introduction").assertExists()
+            composeRule.onNodeWithText("Chapter 7 of 19").assertExists()
         }
     }
 
     @Test
-    fun `on the first chapter there's no title to show and the back arrow is disabled`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.totalPages } returns MutableStateFlow(19)
-        every { readerViewModel.getChapterTitle(0) } returns null
+    fun `the next chapter arrow moves to the next chapter`() {
+        epub()
+        currentPageFlow.value = 6
 
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                val root = fragment.requireView()
-                root.findViewById<View>(R.id.chapter_title).visibility shouldBe View.GONE
-                root.findViewById<TextView>(R.id.chapter_position).text.toString() shouldBe "Chapter 1 of 19"
-                root.findViewById<View>(R.id.btn_prev_chapter).isEnabled shouldBe false
-            }
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(R.string.chapter_next)).performClick()
         }
-    }
 
-    @Test
-    fun `on the last chapter the forward arrow is disabled`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.totalPages } returns MutableStateFlow(19)
-        currentPageFlow.value = 18
-
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.requireView().findViewById<View>(R.id.btn_next_chapter).isEnabled shouldBe false
-            }
-        }
+        verify { readerViewModel.setPage(7) }
     }
 
     @Test
     fun `the EPUB chapter buttons stay above the system navigation bar`() {
         // The app draws edge-to-edge; with 3-button navigation the bar would otherwise cover the
         // Previous/Next chapter buttons, leaving no way past a chapter with nothing to scroll.
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.totalPages } returns MutableStateFlow(5)
-        val navBarPx = 126
+        epub(chapters = 5)
 
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
+        launch().use { scenario ->
             scenario.onFragment { fragment ->
-                val root = fragment.requireView()
                 val bars = WindowInsetsCompat.Builder()
-                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navBarPx))
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, NAV_BAR_PX))
                     .build()
-                ViewCompat.dispatchApplyWindowInsets(root, bars)
+                ViewCompat.dispatchApplyWindowInsets(fragment.requireView(), bars)
             }
+            shadowOf(Looper.getMainLooper()).idle()
+
+            val screenHeight = composeRule.onRoot().fetchSemanticsNode().size.height
+            val next = composeRule.onNodeWithContentDescription(string(R.string.chapter_next)).fetchSemanticsNode()
+            next.boundsInRoot.bottom shouldBeLessThanOrEqual (screenHeight - NAV_BAR_PX).toFloat()
+        }
+    }
+
+    @Test
+    fun `the pages fill the screen between the bars`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.PDF)
+        every { readerViewModel.totalPages } returns MutableStateFlow(20)
+
+        launch().use { scenario ->
             shadowOf(Looper.getMainLooper()).idle()
             scenario.onFragment { fragment ->
                 val root = fragment.requireView()
-                val chapterNav = root.findViewById<View>(R.id.chapter_nav_bar)
-                chapterNav.visibility shouldBe View.VISIBLE
-                chapterNav.bottom shouldBeLessThanOrEqual root.height - navBarPx
+                val pages = root.findViewById<RecyclerView>(R.id.recycler_view)
+                pages.width shouldBe root.width
+                pages.height shouldBeGreaterThan root.height / 2
             }
         }
     }
@@ -172,128 +182,15 @@ class BookReaderFragmentTest {
         // Regression test: TOC/bookmark jumps and the PDF page-jump dialog all call
         // viewModel.setPage(...) directly — that has no path back to the ViewPager2 unless
         // something observes currentPage and moves it explicitly (see observeCurrentPage).
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.totalPages } returns MutableStateFlow(5)
+        epub(chapters = 5)
 
         lateinit var pager: ViewPager2
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> pager = fragment.view!!.findViewById(R.id.view_pager) }
+        launch().use { scenario ->
+            scenario.onFragment { fragment -> pager = fragment.requireView().findViewById(R.id.view_pager) }
             scenario.onFragment { currentPageFlow.value = 3 } // simulates a TOC/bookmark jump, not a swipe
         }
 
         pager.currentItem shouldBe 3
-    }
-
-    @Test
-    fun `the night mode menu action toggles night mode on the view model`() {
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_night_mode, 0)
-            }
-        }
-
-        verify { readerViewModel.toggleNightMode() }
-    }
-
-    @Test
-    fun `the text settings menu action opens the settings chooser dialog`() {
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_text_settings, 0)
-            }
-        }
-
-        ShadowDialog.getLatestDialog() shouldNotBe null
-    }
-
-    @Test
-    fun `choosing a font size preset persists it and does not change the current page`() {
-        currentPageFlow.value = 3
-
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                // Calls the dialog builder directly (marked internal for this) rather than routing
-                // through the "Font size" chooser-dialog item click first — the chooser's own
-                // setItems dialog works fine with Robolectric's ShadowDialog#clickOnText (see the
-                // "opens the settings chooser dialog" test), but chaining straight into a SECOND,
-                // setSingleChoiceItems-based dialog from within that click callback hits a
-                // ShadowDialog NPE unrelated to this feature — a Robolectric/nested-dialog quirk,
-                // not a production bug. Exercising this dialog directly avoids it.
-                fragment.dialogs.showFontSizeDialog()
-                shadowOf(Looper.getMainLooper()).idle()
-                // setSingleChoiceItems' internal CheckedTextView rows also confuse
-                // ShadowDialog#clickOnText itself (NPE deep in its shadow extraction) — drive the
-                // ListView's item-click listener directly instead, the same mechanism a real touch
-                // triggers.
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                val index = EPUB_FONT_SCALE_PRESETS.indexOf(1.25f)
-                dialog.listView.performItemClick(dialog.listView.getChildAt(index), index, index.toLong())
-            }
-        }
-
-        verify { appPreferences.epubFontScale = 1.25f }
-        currentPageFlow.value shouldBe 3
-    }
-
-    // --- table of contents / page jump ------------------------------------------------------------
-
-    @Test
-    fun `the contents action shows the chapter list for an EPUB book and jumping to one calls setPage`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
-        every { readerViewModel.getTableOfContents() } returns listOf(
-            EpubTocEntry("Prologue", 0),
-            EpubTocEntry("Chapter One", 1),
-        )
-
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_contents, 0)
-                shadowOf(Looper.getMainLooper()).idle()
-                // ShadowDialog#clickOnText only reliably finds the first ListView row under
-                // Robolectric (later rows aren't always measured) — drive the item-click listener
-                // directly by index instead, same mechanism a real touch triggers.
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.listView.performItemClick(dialog.listView.getChildAt(1), 1, 1L)
-            }
-        }
-
-        verify { readerViewModel.setPage(1) }
-    }
-
-    @Test
-    fun `the contents action shows a page-jump dialog for a PDF book`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.PDF)
-        every { readerViewModel.totalPages } returns MutableStateFlow(180)
-
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_contents, 0)
-            }
-        }
-
-        ShadowDialog.getLatestDialog() shouldNotBe null
-    }
-
-    @Test
-    fun `entering a valid page number in the PDF jump dialog calls setPage with a zero-based index`() {
-        every { readerViewModel.bookType } returns MutableStateFlow(BookType.PDF)
-        every { readerViewModel.totalPages } returns MutableStateFlow(180)
-
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_contents, 0)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.findViewById<EditText>(R.id.dialog_page_input)!!.setText("42")
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
-        }
-
-        verify { readerViewModel.setPage(41) }
     }
 
     @Test
@@ -307,8 +204,8 @@ class BookReaderFragmentTest {
         coEvery { readerViewModel.renderPage(any()) } returns Bitmap.createBitmap(200, 2000, Bitmap.Config.ARGB_8888)
 
         lateinit var recyclerView: RecyclerView
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> recyclerView = fragment.view!!.findViewById(R.id.recycler_view) }
+        launch().use { scenario ->
+            scenario.onFragment { fragment -> recyclerView = fragment.requireView().findViewById(R.id.recycler_view) }
             shadowOf(Looper.getMainLooper()).idle()
 
             scenario.onFragment { currentPageFlow.value = 9 } // simulates a TOC/bookmark/page-jump dialog
@@ -320,91 +217,109 @@ class BookReaderFragmentTest {
         verify(exactly = 0) { readerViewModel.setPage(any()) }
     }
 
-    // --- bookmarks ----------------------------------------------------------------------------------
+    @Test
+    fun `the night mode button toggles night mode on the view model`() {
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(R.string.reader_night_mode_on)).performClick()
+        }
+
+        verify { readerViewModel.toggleNightMode() }
+    }
 
     @Test
-    fun `the add-bookmark action prompts for a note and calls addBookmark with the entered text`() {
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_add_bookmark, 0)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.findViewById<EditText>(R.id.dialog_bookmark_note_input)!!.setText("Great line here")
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
+    fun `choosing a font size saves it and does not change the current page`() {
+        currentPageFlow.value = 3
+
+        launch().use {
+            openMenuItem(R.string.text_settings_title)
+            composeRule.onNodeWithText(string(R.string.text_settings_font_size)).performClick()
+            composeRule.onNodeWithText("125%").performClick()
+        }
+
+        verify { appPreferences.epubFontScale = 1.25f }
+        currentPageFlow.value shouldBe 3
+    }
+
+    @Test
+    fun `choosing a chapter from an EPUB's contents goes to it`() {
+        epub()
+        every { readerViewModel.getTableOfContents() } returns listOf(
+            EpubTocEntry("Prologue", 0),
+            EpubTocEntry("Chapter One", 1),
+        )
+
+        launch().use {
+            openMenuItem(R.string.contents_title)
+            composeRule.onNodeWithText("Chapter One").performClick()
+        }
+
+        verify { readerViewModel.setPage(1) }
+    }
+
+    @Test
+    fun `entering a page number for a PDF goes to it, counting from zero`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.PDF)
+        every { readerViewModel.totalPages } returns MutableStateFlow(180)
+
+        launch().use {
+            openMenuItem(R.string.contents_title)
+            composeRule.onNodeWithText(string(R.string.go_to_page_hint)).performTextInput("42")
+            composeRule.onNodeWithText(string(R.string.go)).performClick()
+        }
+
+        verify { readerViewModel.setPage(41) }
+    }
+
+    @Test
+    fun `adding a bookmark saves it with the note`() {
+        launch().use {
+            openMenuItem(R.string.add_bookmark_action)
+            composeRule.onNodeWithText(string(R.string.add_bookmark_note_hint)).performTextInput("Great line here")
+            composeRule.onNodeWithText(string(R.string.bookmark_save)).performClick()
         }
 
         verify { readerViewModel.addBookmark("Great line here") }
     }
 
     @Test
-    fun `skipping the note in the add-bookmark prompt still adds a bookmark`() {
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_add_bookmark, 0)
-                val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            }
-        }
-
-        verify { readerViewModel.addBookmark("") }
-    }
-
-    @Test
-    fun `tapping a saved bookmark and choosing jump calls jumpToBookmark`() {
-        val bookmark = BookBookmarkEntity(
-            id = 1L,
-            bookItemId = "book-1",
-            pageIndex = 2,
-            label = "Chapter 3",
-            note = null,
-            createdAt = 0L,
-        )
+    fun `tapping a saved bookmark jumps to it`() {
         every { readerViewModel.bookmarks } returns MutableStateFlow(listOf(bookmark))
 
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_bookmarks, 0)
-                shadowOf(Looper.getMainLooper()).idle()
-                val listDialog = ShadowDialog.getLatestDialog() as AlertDialog
-                listDialog.listView.performItemClick(listDialog.listView.getChildAt(0), 0, 0L)
-                shadowOf(Looper.getMainLooper()).idle()
-                // Per-bookmark action menu: "Jump to bookmark" (index 0) / "Delete" (index 1).
-                val actionDialog = ShadowDialog.getLatestDialog() as AlertDialog
-                actionDialog.listView.performItemClick(actionDialog.listView.getChildAt(0), 0, 0L)
-            }
+        launch().use {
+            openMenuItem(R.string.bookmarks_title)
+            composeRule.onNodeWithText("Chapter 3").performClick()
         }
 
         verify { readerViewModel.jumpToBookmark(bookmark) }
     }
 
     @Test
-    fun `tapping a saved bookmark and choosing delete calls deleteBookmark`() {
-        val bookmark = BookBookmarkEntity(
-            id = 1L,
-            bookItemId = "book-1",
-            pageIndex = 2,
-            label = "Chapter 3",
-            note = null,
-            createdAt = 0L,
-        )
+    fun `deleting a saved bookmark deletes it`() {
         every { readerViewModel.bookmarks } returns MutableStateFlow(listOf(bookmark))
 
-        launchFragmentInContainer<BookReaderFragment>(args(), themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment ->
-                fragment.view!!.findViewById<Toolbar>(R.id.toolbar)
-                    .menu.performIdentifierAction(R.id.action_bookmarks, 0)
-                shadowOf(Looper.getMainLooper()).idle()
-                val listDialog = ShadowDialog.getLatestDialog() as AlertDialog
-                listDialog.listView.performItemClick(listDialog.listView.getChildAt(0), 0, 0L)
-                shadowOf(Looper.getMainLooper()).idle()
-                val actionDialog = ShadowDialog.getLatestDialog() as AlertDialog
-                actionDialog.listView.performItemClick(actionDialog.listView.getChildAt(1), 1, 1L)
-            }
+        launch().use {
+            openMenuItem(R.string.bookmarks_title)
+            composeRule.onNodeWithContentDescription(
+                ApplicationProvider.getApplicationContext<Application>().getString(
+                    R.string.delete_bookmark,
+                    "Chapter 3",
+                ),
+            ).performClick()
         }
 
         verify { readerViewModel.deleteBookmark(1L) }
+    }
+
+    private val bookmark = BookBookmarkEntity(
+        id = 1L,
+        bookItemId = "book-1",
+        pageIndex = 2,
+        label = "Chapter 3",
+        note = null,
+        createdAt = 0L,
+    )
+
+    private companion object {
+        const val NAV_BAR_PX = 126
     }
 }
