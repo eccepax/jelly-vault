@@ -8,6 +8,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import org.jellyfin.mobile.common.MainViewModel
@@ -27,6 +29,7 @@ import org.jellyfin.mobile.music.library.ArtistsRoute
 import org.jellyfin.mobile.music.library.LibraryScreen
 import org.jellyfin.mobile.music.library.SongsRoute
 import org.jellyfin.mobile.music.navigation.Browse
+import org.jellyfin.mobile.music.navigation.BrowseTarget
 import org.jellyfin.mobile.music.navigation.LibraryNavigation
 import org.jellyfin.mobile.music.navigation.MainBottomBar
 import org.jellyfin.mobile.music.navigation.MainTab
@@ -63,7 +66,13 @@ private fun SignedIn() {
 private fun SignedInTabs(selected: MainTab, select: (MainTab) -> Unit) {
     val connectivity: ServerConnectivity = koinInject()
     val isOffline by connectivity.isOffline.collectAsState()
+    // A page the player asked for, opened by the tab that's showing
+    var target by remember { mutableStateOf<BrowseTarget?>(null) }
+    val targetFor = { tab: MainTab -> target.takeIf { selected == tab } }
+    val opened = { target = null }
     PlayerShell(
+        onOpenAlbum = { target = BrowseTarget.Album(it) },
+        onOpenArtist = { target = BrowseTarget.Artist(it) },
         bottomBar = {
             Column {
                 if (isOffline) OfflineBanner()
@@ -75,7 +84,7 @@ private fun SignedInTabs(selected: MainTab, select: (MainTab) -> Unit) {
             selected = selected,
             onSelect = select,
             home = {
-                BrowseNavigation { browse ->
+                BrowseNavigation(targetFor(MainTab.HOME), opened) { browse ->
                     HomeRoute(
                         onAlbumClick = { album -> browse.openAlbum(album.id) },
                         onSettingsClick = browse.openSettings,
@@ -83,7 +92,7 @@ private fun SignedInTabs(selected: MainTab, select: (MainTab) -> Unit) {
                 }
             },
             library = {
-                BrowseNavigation { browse ->
+                BrowseNavigation(targetFor(MainTab.LIBRARY), opened) { browse ->
                     LibraryScreen(
                         albums = { AlbumsRoute(onAlbumClick = { album -> browse.openAlbum(album.id) }) },
                         artists = { ArtistsRoute(onArtistClick = { artist -> browse.openArtist(artist.id) }) },
@@ -100,7 +109,7 @@ private fun SignedInTabs(selected: MainTab, select: (MainTab) -> Unit) {
                 }
             },
             search = {
-                BrowseNavigation { browse ->
+                BrowseNavigation(targetFor(MainTab.SEARCH), opened) { browse ->
                     SearchRoute(
                         onArtistClick = { artist -> browse.openArtist(artist.id) },
                         onAlbumClick = { album -> browse.openAlbum(album.id) },
@@ -111,9 +120,12 @@ private fun SignedInTabs(selected: MainTab, select: (MainTab) -> Unit) {
     }
 }
 
-/** A tab's back stack: [home], with album, artist and playlist pages opened on top of it. */
+/**
+ * A tab's back stack: [home], with album, artist and playlist pages opened on top of it, and
+ * [target] when something outside the tab (the player) asks for a page.
+ */
 @Composable
-private fun BrowseNavigation(home: @Composable (browse: Browse) -> Unit) {
+private fun BrowseNavigation(target: BrowseTarget?, onOpened: () -> Unit, home: @Composable (browse: Browse) -> Unit) {
     val activity = LocalActivity.current
     LibraryNavigation(
         home = home,
@@ -123,6 +135,8 @@ private fun BrowseNavigation(home: @Composable (browse: Browse) -> Unit) {
         },
         playlistDetail = { playlistId, onBack -> PlaylistDetailRoute(playlistId = playlistId, onBack = onBack) },
         settings = { onBack -> SettingsRoute(onBack = onBack, onSignedOut = { activity?.startOver() }) },
+        open = target,
+        onOpened = onOpened,
     )
 }
 

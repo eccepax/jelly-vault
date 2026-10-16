@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.music.nowplaying
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -72,7 +74,14 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 }
             }
             Spacer(Modifier.height(16.dp))
-            AlbumCover(coverUrl = track?.coverUrl, modifier = Modifier.fillMaxWidth())
+            // The cover, title and album lead to the album; the artist to the artist's page
+            val openAlbum = Modifier.clickable(
+                enabled = track != null,
+            ) { track?.let { actions.onOpenAlbum(it.albumId) } }
+            AlbumCover(
+                coverUrl = track?.coverUrl,
+                modifier = Modifier.fillMaxWidth().testTag(NowPlayingTags.COVER).then(openAlbum),
+            )
             Spacer(Modifier.height(24.dp))
             Text(
                 text = track?.title.orEmpty(),
@@ -80,12 +89,19 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = openAlbum,
             )
-            Text(text = track?.let { artistOrUnknown(it.artist) }.orEmpty(), style = MaterialTheme.typography.subtitle1)
+            val artistId = track?.artistId
+            Text(
+                text = track?.let { artistOrUnknown(it.artist) }.orEmpty(),
+                style = MaterialTheme.typography.subtitle1,
+                modifier = if (artistId != null) Modifier.clickable { actions.onOpenArtist(artistId) } else Modifier,
+            )
             Text(
                 text = track?.albumTitle.orEmpty(),
                 style = MaterialTheme.typography.body2,
                 color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
+                modifier = openAlbum,
             )
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
