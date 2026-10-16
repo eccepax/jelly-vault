@@ -35,6 +35,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /** AudioVault's main screens on a phone with 3-button navigation; see [captureWithSystemBars]. */
 @RunWith(RobolectricTestRunner::class)
@@ -90,7 +91,7 @@ class AudioVaultScreenshotTest {
             )
         }
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { it.requireView().captureWithSystemBars("library") }
         }
     }
@@ -107,7 +108,7 @@ class AudioVaultScreenshotTest {
             )
         }
 
-        launchFragmentInContainer<PlayerFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<PlayerFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { it.requireView().captureWithSystemBars("player") }
         }
     }

@@ -44,6 +44,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.time.Duration
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Tests [PlayerFragment] with [AudiobookPlayerViewModel] mocked through
@@ -89,7 +90,10 @@ class PlayerFragmentTest {
         }
         // No fragmentArgs: the "ResumePlayer" path (tap the mini player while audio is already
         // playing) — the ViewModel already has an active player, so no PlayOptions are needed.
-        return launchFragmentInContainer<PlayerFragment>(fragmentArgs = fragmentArgs, themeResId = R.style.AppTheme)
+        return launchFragmentInContainer<PlayerFragment>(
+            fragmentArgs = fragmentArgs,
+            themeResId = CommonR.style.AppTheme,
+        )
     }
 
     @Test

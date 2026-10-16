@@ -31,6 +31,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlertDialog
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Tests the audiobook-download long-press menu and tap-to-play, with every dependency mocked through
@@ -94,7 +95,7 @@ class LibraryFragmentTest {
         val queue = LibraryViewModel.AudioQueue(listOf(item.id), 0, listOf("Track"), null)
         coEvery { libraryViewModel.getAudioQueueWithResume(item.id) } returns queue
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemClick(item) }
             idle()
         }
@@ -108,7 +109,7 @@ class LibraryFragmentTest {
     fun `long-press on a not-yet-downloaded audio file offers to download it`() {
         val item = audioFile()
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -122,7 +123,7 @@ class LibraryFragmentTest {
         val item = audioFile()
         downloadedIdsFlow.value = setOf(item.id.toString())
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -135,7 +136,7 @@ class LibraryFragmentTest {
     fun `tapping the download menu action asks to download the item's tracks`() {
         val item = audioFile(name = "My Chapter")
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -152,7 +153,7 @@ class LibraryFragmentTest {
         val item = audioFile(name = "My Chapter")
         downloadedIdsFlow.value = setOf(item.id.toString())
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -168,7 +169,7 @@ class LibraryFragmentTest {
     fun `long-press on a not-yet-hidden item offers to hide it as the second menu action`() {
         val item = audioFile()
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -182,7 +183,7 @@ class LibraryFragmentTest {
         val item = audioFile()
         hiddenIdsFlow.value = setOf(item.id.toString())
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -195,7 +196,7 @@ class LibraryFragmentTest {
     fun `tapping the hide menu action toggles the item's hidden state`() {
         val item = audioFile()
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(item) }
 
             val dialog = ShadowAlertDialog.getLatestAlertDialog()
@@ -211,7 +212,7 @@ class LibraryFragmentTest {
             BaseItemDto(id = UUID.randomUUID(), type = BaseItemKind.FOLDER, name = "Series", isFolder = true),
         )
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onItemLongClick(folder) }
         }
 

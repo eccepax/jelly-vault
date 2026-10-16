@@ -10,7 +10,6 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.jellyfin.mobile.R
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
@@ -30,6 +29,7 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /** Tests playing and removing an already-downloaded item. */
 @RunWith(RobolectricTestRunner::class)
@@ -83,7 +83,7 @@ class DownloadsFragmentTest {
         val chapter2 = downloadEntity(item = chapter(2))
         downloadsFlow.value = listOf(chapter2, chapter1)
 
-        launchFragmentInContainer<DownloadsFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<DownloadsFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onDownloadItemClick(chapter2) }
         }
 
@@ -108,7 +108,7 @@ class DownloadsFragmentTest {
     fun `holding a downloaded item requests its removal`() {
         val download = downloadEntity()
 
-        launchFragmentInContainer<DownloadsFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<DownloadsFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { fragment -> fragment.onDownloadItemHold(download) }
         }
 

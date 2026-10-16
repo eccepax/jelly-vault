@@ -6,6 +6,9 @@
     <!-- Splash logo color for API < 24. API >= 24 will have the default gradient. -->
     <color name="splash_fill">#fafafa</color>
 
+    <!-- The app's accent (VaultBrand.AudioVault), from common -->
+    <color name="vault_accent">@color/vault_accent_audiovault</color>
+
     <!-- App colors -->
     <color name="playback_info_background">#cc000000</color>
     <color name="playback_timebar_unplayed">#333333</color>

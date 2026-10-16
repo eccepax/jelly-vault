@@ -355,7 +355,7 @@ public class ChromecastConnection {
 
                 // Create the dialog
                 // TODO accept theme as a config.xml option
-                MediaRouteChooserDialog builder = new MediaRouteChooserDialog(activity, R.style.AppTheme);
+                MediaRouteChooserDialog builder = new MediaRouteChooserDialog(activity, org.jellyfin.mobile.common.R.style.AppTheme);
                 builder.setRouteSelector(new MediaRouteSelector.Builder()
                     .addControlCategory(CastMediaControlIntent.categoryForCast(appId))
                     .build());
