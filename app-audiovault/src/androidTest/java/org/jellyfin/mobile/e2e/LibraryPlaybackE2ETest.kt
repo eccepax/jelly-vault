@@ -1,9 +1,7 @@
 package org.jellyfin.mobile.e2e
 
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import org.jellyfin.mobile.R
+import androidx.compose.ui.test.onNodeWithTag
+import org.jellyfin.mobile.player.ui.PlayerTags
 import org.junit.Test
 
 /**
@@ -18,6 +16,6 @@ class LibraryPlaybackE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         startPlaybackFromFirstLibraryItem()
 
-        onView(playerControl(R.id.exo_play_pause)).check(matches(isDisplayed()))
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
     }
 }

@@ -7,6 +7,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
@@ -103,6 +104,7 @@ class AudioVaultScreenshotTest {
                 module {
                     single { apiClient }
                     single { mockk<AppPreferences>(relaxed = true) }
+                    single { mockk<AudioVaultAppPreferences>(relaxed = true) }
                     viewModel { mockedPlayerViewModelForPlayerFragment() }
                 },
             )

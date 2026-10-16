@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.TrackSelectionHelper
 import org.jellyfin.mobile.player.queue.QueueManager
@@ -57,6 +58,7 @@ fun mockedPlayerViewModelForPlayerFragment(playWhenReady: Boolean = false): Audi
     every { playerViewModel.player } returns MutableLiveData(mockedPlayer)
     every { playerViewModel.playerOrNull } returns mockedPlayer
     every { playerViewModel.playerState } returns MutableLiveData(Player.STATE_READY)
+    every { playerViewModel.skipSegment } returns MutableStateFlow(null)
     every { playerViewModel.error } returns MutableLiveData()
     every { playerViewModel.queueManager } returns queueManager
     every { playerViewModel.trackSelectionHelper } returns trackSelectionHelper
