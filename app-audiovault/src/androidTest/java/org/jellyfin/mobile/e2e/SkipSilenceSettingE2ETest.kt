@@ -4,10 +4,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.junit.Assert.assertTrue
@@ -25,8 +21,7 @@ class SkipSilenceSettingE2ETest : LoggedInE2ETest() {
         assertTrue(!koinGet<AudioVaultAppPreferences>().skipSilenceEnabled)
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        openActionBarOverflowOrOptionsMenu(context)
-        onView(withText(context.getString(R.string.activity_name_settings))).perform(click())
+        chooseFromLibraryMenu(context.getString(R.string.activity_name_settings))
 
         val skipSilenceTitle = context.getString(R.string.pref_skip_silence_title)
         waitForComposeText(skipSilenceTitle)

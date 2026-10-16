@@ -80,7 +80,6 @@ dependencies {
     // UI
     implementation(libs.google.material)
     implementation(libs.androidx.constraintlayout)
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // Jetpack Compose
     implementation(libs.bundles.compose)

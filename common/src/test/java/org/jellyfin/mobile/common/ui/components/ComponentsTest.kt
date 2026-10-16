@@ -11,11 +11,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -286,5 +288,56 @@ class ComponentsTest {
         composeRule.onNodeWithText("Sign out").performClick()
         composeRule.onNodeWithText("Yes, sign out").performClick()
         signedOut shouldBe 1
+    }
+
+    @Test
+    fun `the mini player shows what's loaded, and tapping it opens the player`() {
+        var opened = 0
+        show {
+            MiniPlayerBar(
+                title = "Dune",
+                subtitle = "Frank Herbert",
+                cover = {},
+                isPlaying = false,
+                onTogglePlayPause = {},
+                onExpand = { opened++ },
+            )
+        }
+
+        composeRule.onNodeWithText("Frank Herbert").assertExists()
+        composeRule.onNodeWithText("Dune").performClick()
+
+        opened shouldBe 1
+    }
+
+    @Test
+    fun `the mini player's play button says what it does`() {
+        var toggles = 0
+        show {
+            var playing by remember { mutableStateOf(false) }
+            MiniPlayerBar(
+                title = "Dune",
+                subtitle = null,
+                cover = {},
+                isPlaying = playing,
+                onTogglePlayPause = {
+                    toggles++
+                    playing = !playing
+                },
+                onExpand = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Play").performClick()
+        composeRule.onNodeWithContentDescription("Pause").assertExists()
+
+        toggles shouldBe 1
+    }
+
+    @Test
+    fun `a list row can show how far through the item is`() {
+        show { MediaListRow(title = "Dune", progress = 0.4f) }
+
+        composeRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo(0.4f, 0f..1f))).assertExists()
     }
 }

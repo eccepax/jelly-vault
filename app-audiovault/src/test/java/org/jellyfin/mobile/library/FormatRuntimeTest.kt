@@ -4,7 +4,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
 /** Basic functionality coverage for [formatRuntime] — converts Jellyfin runtime ticks (100ns units) to a display string. */
-class LibraryAdapterFormatRuntimeTest {
+class FormatRuntimeTest {
 
     private val ticksPerSecond = 10_000_000L
 

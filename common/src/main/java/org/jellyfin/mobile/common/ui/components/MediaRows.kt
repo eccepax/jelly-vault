@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +33,8 @@ fun MediaListRow(
     cover: (@Composable () -> Unit)? = null,
     highlighted: Boolean = false,
     onClick: (() -> Unit)? = null,
+    /** How far through the item is, from 0 to 1, shown under the text; nothing when null. */
+    progress: Float? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
@@ -57,6 +60,12 @@ fun MediaListRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) SecondaryText(subtitle, maxLines = 1)
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth().padding(top = VaultSpacing.XSmall),
+                )
+            }
         }
         trailing()
     }

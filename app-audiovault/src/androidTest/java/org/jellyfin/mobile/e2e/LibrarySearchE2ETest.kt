@@ -1,13 +1,13 @@
 package org.jellyfin.mobile.e2e
 
-import androidx.recyclerview.widget.RecyclerView
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.typeText
-import androidx.test.espresso.matcher.ViewMatchers.hasMinimumChildCount
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.hamcrest.Matchers.allOf
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
@@ -22,25 +22,15 @@ class LibrarySearchE2ETest : LoggedInE2ETest() {
     @Test
     fun searchingFiltersTheLibraryList() {
         loginAndWaitForLibrary()
-        waitForView(allOf(withId(R.id.recycler_view), hasMinimumChildCount(1)))
-        val fullCount = itemCount()
+        val firstTitle = libraryTitles().first()
 
-        onView(withId(R.id.action_search)).perform(click())
-        onView(withId(androidx.appcompat.R.id.search_src_text)).perform(typeText("Caste"))
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.search_hint)).performClick()
+        composeRule.onNodeWithTag(VaultTestTags.SEARCH_FIELD).performTextInput("Caste")
 
-        waitForView(allOf(withId(R.id.recycler_view), hasMinimumChildCount(1)))
-        val filteredCount = itemCount()
-
-        assert(filteredCount in 1 until fullCount) {
-            "Expected the search to narrow the list (full=$fullCount, filtered=$filteredCount)"
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) {
+            val titles = libraryTitles()
+            titles.isNotEmpty() && firstTitle !in titles && titles.all { it.contains("Caste", ignoreCase = true) }
         }
-    }
-
-    private fun itemCount(): Int {
-        var count = -1
-        onView(withId(R.id.recycler_view)).check { view, _ ->
-            count = (view as RecyclerView).adapter?.itemCount ?: -1
-        }
-        return count
     }
 }

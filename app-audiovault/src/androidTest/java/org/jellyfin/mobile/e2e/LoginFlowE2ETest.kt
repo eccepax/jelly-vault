@@ -1,10 +1,8 @@
 package org.jellyfin.mobile.e2e
 
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.jellyfin.mobile.R
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.junit.Test
 
 /**
@@ -17,6 +15,6 @@ class LoginFlowE2ETest : LoggedInE2ETest() {
     fun loginThroughToLibrary() {
         loginAndWaitForLibrary()
 
-        onView(withId(R.id.recycler_view)).check(matches(isDisplayed()))
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).assertIsDisplayed()
     }
 }

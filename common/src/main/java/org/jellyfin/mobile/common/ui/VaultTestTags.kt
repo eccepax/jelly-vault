@@ -34,4 +34,7 @@ object VaultTestTags {
 
     /** The Quick Connect code waiting to be approved. */
     const val QUICK_CONNECT_CODE = "quick_connect_code"
+
+    /** The bar along the bottom of a library while something is loaded. */
+    const val MINI_PLAYER = "mini_player"
 }

@@ -491,7 +491,7 @@ class LibraryViewModel(
      * Refresh current view/folder.
      *
      * @param force When true in global-flat mode, bypasses the in-memory and Room caches and
-     *   re-fetches from Jellyfin. Used by the SwipeRefreshLayout pull-to-refresh gesture.
+     *   re-fetches from Jellyfin. Used by the library's pull-to-refresh gesture.
      */
     fun refresh(force: Boolean = false) {
         val current = folderStack.lastOrNull()

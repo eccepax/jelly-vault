@@ -4,6 +4,8 @@
 
     <string name="player_tracklist">Tracklist</string>
     <string name="search_hint">Search</string>
+    <string name="close_search">Close search</string>
+    <string name="library_empty">No audiobooks to show</string>
     <string name="library_sort_by">Sort by</string>
     <string name="library_sort_title">Title</string>
     <string name="library_sort_author">Author</string>
