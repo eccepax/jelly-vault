@@ -5,6 +5,7 @@ object ChannelsScreenTags {
     const val LOADING = "channels_loading"
     const val SEARCH = "channels_search"
     const val CHIPS = "channels_chips"
+    const val GRID = "channels_grid"
     const val CONTINUE = "channels_continue"
     const val CHANNEL_PREFIX = "channel_"
 

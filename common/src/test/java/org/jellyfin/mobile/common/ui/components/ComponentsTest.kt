@@ -1,6 +1,9 @@
 package org.jellyfin.mobile.common.ui.components
 
 import android.app.Application
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
@@ -13,11 +16,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasProgressBarRangeInfo
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,9 +32,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
@@ -339,5 +348,40 @@ class ComponentsTest {
         show { MediaListRow(title = "Dune", progress = 0.4f) }
 
         composeRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo(0.4f, 0f..1f))).assertExists()
+    }
+
+    @Composable
+    private fun LongGrid(key: String) {
+        val grid = rememberLazyGridState()
+        ScrollToTopOnChange(key) { grid.scrollToItem(0) }
+        LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid, modifier = Modifier.testTag("grid")) {
+            items(LONG_LIST) { Text("Item $it") }
+        }
+    }
+
+    @Test
+    fun `a list goes back to the top when what it shows changes`() {
+        var key by mutableStateOf("title")
+        show { LongGrid(key) }
+        composeRule.onNodeWithTag("grid").performScrollToIndex(LONG_LIST - 1)
+
+        key = "artist"
+
+        composeRule.onNodeWithText("Item 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a list keeps its place when the screen comes back showing the same thing`() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent { AppTheme(VaultBrand.Jellyfin) { LongGrid("title") } }
+        composeRule.onNodeWithTag("grid").performScrollToIndex(LONG_LIST - 1)
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText("Item 0").assertDoesNotExist()
+    }
+
+    private companion object {
+        const val LONG_LIST = 60
     }
 }

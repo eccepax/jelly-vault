@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.runtime.Composable
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.components.CoverArt
 import org.jellyfin.mobile.common.ui.components.EmptyState
 import org.jellyfin.mobile.common.ui.components.ErrorState
@@ -44,20 +46,28 @@ fun AlbumsScreen(
                 EmptyState(stringResource(R.string.albums_empty))
             } else {
                 SortMenu(current = state.sort, onSortChange = onSortChange, modifier = Modifier.padding(start = 4.dp))
-                AlbumGrid(albums = state.albums, onAlbumClick = onAlbumClick)
+                AlbumGrid(albums = state.albums, onAlbumClick = onAlbumClick, scrollKey = state.sort.name)
             }
         }
     }
 }
 
-/** [subtitle] is the line under each title: the artist by default. */
+/**
+ * [subtitle] is the line under each title: the artist by default. A new [scrollKey] (a new sort)
+ * takes the grid back to its top.
+ */
 @Composable
 internal fun AlbumGrid(
     albums: List<Album>,
     onAlbumClick: (Album) -> Unit,
     subtitle: @Composable (Album) -> String = { artistOrUnknown(it.artist) },
+    scrollKey: String = "",
 ) {
+    val grid = rememberLazyGridState()
+    ScrollToTopOnChange(scrollKey) { grid.scrollToItem(0) }
     LazyVerticalGrid(
+        state = grid,
+        modifier = Modifier.testTag(AlbumsScreenTags.GRID),
         columns = GridCells.Adaptive(minSize = 150.dp),
         contentPadding = PaddingValues(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

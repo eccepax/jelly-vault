@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.components.ConfirmDialog
 import org.jellyfin.mobile.common.ui.components.EmptyState
 import org.jellyfin.mobile.common.ui.components.ErrorState
@@ -122,6 +124,8 @@ fun ChannelsScreen(
                             onFavoriteToggle = actions.onFavoriteToggle,
                             onChannelClick = actions.onChannelClick,
                             firstFocus = startFocus.takeIf { state.lastChannel == null },
+                            // Another tag, or favorites, is another list: start it at its top
+                            scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
                         )
                     }
                 }
@@ -245,8 +249,13 @@ private fun ChannelGrid(
     onChannelClick: (LiveChannel) -> Unit,
     /** Given to the first card, when it's where the remote starts. */
     firstFocus: FocusRequester?,
+    scrollKey: String,
 ) {
+    val grid = rememberLazyGridState()
+    ScrollToTopOnChange(scrollKey) { grid.scrollToItem(0) }
     LazyVerticalGrid(
+        state = grid,
+        modifier = Modifier.testTag(ChannelsScreenTags.GRID),
         columns = GridCells.Adaptive(minSize = CARD_MIN_WIDTH),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

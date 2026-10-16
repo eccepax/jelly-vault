@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.shouldBe
@@ -179,6 +180,20 @@ class ChannelsScreenTest {
 
         composeRule.onNodeWithText("Sports").assertIsSelected()
         composeRule.onNodeWithText("All").assertIsNotSelected()
+    }
+
+    @Test
+    fun `choosing another tag goes back to the top of the channels`() {
+        val many = List(60) { channel("${it + 1}", "Channel ${it + 1}", tags = listOf("Sports")) }
+        var state by mutableStateOf(loaded(channels = many))
+        composeRule.setContent {
+            ChannelsScreen(state = state, now = now, actions = ChannelsActions({}, {}, {}, {}, {}, {}, {}))
+        }
+        composeRule.onNodeWithTag(ChannelsScreenTags.GRID).performScrollToIndex(many.lastIndex)
+
+        state = loaded(channels = many, filter = ChannelFilter(tag = "Sports"))
+
+        composeRule.onNodeWithText("Channel 1").assertIsDisplayed()
     }
 
     @Test

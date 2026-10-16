@@ -1,6 +1,9 @@
 package org.jellyfin.mobile.music.library
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
@@ -8,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.music.catalog.album
 import org.jellyfin.mobile.music.domain.Album
@@ -87,6 +91,18 @@ class AlbumsScreenTest {
         composeRule.onNodeWithText("Recently added").performClick()
 
         chosen shouldBe AlbumSort.RECENTLY_ADDED
+    }
+
+    @Test
+    fun `changing the sort goes back to the top of the albums`() {
+        val albums = List(60) { album("$it", "Album number $it") }
+        var state by mutableStateOf<AlbumsUiState>(AlbumsUiState.Loaded(albums, sort = AlbumSort.TITLE))
+        composeRule.setContent { AlbumsScreen(state = state, onRetry = {}, onAlbumClick = {}) }
+        composeRule.onNodeWithTag(AlbumsScreenTags.GRID).performScrollToIndex(albums.lastIndex)
+
+        state = AlbumsUiState.Loaded(albums.reversed(), sort = AlbumSort.YEAR)
+
+        composeRule.onNodeWithText("Album number 59").assertIsDisplayed()
     }
 
     @Test
