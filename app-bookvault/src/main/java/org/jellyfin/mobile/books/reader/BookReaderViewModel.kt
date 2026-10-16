@@ -73,14 +73,21 @@ class BookReaderViewModel(
      */
     @Suppress("TooGenericExceptionCaught")
     fun loadBook(bookItemId: String, initialNightMode: Boolean) {
-        currentBookItemId = bookItemId
-        _nightMode.value = initialNightMode
-        viewModelScope.launch {
-            bookBookmarkDao.getForBook(bookItemId).collect { bookmarks -> _bookmarks.value = bookmarks }
+        val sameBook = bookItemId == currentBookItemId
+        // The fragment asks again each time it's recreated (rotation): the book is already open,
+        // as the reader left it, night mode and all. Only a book that failed to open is tried again.
+        if (sameBook && _error.value == null) return
+        if (!sameBook) {
+            currentBookItemId = bookItemId
+            _nightMode.value = initialNightMode
+            viewModelScope.launch {
+                bookBookmarkDao.getForBook(bookItemId).collect { bookmarks -> _bookmarks.value = bookmarks }
+            }
         }
+        // Loading from the moment it's asked for, so no one reads the last attempt's error in between
+        _loading.value = true
+        _error.value = null
         viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
             try {
                 val savedProgress = bookProgressDao.getProgress(bookItemId)
                 val cachedFile = bookFiles.fileFor(bookItemId)
