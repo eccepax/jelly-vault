@@ -69,3 +69,17 @@ fun ConfirmDialog(
         backgroundColor = MaterialTheme.colors.surface,
     )
 }
+
+/** Tells the user something, with one button to close it. */
+@Composable
+fun NoticeDialog(message: String, onDismiss: () -> Unit, title: String? = null) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = title?.let { { Text(it) } },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.ok)) }
+        },
+        backgroundColor = MaterialTheme.colors.surface,
+    )
+}

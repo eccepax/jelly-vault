@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.library.BookLibraryFragment
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
+import org.jellyfin.mobile.books.library.BookSortOption
+import org.jellyfin.mobile.books.library.ProgressFilter
 import org.jellyfin.mobile.books.setup.BookConnectFragment
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
@@ -58,6 +60,10 @@ class BookMainActivityTest {
         every { libraryViewModel.error } returns MutableStateFlow(null)
         every { libraryViewModel.downloadedIds } returns MutableStateFlow(emptySet())
         every { libraryViewModel.showDownloadedOnly } returns MutableStateFlow(false)
+        every { libraryViewModel.searchQuery } returns MutableStateFlow("")
+        every { libraryViewModel.sortOption } returns MutableStateFlow(BookSortOption.TITLE)
+        every { libraryViewModel.progressFilter } returns MutableStateFlow(ProgressFilter.ALL)
+        every { libraryViewModel.tagFilter } returns MutableStateFlow(null)
 
         startKoin {
             modules(

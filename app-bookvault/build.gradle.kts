@@ -63,7 +63,6 @@ dependencies {
     // UI
     implementation(libs.google.material)
     implementation(libs.androidx.constraintlayout)
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation(libs.androidx.viewpager2)
 
     // Jetpack Compose

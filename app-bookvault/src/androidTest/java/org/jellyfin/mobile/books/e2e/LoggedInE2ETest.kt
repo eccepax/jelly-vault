@@ -1,19 +1,17 @@
 package org.jellyfin.mobile.books.e2e
 
-import androidx.recyclerview.widget.RecyclerView
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.contrib.RecyclerViewActions.actionOnItemAtPosition
-import androidx.test.espresso.matcher.ViewMatchers.hasMinimumChildCount
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.not
 import org.jellyfin.mobile.books.BookMainActivity
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.data.BookDatabase
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 
@@ -30,11 +28,19 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
         onMain { koinGet<ItemDownloads>().run { downloads.value.keys.forEach(::remove) } }
     }
 
-    /** Connects and logs in, returning once the library's item list is on screen. */
+    /** Connects and logs in, returning once the library shows at least one book. */
     protected fun loginAndWaitForLibrary() {
         connectAndSignIn()
-        waitForView(allOf(withId(R.id.recycler_view_list), hasMinimumChildCount(1)))
+        waitForLibraryItems()
     }
+
+    /** Waits until the library shows at least one book. */
+    protected fun waitForLibraryItems(timeoutMillis: Long = WAIT_TIMEOUT_MS) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) { libraryItems().fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    /** The books the library has on screen (a lazy list only composes those). */
+    protected fun libraryItems() = composeRule.onAllNodesWithTag(VaultTestTags.LIBRARY_ITEM)
 
     /**
      * Taps the library item at [position] (default: the first) and waits for the reader screen to
@@ -42,8 +48,7 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
      * `BookReaderFragment`'s `loading` collector).
      */
     protected fun openBookAtPosition(position: Int = 0) {
-        onView(withId(R.id.recycler_view_list))
-            .perform(actionOnItemAtPosition<RecyclerView.ViewHolder>(position, click()))
+        libraryItems()[position].performClick()
 
         waitForReaderToFinishLoading()
     }

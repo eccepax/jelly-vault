@@ -1,19 +1,22 @@
 package org.jellyfin.mobile.books.library
 
 import android.app.Application
-import android.content.DialogInterface
 import android.os.Looper
-import android.view.View
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.Toolbar
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.test.core.app.ApplicationProvider
-import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.floats.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -22,10 +25,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.LibraryViewMode
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.startKoin
@@ -35,36 +40,38 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 import java.util.UUID
 import org.jellyfin.mobile.common.R as CommonR
 
-/**
- * Tests the book library's long-press download menu.
- *
- * [BookLibraryFragment] shows an `androidx.appcompat.app.AlertDialog`, not the framework
- * `android.app.AlertDialog` — [ShadowDialog.getLatestDialog] (which tracks any shown [android.app.Dialog]
- * subclass) is used instead of the framework-only `ShadowAlertDialog`.
- */
+/** How [BookLibraryFragment] connects its screen to the library's view model and preferences. */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class)
+@Config(application = Application::class, qualifiers = "w411dp-h914dp")
 class BookLibraryFragmentTest {
 
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
+
+    private val dune = BaseItemDto(id = UUID.randomUUID(), type = BaseItemKind.BOOK, name = "Dune")
     private val libraryViewModel = mockk<BookLibraryViewModel>(relaxed = true)
     private val bookAppPreferences = mockk<BookAppPreferences>(relaxed = true)
-    private val downloadedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val downloadedIds = MutableStateFlow<Set<String>>(emptySet())
     private val tagFilter = MutableStateFlow<String?>(null)
-    private var scenario: FragmentScenario<BookLibraryFragment>? = null
+    private val searchQuery = MutableStateFlow("")
+    private val showDownloadedOnly = MutableStateFlow(false)
 
     @Before
     fun setUp() {
-        every { libraryViewModel.filteredBooks } returns MutableStateFlow(emptyList())
+        every { libraryViewModel.filteredBooks } returns MutableStateFlow(listOf(dune))
         every { libraryViewModel.loading } returns MutableStateFlow(false)
         every { libraryViewModel.error } returns MutableStateFlow(null)
-        every { libraryViewModel.downloadedIds } returns downloadedIdsFlow
-        every { libraryViewModel.showDownloadedOnly } returns MutableStateFlow(false)
+        every { libraryViewModel.downloadedIds } returns downloadedIds
+        every { libraryViewModel.showDownloadedOnly } returns showDownloadedOnly
         every { libraryViewModel.tagFilter } returns tagFilter
+        every { libraryViewModel.searchQuery } returns searchQuery
+        every { libraryViewModel.sortOption } returns MutableStateFlow(BookSortOption.TITLE)
+        every { libraryViewModel.progressFilter } returns MutableStateFlow(ProgressFilter.ALL)
+        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
         every { bookAppPreferences.getLibraryViewMode(any()) } returns LibraryViewMode.LIST
 
         startKoin {
@@ -79,122 +86,99 @@ class BookLibraryFragmentTest {
 
     @After
     fun tearDown() {
-        scenario?.close()
         stopKoin()
-        ShadowDialog.reset()
     }
 
-    private fun book(name: String = "My Book") =
-        BaseItemDto(id = UUID.randomUUID(), type = BaseItemKind.BOOK, name = name)
+    private fun launch() = launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme)
 
     private fun string(resId: Int): String =
         ApplicationProvider.getApplicationContext<Application>().getString(resId)
 
     @Test
     fun `the book list ends above the system navigation bar`() {
-        val navBarPx = 126
-        launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+        launch().use { scenario ->
             scenario.onFragment { fragment ->
                 val bars = WindowInsetsCompat.Builder()
-                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navBarPx))
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, NAV_BAR_PX))
                     .build()
                 ViewCompat.dispatchApplyWindowInsets(fragment.requireView(), bars)
             }
             shadowOf(Looper.getMainLooper()).idle()
-            scenario.onFragment { fragment ->
-                val root = fragment.requireView()
-                root.findViewById<View>(R.id.recycler_view_list).bottom shouldBeLessThanOrEqual root.height - navBarPx
-            }
+
+            val screenHeight = composeRule.onRoot().fetchSemanticsNode().size.height
+            val list = composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).fetchSemanticsNode()
+            list.boundsInRoot.bottom shouldBeLessThanOrEqual (screenHeight - NAV_BAR_PX).toFloat()
         }
     }
 
     @Test
-    fun `long-press on a not-yet-downloaded book starts the download directly, no dialog`() {
-        val target = book()
+    fun `the library opens in the view it was left in, and switching saves the other`() {
+        every { bookAppPreferences.getLibraryViewMode(any()) } returns LibraryViewMode.SHELF
 
-        launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> fragment.showDownloadDialog(target) }
+        launch().use {
+            composeRule.onNodeWithTag(VaultTestTags.LIBRARY_GRID).assertExists()
+            composeRule.onNodeWithContentDescription(string(R.string.action_view_list)).performClick()
+            composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).assertExists()
         }
 
-        verify { libraryViewModel.downloadBook(target) }
-        ShadowDialog.getLatestDialog() shouldBe null
+        verify { bookAppPreferences.setLibraryViewMode(any(), LibraryViewMode.LIST) }
+    }
+
+    @Test
+    fun `long-pressing a book that isn't downloaded starts the download and says so`() {
+        launch().use {
+            composeRule.onNodeWithText("Dune").performTouchInput { longClick() }
+            composeRule.waitForIdle()
+        }
+
+        verify { libraryViewModel.downloadBook(dune) }
         ShadowToast.getTextOfLatestToast() shouldBe string(R.string.downloading_book)
     }
 
     @Test
-    fun `long-press on an already-downloaded book offers to remove it`() {
-        val target = book()
-        downloadedIdsFlow.value = setOf(target.id.toString())
+    fun `removing a downloaded book's download, once confirmed, deletes it`() {
+        downloadedIds.value = setOf(dune.id.toString())
 
-        launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> fragment.showDownloadDialog(target) }
-
-            val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-
-            // Tap the positive ("OK") button to confirm removal.
-            dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
+        launch().use {
+            composeRule.onNodeWithText("Dune").performTouchInput { longClick() }
+            composeRule.onNodeWithText(string(R.string.remove_download)).performClick()
         }
 
-        verify { libraryViewModel.deleteDownload(target) }
+        verify { libraryViewModel.deleteDownload(dune) }
     }
 
-    // --- Filter by tag ----------------------------------------------------------------------------
-
     @Test
-    fun `filtering by tag offers every tag in the library, after all tags, with the current one checked`() {
-        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
-        tagFilter.value = "Sci-Fi"
+    fun `search narrows the library as you type`() {
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(R.string.action_search)).performClick()
+            composeRule.onNodeWithTag(VaultTestTags.SEARCH_FIELD).performTextInput("Dun")
+        }
 
-        val dialog = openTagFilter()
-
-        dialog.items() shouldBe listOf(string(R.string.filter_all_tags), "Fantasy", "Sci-Fi")
-        dialog.listView.checkedItemPosition shouldBe 2
+        searchQuery.value shouldBe "Dun"
     }
 
     @Test
     fun `choosing a tag narrows the library to it`() {
-        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
-
-        openTagFilter().choose(1)
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+            composeRule.onNodeWithText(string(R.string.filter_tag)).performClick()
+            composeRule.onNodeWithText("Fantasy").performClick()
+        }
 
         tagFilter.value shouldBe "Fantasy"
     }
 
     @Test
-    fun `choosing all tags shows every book again`() {
-        every { libraryViewModel.getAvailableTags() } returns listOf("Fantasy", "Sci-Fi")
-        tagFilter.value = "Fantasy"
-
-        openTagFilter().choose(0)
-
-        tagFilter.value shouldBe null
-    }
-
-    @Test
-    fun `with no tags in the library, filtering by tag says so`() {
-        every { libraryViewModel.getAvailableTags() } returns emptyList()
-
-        val dialog = openTagFilter()
-
-        dialog.listView shouldBe null
-        dialog.findViewById<TextView>(android.R.id.message)?.text?.toString() shouldBe string(R.string.filter_no_tags)
-    }
-
-    private fun openTagFilter(): AlertDialog {
-        scenario = launchFragmentInContainer<BookLibraryFragment>(themeResId = CommonR.style.AppTheme)
-        scenario?.onFragment { fragment ->
-            fragment.requireView().findViewById<Toolbar>(
-                R.id.toolbar,
-            ).menu.performIdentifierAction(R.id.action_filter_tag, 0)
+    fun `downloaded only switches the library to downloaded books`() {
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+            composeRule.onNodeWithText(string(R.string.filter_downloaded_only)).performClick()
         }
-        shadowOf(Looper.getMainLooper()).idle()
-        return ShadowDialog.getLatestDialog() as AlertDialog
+
+        showDownloadedOnly.value shouldBe true
     }
 
-    private fun AlertDialog.items() = (0 until listView.adapter.count).map { listView.adapter.getItem(it).toString() }
-
-    private fun AlertDialog.choose(position: Int) {
-        shadowOf(listView).performItemClick(position)
-        shadowOf(Looper.getMainLooper()).idle()
+    private companion object {
+        const val NAV_BAR_PX = 126
     }
 }

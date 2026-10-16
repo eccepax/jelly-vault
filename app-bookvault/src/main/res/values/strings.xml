@@ -4,6 +4,11 @@
     <!-- Library -->
     <string name="library">Library</string>
     <string name="search_hint">Search by title or author</string>
+    <string name="library_empty">No books to show</string>
+    <string name="action_search">Search</string>
+    <string name="action_close_search">Close search</string>
+    <string name="action_view_shelf">Show as a shelf</string>
+    <string name="action_view_list">Show as a list</string>
     <string name="sort_by">Sort by</string>
     <string name="sort_title">Title</string>
     <string name="sort_author">Author</string>
@@ -18,6 +23,7 @@
     <string name="filter_finished">Finished</string>
     <string name="filter_downloaded_only">Downloaded only</string>
     <string name="remove_download">Remove download</string>
+    <string name="remove_download_confirm">Remove this book from the device? You can still read it while connected to your server.</string>
     <string name="downloading_book">Downloading…</string>
     <string name="downloads_channel">Downloads</string>
     <plurals name="downloading_books">

@@ -16,9 +16,11 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
@@ -167,5 +169,36 @@ class ComponentsTest {
         composeRule.onNodeWithText("Dune").performClick()
 
         taps shouldBe 1
+    }
+
+    @Test
+    fun `a grid card tells a tap from a long press`() {
+        val events = mutableListOf<String>()
+        show {
+            MediaGridCard(
+                title = "Dune",
+                subtitle = null,
+                cover = {},
+                onClick = { events += "tap" },
+                onLongClick = { events += "long press" },
+            )
+        }
+
+        composeRule.onNodeWithText("Dune").performClick()
+        composeRule.onNodeWithText("Dune").performTouchInput { longClick() }
+
+        events shouldBe listOf("tap", "long press")
+    }
+
+    @Test
+    fun `a notice closes on OK`() {
+        show {
+            var open by remember { mutableStateOf(true) }
+            if (open) NoticeDialog(message = "No tags yet", onDismiss = { open = false })
+        }
+
+        composeRule.onNodeWithText("OK").performClick()
+
+        composeRule.onNodeWithText("No tags yet").assertDoesNotExist()
     }
 }

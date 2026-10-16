@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.common.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,7 +62,10 @@ fun MediaListRow(
     }
 }
 
-/** One item in a grid or a shelf: its cover, with the title and a subtitle under it. */
+/**
+ * One item in a grid or a shelf: its cover, with the title and a subtitle under it. [onLongClick]
+ * opens whatever the item offers besides opening it, such as downloading.
+ */
 @Composable
 fun MediaGridCard(
     title: String,
@@ -69,8 +73,9 @@ fun MediaGridCard(
     cover: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
 ) {
-    Column(modifier = modifier.clickable(onClick = onClick)) {
+    Column(modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         cover()
         Text(
             text = title,
