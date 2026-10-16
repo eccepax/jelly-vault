@@ -64,6 +64,7 @@
     <string name="pref_download_location">Download location</string>
     <string name="view_downloads">View downloads</string>
     <string name="downloads">Downloads</string>
+    <string name="downloads_empty">No downloaded audiobooks yet</string>
     <plurals name="downloading_tracks">
         <item quantity="one">Downloading %d track</item>
         <item quantity="other">Downloading %d tracks</item>
