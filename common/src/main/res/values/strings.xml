@@ -42,4 +42,8 @@
     <string name="vault_downloaded">Downloaded</string>
     <string name="vault_search_clear">Clear search</string>
     <string name="vault_offline_banner">Offline · showing your downloads</string>
+    <string name="settings_about">About</string>
+    <string name="about_app_version">%1$s %2$s</string>
+    <string name="report_bug">Report a bug</string>
+    <string name="report_bug_summary">Opens a form on GitHub</string>
 </resources>

@@ -1,0 +1,32 @@
+name: Issues / App label
+
+# Labels a new issue with the app(s) chosen in its form's "App" dropdown, e.g. "app: tunevault",
+# so issues can be filtered by app.
+on:
+  issues:
+    types:
+      - opened
+      - edited
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    name: Label by app
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Add the chosen apps' labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          # The form renders the dropdown as "### App", a blank line, then "AudioVault, TuneVault"
+          apps=$(printf '%s\n' "$BODY" | awk '/^### /{inapp = ($0 == "### App"); next} inapp && NF {print; exit}')
+          for app in AudioVault BookVault TuneVault LiveVault; do
+            case ", $apps," in
+              *", $app,"*) gh issue edit "$ISSUE" --add-label "app: $(echo "$app" | tr '[:upper:]' '[:lower:]')" ;;
+            esac
+          done

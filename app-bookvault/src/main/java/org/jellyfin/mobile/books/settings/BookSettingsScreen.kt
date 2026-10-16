@@ -27,6 +27,7 @@ import org.jellyfin.mobile.books.reader.TextSetting
 import org.jellyfin.mobile.books.reader.TextSettingActions
 import org.jellyfin.mobile.books.reader.TextSettingPicker
 import org.jellyfin.mobile.books.reader.TextSettingRows
+import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutSetting
@@ -40,6 +41,9 @@ data class BookSettingsState(
     val fontFamily: EpubFontFamily,
     val lineSpacing: Float,
     val removeDownloadsOnSignOut: Boolean,
+    /** For About: the name as the bug form lists it, and the version. */
+    val appName: String,
+    val appVersion: String,
 ) {
     val textSettings get() = EpubTextSettings(fontScale, fontFamily, lineSpacing)
 }
@@ -79,6 +83,8 @@ fun BookSettingsScreen(state: BookSettingsState, actions: BookSettingsActions) {
                 TextSettingRows(state.textSettings) { picker = it }
                 Divider()
                 AccountSection(state.removeDownloadsOnSignOut, actions)
+                Divider()
+                AboutSettings(appName = state.appName, version = state.appVersion)
             }
         }
     }

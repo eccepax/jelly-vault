@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.SettingsActionRow
@@ -40,6 +41,9 @@ data class SettingsUiState(
     /** The networks downloads may use; none chosen yet means Wi-Fi only, as downloads treat it. */
     @DownloadMethod val downloadMethod: Int?,
     val removeDownloadsOnSignOut: Boolean,
+    /** For About: the name as the bug form lists it, and the version. */
+    val appName: String,
+    val appVersion: String,
 )
 
 /** What the settings screen can change. */
@@ -80,6 +84,8 @@ fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                 DownloadsSection(state, actions)
                 Divider()
                 AccountSection(state, actions)
+                Divider()
+                AboutSettings(appName = state.appName, version = state.appVersion)
             }
         }
     }

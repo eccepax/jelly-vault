@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.livetv.channels
 
 import android.app.Application
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,6 +11,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
@@ -28,6 +31,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
+import org.jellyfin.mobile.common.ui.components.bugReportUrl
+import org.jellyfin.mobile.livetv.BuildConfig
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
@@ -60,6 +65,7 @@ class ChannelsScreenTest {
     private var clicked: LiveChannel? = null
     private var retried = false
     private var signedOut = false
+    private val opened = mutableListOf<String>()
 
     private fun loaded(
         channels: List<LiveChannel> = listOf(bulls, espn, tubi),
@@ -79,21 +85,28 @@ class ChannelsScreenTest {
                     ready = true
                 }
             }
+            val uriHandler = object : UriHandler {
+                override fun openUri(uri: String) {
+                    opened += uri
+                }
+            }
             if (ready) {
-                ChannelsScreen(
-                    state = state,
-                    now = now,
-                    onTv = onTv,
-                    actions = ChannelsActions(
-                        onQueryChange = { query = it },
-                        onTagSelect = { tagSelected = it },
-                        onFavoritesSelect = { favoritesSelected = true },
-                        onFavoriteToggle = { favoriteToggled = it },
-                        onChannelClick = { clicked = it },
-                        onSignOut = { signedOut = true },
-                        onRetry = { retried = true },
-                    ),
-                )
+                CompositionLocalProvider(LocalUriHandler provides uriHandler) {
+                    ChannelsScreen(
+                        state = state,
+                        now = now,
+                        onTv = onTv,
+                        actions = ChannelsActions(
+                            onQueryChange = { query = it },
+                            onTagSelect = { tagSelected = it },
+                            onFavoritesSelect = { favoritesSelected = true },
+                            onFavoriteToggle = { favoriteToggled = it },
+                            onChannelClick = { clicked = it },
+                            onSignOut = { signedOut = true },
+                            onRetry = { retried = true },
+                        ),
+                    )
+                }
             }
         }
     }
@@ -277,6 +290,17 @@ class ChannelsScreenTest {
 
         signedOut shouldBe false
         composeRule.onNodeWithText("Yes, sign out").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the menu says which version this is, and reporting a bug opens the form for it`() {
+        show(loaded())
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("LiveVault ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
+        composeRule.onNodeWithText("Report a bug").performClick()
+
+        opened shouldBe listOf(bugReportUrl("LiveVault", BuildConfig.VERSION_NAME))
     }
 
     @Test

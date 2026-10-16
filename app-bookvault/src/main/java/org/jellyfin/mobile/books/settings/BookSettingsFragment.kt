@@ -17,6 +17,7 @@ import org.jellyfin.mobile.books.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 
@@ -26,6 +27,7 @@ class BookSettingsFragment : Fragment() {
     private val binding get() = _binding!!
     private val mainViewModel: MainViewModel by activityViewModel()
     private val appPreferences: BookAppPreferences by inject()
+    private val clientInfo: ClientInfo by inject()
 
     private var state by mutableStateOf<BookSettingsState?>(null)
 
@@ -59,6 +61,8 @@ class BookSettingsFragment : Fragment() {
         fontFamily = appPreferences.epubFontFamily,
         lineSpacing = appPreferences.epubLineSpacing,
         removeDownloadsOnSignOut = appPreferences.removeDownloadsOnSignOut,
+        appName = clientInfo.name,
+        appVersion = clientInfo.version,
     )
 
     override fun onDestroyView() {

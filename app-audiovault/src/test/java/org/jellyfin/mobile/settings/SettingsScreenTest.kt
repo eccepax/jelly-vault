@@ -38,6 +38,8 @@ class SettingsScreenTest {
         flatLibrary = true,
         downloadMethod = DownloadMethod.WIFI_ONLY,
         removeDownloadsOnSignOut = false,
+        appName = "AudioVault",
+        appVersion = "1.2.3",
     )
     private val events = mutableListOf<String>()
 
@@ -159,5 +161,13 @@ class SettingsScreenTest {
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_back)).performClick()
 
         events shouldBe listOf("back")
+    }
+
+    @Test
+    fun `about says which app and version this is, with a way to report a bug`() {
+        show()
+
+        composeRule.onNodeWithText("AudioVault 1.2.3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Report a bug").performScrollTo().assertIsDisplayed()
     }
 }

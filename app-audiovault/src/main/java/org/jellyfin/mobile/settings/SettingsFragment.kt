@@ -18,6 +18,7 @@ import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.downloads.applyDownloadMethod
+import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 
@@ -26,6 +27,7 @@ class SettingsFragment : Fragment() {
     private val mainViewModel: MainViewModel by activityViewModel()
     private val appPreferences: AudioVaultAppPreferences by inject()
     private val downloadManager: DownloadManager by inject()
+    private val clientInfo: ClientInfo by inject()
 
     private var _binding: FragmentComposeBinding? = null
     private val binding get() = _binding!!
@@ -67,6 +69,8 @@ class SettingsFragment : Fragment() {
         flatLibrary = appPreferences.libraryGlobalFlattened,
         downloadMethod = appPreferences.downloadMethod,
         removeDownloadsOnSignOut = appPreferences.removeDownloadsOnSignOut,
+        appName = clientInfo.name,
+        appVersion = clientInfo.version,
     )
 
     override fun onDestroyView() {

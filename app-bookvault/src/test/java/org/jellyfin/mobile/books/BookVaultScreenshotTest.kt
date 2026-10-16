@@ -21,6 +21,7 @@ import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
+import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
@@ -121,6 +122,7 @@ class BookVaultScreenshotTest {
             modules(
                 module {
                     single { preferences }
+                    single { ClientInfo("BookVault", "1.0.0") }
                     viewModel { mockk<MainViewModel>(relaxed = true) }
                 },
             )

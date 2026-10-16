@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.settings
 
 import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -16,6 +17,7 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.sdk.model.ClientInfo
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -49,6 +51,7 @@ class SettingsFragmentTest {
                 module {
                     single { appPreferences }
                     single { downloadManager }
+                    single { ClientInfo("AudioVault", "9.9.9") }
                     viewModel { mainViewModel }
                 },
             )
@@ -61,6 +64,13 @@ class SettingsFragmentTest {
     }
 
     private fun launch() = launchFragmentInContainer<SettingsFragment>(themeResId = CommonR.style.AppTheme)
+
+    @Test
+    fun `about shows the app and version the app was built as`() {
+        launch().use {
+            composeRule.onNodeWithText("AudioVault 9.9.9").performScrollTo().assertIsDisplayed()
+        }
+    }
 
     @Test
     fun `turning on skip silence saves it`() {

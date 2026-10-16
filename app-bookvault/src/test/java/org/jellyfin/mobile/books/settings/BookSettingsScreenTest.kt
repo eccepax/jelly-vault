@@ -31,6 +31,8 @@ class BookSettingsScreenTest {
         fontFamily = EpubFontFamily.SANS_SERIF,
         lineSpacing = 1.5f,
         removeDownloadsOnSignOut = false,
+        appName = "BookVault",
+        appVersion = "1.2.3",
     )
     private val events = mutableListOf<String>()
 
@@ -141,5 +143,13 @@ class BookSettingsScreenTest {
         composeRule.onNodeWithContentDescription("Back").performClick()
 
         events shouldBe listOf("back")
+    }
+
+    @Test
+    fun `about says which app and version this is, with a way to report a bug`() {
+        show()
+
+        composeRule.onNodeWithText("BookVault 1.2.3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Report a bug").performScrollTo().assertIsDisplayed()
     }
 }

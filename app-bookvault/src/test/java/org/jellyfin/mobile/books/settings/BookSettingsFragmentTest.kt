@@ -2,6 +2,7 @@ package org.jellyfin.mobile.books.settings
 
 import android.app.Application
 import android.os.Looper
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -20,6 +21,7 @@ import io.mockk.mockk
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.sdk.model.ClientInfo
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -50,6 +52,7 @@ class BookSettingsFragmentTest {
             modules(
                 module {
                     single { BookAppPreferences(context) }
+                    single { ClientInfo("BookVault", "9.9.9") }
                     viewModel { mainViewModel }
                 },
             )
@@ -62,6 +65,13 @@ class BookSettingsFragmentTest {
     }
 
     private fun launch() = launchFragmentInContainer<BookSettingsFragment>(themeResId = CommonR.style.AppTheme)
+
+    @Test
+    fun `about shows the app and version the app was built as`() {
+        launch().use {
+            composeRule.onNodeWithText("BookVault 9.9.9").performScrollTo().assertIsDisplayed()
+        }
+    }
 
     @Test
     fun `reading settings chosen here apply to every book`() {

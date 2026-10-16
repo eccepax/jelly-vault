@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.InlineConfirm
 import org.jellyfin.mobile.common.ui.components.SecondaryText
@@ -97,11 +98,8 @@ fun SettingsScreen(
                 Divider()
                 AccountSection(state, onSignOut)
                 Divider()
-                SectionHeader(R.string.settings_about)
-                Text(
-                    stringResource(R.string.app_version, state.appVersion),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                // The name as the bug form lists it (not app_name, which debug builds change)
+                AboutSettings(appName = "TuneVault", version = state.appVersion)
             }
         }
     }

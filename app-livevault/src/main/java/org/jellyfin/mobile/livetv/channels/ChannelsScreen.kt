@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -68,15 +69,18 @@ import org.jellyfin.mobile.common.ui.components.EmptyState
 import org.jellyfin.mobile.common.ui.components.ErrorState
 import org.jellyfin.mobile.common.ui.components.LoadingState
 import org.jellyfin.mobile.common.ui.components.SearchField
+import org.jellyfin.mobile.common.ui.components.bugReportUrl
 import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultColors
 import org.jellyfin.mobile.common.ui.theme.focusBorder
+import org.jellyfin.mobile.livetv.BuildConfig
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.koin.compose.viewmodel.koinViewModel
 import java.time.Instant
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
@@ -160,6 +164,8 @@ private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: ()
 private fun MoreMenu(onSignOut: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
+    // Read here: the menu is its own window, whose composition has its own handler
+    val uriHandler = LocalUriHandler.current
     if (confirming) {
         ConfirmDialog(
             message = stringResource(R.string.sign_out_question),
@@ -173,6 +179,19 @@ private fun MoreMenu(onSignOut: () -> Unit) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.channels_more_options))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            val appName = "LiveVault" // as the bug form lists it
+            // Which version this is, for a bug report; there's no settings screen to show it on
+            DropdownMenuItem(onClick = {}, enabled = false) {
+                Text(stringResource(CommonR.string.about_app_version, appName, BuildConfig.VERSION_NAME))
+            }
+            DropdownMenuItem(
+                onClick = {
+                    expanded = false
+                    uriHandler.openUri(bugReportUrl(appName, BuildConfig.VERSION_NAME))
+                },
+            ) {
+                Text(stringResource(CommonR.string.report_bug))
+            }
             DropdownMenuItem(
                 onClick = {
                     expanded = false

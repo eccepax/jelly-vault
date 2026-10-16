@@ -66,6 +66,13 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun `there's a way to report a bug`() {
+        show()
+
+        composeRule.onNodeWithText("Report a bug").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun `the saved quality is selected and another can be chosen`() {
         show(signedIn.copy(streamingQuality = StreamingQuality.NORMAL))
 

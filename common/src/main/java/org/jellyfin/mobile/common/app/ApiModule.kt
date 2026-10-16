@@ -18,6 +18,8 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 fun apiModule(clientInfo: ClientInfo) = module {
+    // Also which app and version this is, e.g. for Settings' About
+    single { clientInfo }
     single {
         createJellyfin {
             context = androidContext()
