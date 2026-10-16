@@ -35,6 +35,7 @@
     <!-- Shared components (ui/components); vault_ so they never override an app's own strings -->
     <string name="vault_retry">Retry</string>
     <string name="vault_cancel">Cancel</string>
+    <string name="vault_back">Back</string>
     <string name="vault_downloaded">Downloaded</string>
     <string name="vault_search_clear">Clear search</string>
     <string name="vault_offline_banner">Offline · showing your downloads</string>

@@ -29,6 +29,10 @@
     <string name="settings">Settings</string>
     <string name="pref_category_account">Account</string>
     <string name="pref_sign_out">Sign out</string>
+    <string name="sign_out_confirm">Sign out of this server?</string>
+    <string name="sign_out_keeps_downloads">Your downloaded books stay on this device.</string>
+    <string name="sign_out_removes_downloads">Your downloaded books will be removed from this device.</string>
+    <string name="sign_out_yes">Yes, sign out</string>
 
     <!-- Reader chapter navigation -->
     <string name="chapter_prev">Previous chapter</string>

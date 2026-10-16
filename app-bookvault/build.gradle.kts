@@ -64,7 +64,6 @@ dependencies {
     implementation(libs.google.material)
     implementation(libs.androidx.constraintlayout)
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation(libs.modernandroidpreferences)
     implementation(libs.androidx.viewpager2)
 
     // Jetpack Compose
@@ -109,6 +108,7 @@ dependencies {
     testImplementation(project(":common-testing"))
     testImplementation(project(":test-support"))
     testImplementation(libs.androidx.fragment.testing)
+    testImplementation(libs.compose.ui.test.junit4)
     // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
     // into the debug variant, which is what unit tests actually run against.
     debugImplementation(libs.androidx.fragment.testing.manifest)
