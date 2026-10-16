@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -80,12 +81,14 @@ data class LoginInUse(val holders: List<ChannelSession>)
 object PlayerScreenTags {
     const val BUFFERING = "player_buffering"
     const val VIDEO_PLAYING = "player_video_playing"
+    const val FAILED_SMALL = "player_failed_small"
 }
 
 /**
  * Full-screen live TV: [video] underneath, and an overlay naming the channel that stays while
  * tuning or on a failure, and otherwise hides a few seconds after the last change or tap. The
- * remote's up/down (and channel keys) zap; on touch screens the overlay has buttons.
+ * remote's up/down (and channel keys) zap; on touch screens the overlay has buttons. In the
+ * picture-in-picture window, [inPictureInPicture], there's only the video (or a sign it failed).
  */
 @Composable
 fun PlayerScreen(
@@ -95,7 +98,12 @@ fun PlayerScreen(
     onExit: () -> Unit,
     onShowFree: () -> Unit,
     video: @Composable () -> Unit,
+    inPictureInPicture: Boolean = false,
 ) {
+    if (inPictureInPicture) {
+        PictureInPictureContent(state, video)
+        return
+    }
     val focus = remember { FocusRequester() }
     var overlayRequests by remember { mutableIntStateOf(0) }
     var overlayHidden by remember { mutableIntStateOf(-1) }
@@ -134,6 +142,22 @@ fun PlayerScreen(
         video()
         Center(state, onRetry, onExit, onShowFree)
         if (overlayVisible) Overlay(state.channel, onZap, onExit)
+    }
+}
+
+/** The floating window is too small to read or tap: the video, or a sign the channel failed. */
+@Composable
+private fun PictureInPictureContent(state: WatchUiState, video: @Composable () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        video()
+        if (state.playback is PlaybackState.Failed) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = stringResource(R.string.player_failed),
+                tint = Color.White,
+                modifier = Modifier.testTag(PlayerScreenTags.FAILED_SMALL),
+            )
+        }
     }
 }
 
@@ -293,12 +317,16 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
         }
     }
     FullScreen()
+    // Leaving the app while a channel plays carries on in a floating window
+    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing)
+    val inPictureInPicture = rememberInPictureInPicture()
     PlayerScreen(
         state = state,
         onZap = viewModel::zap,
         onRetry = viewModel::retry,
         onExit = viewModel::exit,
         onShowFree = onShowFree,
+        inPictureInPicture = inPictureInPicture,
         video = {
             val exoPlayer = (viewModel.player as? ExoLivePlayer)?.exoPlayer
             AndroidView(

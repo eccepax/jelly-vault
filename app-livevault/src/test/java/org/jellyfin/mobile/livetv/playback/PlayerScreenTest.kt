@@ -1,7 +1,10 @@
 package org.jellyfin.mobile.livetv.playback
 
 import android.app.Application
+import androidx.compose.material.Text
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -35,7 +38,12 @@ class PlayerScreenTest {
     private var exited = false
     private var showedFree = false
 
-    private fun show(playback: PlaybackState, videoStarted: Boolean = false, loginInUse: LoginInUse? = null) {
+    private fun show(
+        playback: PlaybackState,
+        videoStarted: Boolean = false,
+        loginInUse: LoginInUse? = null,
+        inPictureInPicture: Boolean = false,
+    ) {
         composeRule.setContent {
             PlayerScreen(
                 state = WatchUiState(
@@ -48,7 +56,8 @@ class PlayerScreenTest {
                 onRetry = { retried = true },
                 onExit = { exited = true },
                 onShowFree = { showedFree = true },
-                video = {},
+                video = { Text("video", Modifier.testTag(VIDEO)) },
+                inPictureInPicture = inPictureInPicture,
             )
         }
     }
@@ -173,6 +182,24 @@ class PlayerScreenTest {
 
         zaps shouldContainExactly listOf(+1, -1, +1, -1)
     }
+
+    @Test
+    fun `in the floating window there's only the video`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, inPictureInPicture = true)
+
+        composeRule.onNodeWithTag(VIDEO).assertIsDisplayed()
+        composeRule.onNodeWithText("Bulls").assertDoesNotExist()
+        composeRule.onNodeWithText("Bulls at Pacers").assertDoesNotExist()
+    }
+
+    @Test
+    fun `in the floating window, a failure still says so`() {
+        show(PlaybackState.Failed(bulls.id), inPictureInPicture = true)
+
+        composeRule.onNodeWithText("Bulls").assertDoesNotExist()
+        composeRule.onNodeWithTag(PlayerScreenTags.FAILED_SMALL).assertIsDisplayed()
+    }
 }
 
 private const val OVERLAY_GONE_MS = 5_000L
+private const val VIDEO = "video"
