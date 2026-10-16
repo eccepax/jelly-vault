@@ -5,6 +5,7 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.testing.VaultTestServer
@@ -34,9 +35,15 @@ class JellyfinPlaylistStoreContractTest {
         tracks = catalog.albumTracks(catalog.albums().first { it.title == "Discovery" }.id).take(4)
     }
 
+    // Not runCatching: a delete the server refuses must fail the run, or every run leaves
+    // playlists behind on the Vault (hundreds did, while the test account couldn't delete).
+    // The wait: Jellyfin writes a playlist's file in the background after a change, and a delete
+    // within about a second of one has the folder written back after it's gone, which the next
+    // library scan brings back as an empty playlist nobody owns.
     @AfterEach
     fun deleteTestPlaylists() = runBlocking<Unit> {
-        created.forEach { runCatching { store.deletePlaylist(it) } }
+        if (created.isNotEmpty()) delay(SERVER_SAVE_SETTLE_MS)
+        created.forEach { store.deletePlaylist(it) }
     }
 
     private suspend fun newPlaylist(vararg tracks: Track): String =
@@ -93,8 +100,10 @@ class JellyfinPlaylistStoreContractTest {
     @Test
     fun `a deleted playlist is gone`() = runBlocking<Unit> {
         val id = newPlaylist(tracks[0])
+        delay(SERVER_SAVE_SETTLE_MS) // see deleteTestPlaylists
 
         store.deletePlaylist(id)
+        created -= id
 
         store.playlists().map { it.id } shouldNotContain id
     }
@@ -125,3 +134,5 @@ class JellyfinPlaylistStoreContractTest {
         }
     }
 }
+
+private const val SERVER_SAVE_SETTLE_MS = 2_000L
