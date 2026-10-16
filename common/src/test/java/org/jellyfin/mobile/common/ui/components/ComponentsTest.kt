@@ -264,4 +264,27 @@ class ComponentsTest {
 
         composeRule.onNodeWithTag(VaultTestTags.LOADING).assertExists()
     }
+
+    @Test
+    fun `sign out asks in place, and only yes signs out`() {
+        var signedOut = 0
+        show {
+            SignOutSetting(
+                label = "Sign out",
+                confirmMessage = "Sign out of this server?",
+                confirmDetail = "Your downloads stay on this device.",
+                confirmLabel = "Yes, sign out",
+                onSignOut = { signedOut++ },
+            )
+        }
+
+        composeRule.onNodeWithText("Sign out").performClick()
+        composeRule.onNodeWithText("Your downloads stay on this device.").assertExists()
+        composeRule.onNodeWithText("Cancel").performClick()
+        signedOut shouldBe 0
+
+        composeRule.onNodeWithText("Sign out").performClick()
+        composeRule.onNodeWithText("Yes, sign out").performClick()
+        signedOut shouldBe 1
+    }
 }

@@ -10,9 +10,7 @@ import androidx.compose.material.Divider
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Surface
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
@@ -29,9 +27,9 @@ import org.jellyfin.mobile.books.reader.TextSetting
 import org.jellyfin.mobile.books.reader.TextSettingActions
 import org.jellyfin.mobile.books.reader.TextSettingPicker
 import org.jellyfin.mobile.books.reader.TextSettingRows
-import org.jellyfin.mobile.common.ui.components.InlineConfirm
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
+import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.common.R as CommonR
@@ -96,7 +94,6 @@ fun BookSettingsScreen(state: BookSettingsState, actions: BookSettingsActions) {
 
 @Composable
 private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSettingsActions) {
-    var confirming by rememberSaveable { mutableStateOf(false) }
     SettingsSectionHeader(stringResource(R.string.pref_category_account))
     SettingsSwitchRow(
         label = stringResource(CommonR.string.pref_remove_downloads_on_sign_out),
@@ -104,25 +101,13 @@ private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSetti
         checked = removeDownloadsOnSignOut,
         onCheckedChange = actions.onRemoveDownloadsOnSignOut,
     )
-    if (confirming) {
-        InlineConfirm(
-            message = stringResource(R.string.sign_out_confirm),
-            detail = stringResource(
-                if (removeDownloadsOnSignOut) R.string.sign_out_removes_downloads else R.string.sign_out_keeps_downloads,
-            ),
-            confirmLabel = stringResource(R.string.sign_out_yes),
-            onConfirm = {
-                confirming = false
-                actions.onSignOut()
-            },
-            onCancel = { confirming = false },
-        )
-    } else {
-        OutlinedButton(
-            onClick = { confirming = true },
-            modifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small),
-        ) {
-            Text(stringResource(R.string.pref_sign_out))
-        }
-    }
+    SignOutSetting(
+        label = stringResource(R.string.pref_sign_out),
+        confirmMessage = stringResource(R.string.sign_out_confirm),
+        confirmDetail = stringResource(
+            if (removeDownloadsOnSignOut) R.string.sign_out_removes_downloads else R.string.sign_out_keeps_downloads,
+        ),
+        confirmLabel = stringResource(R.string.sign_out_yes),
+        onSignOut = actions.onSignOut,
+    )
 }

@@ -54,14 +54,9 @@
     <string name="skip_media_segment">Skip</string>
 
     <string name="activity_name_settings">Settings</string>
-    <string name="pref_category_music_player">Music player</string>
-    <string name="pref_music_notification_always_dismissible_title">Dismissible player notification</string>
-    <string name="pref_music_notification_always_dismissible_summary_off">The notification can only be dismissed when playback is paused</string>
-    <string name="pref_music_notification_always_dismissible_summary_on">The notification can always be dismissed, even when playing media</string>
+    <string name="pref_category_playback">Playback</string>
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
     <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the fast-forward button to play faster until you let go</string>
-    <string name="pref_exoplayer_allow_background_audio">Background audio</string>
-    <string name="pref_exoplayer_allow_background_audio_summary">Allow playing videos in the background with audio-only</string>
     <string name="pref_skip_silence_title">Skip silence</string>
     <string name="pref_skip_silence_summary">Automatically speed through silent passages during playback</string>
 
@@ -108,4 +103,8 @@
 
     <string name="pref_category_account">Account</string>
     <string name="pref_sign_out">Sign out</string>
+    <string name="sign_out_confirm">Sign out of this server?</string>
+    <string name="sign_out_keeps_downloads">Your downloaded audiobooks stay on this device.</string>
+    <string name="sign_out_removes_downloads">Your downloaded audiobooks will be removed from this device.</string>
+    <string name="sign_out_yes">Yes, sign out</string>
 </resources>

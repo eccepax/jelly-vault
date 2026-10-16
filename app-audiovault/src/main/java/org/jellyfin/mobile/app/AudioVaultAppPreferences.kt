@@ -28,14 +28,9 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         )!!
         set(value) = sharedPreferences.edit { putString(Constants.PREF_MEDIA_SEGMENT_ACTIONS, value) }
 
-    val musicNotificationAlwaysDismissible: Boolean
-        get() = sharedPreferences.getBoolean(Constants.PREF_MUSIC_NOTIFICATION_ALWAYS_DISMISSIBLE, false)
-
-    val exoPlayerAllowPressSpeedUp: Boolean
+    var exoPlayerAllowPressSpeedUp: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP, true)
-
-    val exoPlayerAllowBackgroundAudio: Boolean
-        get() = sharedPreferences.getBoolean(Constants.PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO, false)
+        set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP, value) }
 
     var librarySortOption: String
         get() = sharedPreferences.getString(Constants.PREF_LIBRARY_SORT_OPTION, null) ?: "TITLE"

@@ -12,11 +12,16 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedButton
 import androidx.compose.material.RadioButton
 import androidx.compose.material.Switch
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -142,6 +147,37 @@ fun InlineConfirm(
                 },
             ) { Text(confirmLabel) }
             TextButton(onClick = onCancel) { Text(stringResource(R.string.vault_cancel)) }
+        }
+    }
+}
+
+/** Signs out, after asking in place ([InlineConfirm]); [confirmDetail] says what happens to downloads. */
+@Composable
+fun SignOutSetting(
+    label: String,
+    confirmMessage: String,
+    confirmDetail: String,
+    confirmLabel: String,
+    onSignOut: () -> Unit,
+) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    if (confirming) {
+        InlineConfirm(
+            message = confirmMessage,
+            detail = confirmDetail,
+            confirmLabel = confirmLabel,
+            onConfirm = {
+                confirming = false
+                onSignOut()
+            },
+            onCancel = { confirming = false },
+        )
+    } else {
+        OutlinedButton(
+            onClick = { confirming = true },
+            modifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small),
+        ) {
+            Text(label)
         }
     }
 }

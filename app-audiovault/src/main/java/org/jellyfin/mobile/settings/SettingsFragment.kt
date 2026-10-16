@@ -4,152 +4,97 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.exoplayer.offline.DownloadManager
-import de.Maxr1998.modernpreferences.Preference
-import de.Maxr1998.modernpreferences.PreferencesAdapter
-import de.Maxr1998.modernpreferences.helpers.categoryHeader
-import de.Maxr1998.modernpreferences.helpers.checkBox
-import de.Maxr1998.modernpreferences.helpers.defaultOnClick
-import de.Maxr1998.modernpreferences.helpers.pref
-import de.Maxr1998.modernpreferences.helpers.screen
-import de.Maxr1998.modernpreferences.helpers.singleChoice
-import de.Maxr1998.modernpreferences.preferences.CheckBoxPreference
-import de.Maxr1998.modernpreferences.preferences.choice.AbstractSingleChoiceDialogPreference
-import de.Maxr1998.modernpreferences.preferences.choice.SelectionItem
 import kotlinx.coroutines.launch
-import org.jellyfin.mobile.R
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
-import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.databinding.FragmentSettingsBinding
-import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.downloads.applyDownloadMethod
-import org.jellyfin.mobile.utils.BackPressInterceptor
-import org.jellyfin.mobile.utils.Constants
-import org.jellyfin.mobile.utils.applyWindowInsetsAsMargins
-import org.jellyfin.mobile.utils.extensions.requireMainActivity
-import org.jellyfin.mobile.utils.withThemedContext
-import org.koin.android.ext.android.get
+import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
-import org.jellyfin.mobile.common.R as CommonR
 
-class SettingsFragment : Fragment(), BackPressInterceptor {
+class SettingsFragment : Fragment() {
 
     private val mainViewModel: MainViewModel by activityViewModel()
-    private val settingsAdapter: PreferencesAdapter by lazy { PreferencesAdapter(buildSettingsScreen()) }
+    private val appPreferences: AudioVaultAppPreferences by inject()
+    private val downloadManager: DownloadManager by inject()
 
-    private lateinit var pressSpeedUpPreference: CheckBoxPreference
-    private lateinit var backgroundAudioPreference: Preference
+    private var _binding: FragmentComposeBinding? = null
+    private val binding get() = _binding!!
 
-    init {
-        Preference.Config.titleMaxLines = 2
-    }
+    private var state by mutableStateOf<SettingsUiState?>(null)
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        val localInflater = inflater.withThemedContext(requireContext(), CommonR.style.AppTheme_Settings)
-        val binding = FragmentSettingsBinding.inflate(localInflater, container, false)
-        binding.root.applyWindowInsetsAsMargins()
-        binding.toolbar.setTitle(R.string.activity_name_settings)
-        requireMainActivity().apply {
-            setSupportActionBar(binding.toolbar)
-            supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        }
-        binding.recyclerView.adapter = settingsAdapter
-        return binding.root
+        _binding = FragmentComposeBinding.inflate(inflater, container, false)
+        return binding.composeView
     }
 
-    override fun onInterceptBackPressed(): Boolean {
-        return settingsAdapter.goBack()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        ViewCompat.requestApplyInsets(binding.composeView)
+        state = readState()
+        val actions = SettingsActions(
+            onBack = { requireActivity().onBackPressedDispatcher.onBackPressed() },
+            onHoldToSpeedUp = { appPreferences.exoPlayerAllowPressSpeedUp = it },
+            onSkipSilence = { appPreferences.skipSilenceEnabled = it },
+            onFlatLibrary = { appPreferences.libraryGlobalFlattened = it },
+            onDownloadMethod = { method ->
+                appPreferences.downloadMethod = method
+                // Applies to downloads already waiting too, not just new ones
+                downloadManager.applyDownloadMethod(method)
+            },
+            onRemoveDownloadsOnSignOut = { appPreferences.removeDownloadsOnSignOut = it },
+            onSignOut = { lifecycleScope.launch { mainViewModel.logout() } },
+        ).afterEach { state = readState() }
+        binding.composeView.setContent {
+            AppTheme(VaultBrand.AudioVault) {
+                state?.let { SettingsScreen(it, actions) }
+            }
+        }
     }
+
+    private fun readState() = SettingsUiState(
+        holdToSpeedUp = appPreferences.exoPlayerAllowPressSpeedUp,
+        skipSilence = appPreferences.skipSilenceEnabled,
+        flatLibrary = appPreferences.libraryGlobalFlattened,
+        downloadMethod = appPreferences.downloadMethod,
+        removeDownloadsOnSignOut = appPreferences.removeDownloadsOnSignOut,
+    )
 
     override fun onDestroyView() {
         super.onDestroyView()
-        requireMainActivity().setSupportActionBar(null)
-    }
-
-    @Suppress("LongMethod")
-    private fun buildSettingsScreen() = screen(requireContext()) {
-        collapseIcon = true
-        categoryHeader(PREF_CATEGORY_MUSIC_PLAYER) {
-            titleRes = R.string.pref_category_music_player
-        }
-        checkBox(Constants.PREF_MUSIC_NOTIFICATION_ALWAYS_DISMISSIBLE) {
-            titleRes = R.string.pref_music_notification_always_dismissible_title
-            summaryRes = R.string.pref_music_notification_always_dismissible_summary_off
-            summaryOnRes = R.string.pref_music_notification_always_dismissible_summary_on
-        }
-
-        // Audio playback settings (useful for audiobooks)
-        pressSpeedUpPreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP) {
-            titleRes = R.string.pref_exoplayer_allow_press_speed_up
-            summaryRes = R.string.pref_exoplayer_allow_press_speed_up_summary
-            defaultValue = true
-        }
-        backgroundAudioPreference = checkBox(Constants.PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO) {
-            titleRes = R.string.pref_exoplayer_allow_background_audio
-            summaryRes = R.string.pref_exoplayer_allow_background_audio_summary
-        }
-        checkBox(Constants.PREF_SKIP_SILENCE) {
-            titleRes = R.string.pref_skip_silence_title
-            summaryRes = R.string.pref_skip_silence_summary
-        }
-        categoryHeader(PREF_CATEGORY_LIBRARY) {
-            titleRes = R.string.pref_category_library
-        }
-        checkBox(Constants.PREF_LIBRARY_GLOBAL_FLATTEN) {
-            titleRes = R.string.pref_library_global_flatten_title
-            summaryRes = R.string.pref_library_global_flatten_summary_off
-            summaryOnRes = R.string.pref_library_global_flatten_summary_on
-        }
-        categoryHeader(PREF_CATEGORY_DOWNLOADS) {
-            titleRes = R.string.pref_category_downloads
-        }
-
-        val downloadMethods = listOf(
-            SelectionItem(
-                DownloadMethod.WIFI_ONLY,
-                R.string.wifi_only,
-                R.string.wifi_only_summary,
-            ),
-            SelectionItem(
-                DownloadMethod.MOBILE_DATA,
-                R.string.mobile_data,
-                R.string.mobile_data_summary,
-            ),
-        )
-        singleChoice(Constants.PREF_DOWNLOAD_METHOD, downloadMethods) {
-            titleRes = R.string.network_title
-            // Applies to downloads already waiting too, not just new ones
-            selectionChangeListener = AbstractSingleChoiceDialogPreference.OnSelectionChangeListener { _, method ->
-                get<DownloadManager>().applyDownloadMethod(method)
-                true
-            }
-        }
-        checkBox(AppPreferences.PREF_REMOVE_DOWNLOADS_ON_SIGN_OUT) {
-            titleRes = CommonR.string.pref_remove_downloads_on_sign_out
-            summaryRes = CommonR.string.pref_remove_downloads_on_sign_out_summary
-            defaultValue = false
-        }
-
-        categoryHeader(PREF_CATEGORY_ACCOUNT) {
-            titleRes = R.string.pref_category_account
-        }
-        pref(PREF_SIGN_OUT) {
-            titleRes = R.string.pref_sign_out
-            defaultOnClick {
-                lifecycleScope.launch { mainViewModel.logout() }
-                true
-            }
-        }
-    }
-
-    companion object {
-        const val PREF_CATEGORY_MUSIC_PLAYER = "pref_category_music"
-
-        const val PREF_CATEGORY_LIBRARY = "pref_category_library"
-        const val PREF_CATEGORY_DOWNLOADS = "pref_category_downloads"
-        const val PREF_CATEGORY_ACCOUNT = "pref_category_account"
-        const val PREF_SIGN_OUT = "pref_sign_out"
+        _binding = null
     }
 }
+
+/** Each change is saved, then the screen shows it by reading the settings back. */
+private fun SettingsActions.afterEach(refresh: () -> Unit) = copy(
+    onHoldToSpeedUp = {
+        onHoldToSpeedUp(it)
+        refresh()
+    },
+    onSkipSilence = {
+        onSkipSilence(it)
+        refresh()
+    },
+    onFlatLibrary = {
+        onFlatLibrary(it)
+        refresh()
+    },
+    onDownloadMethod = {
+        onDownloadMethod(it)
+        refresh()
+    },
+    onRemoveDownloadsOnSignOut = {
+        onRemoveDownloadsOnSignOut(it)
+        refresh()
+    },
+)
