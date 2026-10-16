@@ -3,13 +3,10 @@
 package org.jellyfin.mobile.utils
 
 import android.content.Context
-import android.view.ContextThemeWrapper
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.annotation.StyleRes
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
@@ -27,10 +24,6 @@ inline fun Context.toast(text: CharSequence, duration: Int = Toast.LENGTH_SHORT)
 
 inline fun LifecycleOwner.runOnUiThread(noinline block: suspend CoroutineScope.() -> Unit) {
     lifecycleScope.launch(Dispatchers.Main, block = block)
-}
-
-fun LayoutInflater.withThemedContext(context: Context, @StyleRes style: Int): LayoutInflater {
-    return cloneInContext(ContextThemeWrapper(context, style))
 }
 
 fun View.applyWindowInsetsAsMargins() {

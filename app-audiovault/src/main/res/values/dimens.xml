@@ -4,9 +4,4 @@
 
     <dimen name="movie_thumbnail_list_size">64dp</dimen>
 
-    <dimen name="exo_player_controls_display_padding">12dp</dimen>
-    <dimen name="exo_center_icon_padding">12dp</dimen>
-    <dimen name="exo_center_controls_distance">24dp</dimen>
-    <dimen name="exo_chapter_marking_width">3dp</dimen>
-    <dimen name="exo_chapter_marking_height">15dp</dimen>
 </resources>

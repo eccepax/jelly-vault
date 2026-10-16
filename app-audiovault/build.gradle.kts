@@ -78,8 +78,6 @@ dependencies {
     implementation(libs.bundles.androidx.lifecycle)
 
     // UI
-    implementation(libs.google.material)
-    implementation(libs.androidx.constraintlayout)
 
     // Jetpack Compose
     implementation(libs.bundles.compose)
