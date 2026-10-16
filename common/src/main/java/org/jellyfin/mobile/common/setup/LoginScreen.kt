@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.em
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.common.ui.screens.connect.StyledTextButton
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.koin.androidx.compose.koinViewModel
@@ -130,7 +131,9 @@ private fun CredentialFields(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = VaultSpacing.Large)
-            .testTag(VaultTestTags.LOGIN_USERNAME),
+            .testTag(VaultTestTags.LOGIN_USERNAME)
+            // A TV remote moves on, rather than getting stuck in the field
+            .dpadLeavesTextField(),
     )
     OutlinedTextField(
         value = password,
@@ -144,7 +147,9 @@ private fun CredentialFields(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = VaultSpacing.Medium)
-            .testTag(VaultTestTags.LOGIN_PASSWORD),
+            .testTag(VaultTestTags.LOGIN_PASSWORD)
+            // A TV remote moves on, rather than getting stuck in the field
+            .dpadLeavesTextField(),
     )
 }
 

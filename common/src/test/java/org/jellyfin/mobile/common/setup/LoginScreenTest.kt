@@ -1,9 +1,12 @@
 package org.jellyfin.mobile.common.setup
 
 import android.app.Application
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -11,7 +14,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.common.R
@@ -107,5 +113,18 @@ class LoginScreenTest {
         composeRule.onNodeWithText(string(R.string.login_change_server)).performClick()
 
         tapped shouldBe listOf("quick connect", "change server")
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `a TV remote's down moves from field to field and on to the buttons, not stuck in a field`() {
+        show()
+
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_USERNAME).requestFocus()
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_USERNAME).performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_PASSWORD).assertIsFocused()
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_PASSWORD).performKeyInput { pressKey(Key.DirectionDown) }
+
+        signInButton().assertIsFocused()
     }
 }
