@@ -5,10 +5,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.common.R as CommonR
 import org.junit.Test
@@ -31,7 +27,6 @@ class LogoutE2ETest : LoggedInE2ETest() {
         composeRule.onNodeWithText(context.getString(R.string.pref_sign_out)).performScrollTo().performClick()
         composeRule.onNodeWithText(context.getString(R.string.sign_out_yes)).performScrollTo().performClick()
 
-        waitForView(CommonR.id.editUsername)
-        onView(withId(CommonR.id.editUsername)).check(matches(isDisplayed()))
+        waitForSignInScreen()
     }
 }

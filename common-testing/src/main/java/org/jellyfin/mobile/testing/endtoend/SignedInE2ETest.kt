@@ -1,22 +1,26 @@
 package org.jellyfin.mobile.testing.endtoend
 
 import android.view.View
-import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matcher
+import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.extensions.authenticateUserByName
 import org.jellyfin.sdk.api.client.extensions.quickConnectApi
@@ -71,25 +75,36 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
 
     /** Fills in and submits the sign-in form (the server is already chosen). */
     protected fun signIn() {
-        waitForView(CommonR.id.editUsername)
-        onView(withId(CommonR.id.editUsername)).perform(replaceText(e2eUsername()))
-        onView(withId(CommonR.id.editPassword)).perform(replaceText(e2ePassword()))
-        onView(withId(CommonR.id.buttonLogin)).perform(click())
+        waitForComposeTag(VaultTestTags.LOGIN_USERNAME)
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_USERNAME).performTextInput(e2eUsername())
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_PASSWORD).performTextInput(e2ePassword())
+        // The title says "Sign in" too, so the button is the one that can be pressed
+        composeRule.onNode(hasText(context.getString(CommonR.string.login_button)) and hasClickAction()).performClick()
     }
 
     /** Opens Quick Connect on the sign-in screen and returns the code it shows. */
     protected fun startQuickConnect(): String {
-        waitForView(CommonR.id.buttonQuickConnect)
-        onView(withId(CommonR.id.buttonQuickConnect)).perform(click())
-        waitForView(CommonR.id.textQuickConnectCode)
+        val quickConnect = context.getString(CommonR.string.login_quick_connect)
+        waitForComposeText(quickConnect)
+        composeRule.onNodeWithText(quickConnect).performClick()
         var code = ""
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
-            onView(withId(CommonR.id.textQuickConnectCode)).check { view, _ ->
-                code = (view as TextView).text.toString().filter(Char::isDigit)
-            }
+            code = composeRule.onAllNodesWithTag(VaultTestTags.QUICK_CONNECT_CODE).fetchSemanticsNodes()
+                .firstOrNull()?.config?.getOrNull(SemanticsProperties.Text)?.joinToString("")?.filter(Char::isDigit)
+                .orEmpty()
             code.length == QUICK_CONNECT_CODE_LENGTH
         }
         return code
+    }
+
+    /** Waits until the sign-in screen shows, as it does after signing out. */
+    protected fun waitForSignInScreen(timeoutMillis: Long = WAIT_TIMEOUT_MS) =
+        waitForComposeTag(VaultTestTags.LOGIN_USERNAME, timeoutMillis)
+
+    protected fun waitForComposeTag(tag: String, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     /**

@@ -7,10 +7,10 @@ import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
-import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,10 +37,12 @@ class LoginScreenshotTest {
         startKoin {
             modules(
                 module {
-                    single { mockk<ApiClient>(relaxed = true) }
+                    single { mockk<PasswordSignIn>(relaxed = true) }
+                    single { mockk<QuickConnect>(relaxed = true) }
                     single { mockk<ApiClientController>(relaxed = true) }
                     single { mockk<AppPreferences>(relaxed = true) }
                     viewModel { mockk<MainViewModel>(relaxed = true) }
+                    viewModel { LoginViewModel(get(), get(), get(), get()) }
                 },
             )
         }

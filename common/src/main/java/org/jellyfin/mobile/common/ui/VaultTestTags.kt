@@ -25,4 +25,13 @@ object VaultTestTags {
 
     /** A screen's spinner while its content loads. */
     const val LOADING = "loading"
+
+    /** The sign-in screen's username field. */
+    const val LOGIN_USERNAME = "login_username"
+
+    /** The sign-in screen's password field. */
+    const val LOGIN_PASSWORD = "login_password"
+
+    /** The Quick Connect code waiting to be approved. */
+    const val QUICK_CONNECT_CODE = "quick_connect_code"
 }

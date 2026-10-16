@@ -19,6 +19,7 @@ import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.data.entity.ServerEntity
 import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.common.setup.LoginViewModel
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -74,6 +75,8 @@ class BookMainActivityTest {
                     // Needed once BookConnectFragment's ComposeView actually renders (ServerSelection
                     // resolves it directly via Koin) — not otherwise exercised by this test.
                     single { mockk<ApiClientController>(relaxed = true) }
+                    // The sign-in screen's, once LoginFragment is shown
+                    viewModel { LoginViewModel(mockk(), mockk(), mockk(relaxed = true), mockk(relaxed = true)) }
                 },
             )
         }

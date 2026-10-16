@@ -42,7 +42,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.fragment)
-    implementation(libs.androidx.fragment.compose)
     coreLibraryDesugaring(libs.androiddesugarlibs)
 
     // Lifecycle

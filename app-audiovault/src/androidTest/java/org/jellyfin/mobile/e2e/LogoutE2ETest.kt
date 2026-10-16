@@ -5,21 +5,18 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
 import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.contrib.RecyclerViewActions.scrollTo
 import androidx.test.espresso.matcher.ViewMatchers.hasDescendant
 import androidx.test.espresso.matcher.ViewMatchers.hasSibling
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.R
-import org.jellyfin.mobile.common.R as CommonR
 import org.junit.Test
 
 /**
  * Library toolbar overflow -> Settings (`ModernAndroidPreferences`-based, a RecyclerView of rows
- * matched by text rather than stable ids) -> Sign out -> lands back on `LoginFragment` (the server
+ * matched by text rather than stable ids) -> Sign out -> lands back on the sign-in screen (the server
  * itself stays configured, only `currentUserId` is cleared — see `MainViewModel.logout()` /
  * `MainActivity.handleAvailableServerState`).
  *
@@ -49,7 +46,6 @@ class LogoutE2ETest : LoggedInE2ETest() {
         )
         onView(withText(context.getString(R.string.pref_sign_out))).perform(click())
 
-        waitForView(CommonR.id.editUsername)
-        onView(withId(CommonR.id.editUsername)).check(matches(isDisplayed()))
+        waitForSignInScreen()
     }
 }

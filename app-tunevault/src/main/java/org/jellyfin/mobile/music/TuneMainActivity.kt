@@ -13,10 +13,8 @@ import org.jellyfin.mobile.music.ui.TuneVaultRoot
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-// AppCompatActivity (a FragmentActivity), not a bare ComponentActivity: common's LoginFragment is
-// hosted inside the Compose tree and needs a FragmentManager. MainViewModel is resolved here (not
-// via koinViewModel() in Compose) so it's provably the same activity-scoped instance LoginFragment
-// gets from activityViewModel().
+// MainViewModel is resolved here (not via koinViewModel() in Compose) so it's provably the one
+// activity-scoped instance that the sign-in screen tells once the user is saved.
 class TuneMainActivity : AppCompatActivity() {
 
     private val mainViewModel: MainViewModel by viewModel()

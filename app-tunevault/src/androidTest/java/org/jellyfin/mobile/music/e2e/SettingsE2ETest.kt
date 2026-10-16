@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.Espresso.pressBack
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.playback.PlaybackController
@@ -17,7 +16,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.jellyfin.mobile.common.R as CommonR
 
 @AccountArea
 class SettingsE2ETest : LoggedInE2ETest() {
@@ -76,7 +74,7 @@ class SettingsE2ETest : LoggedInE2ETest() {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Yes, sign out").performScrollTo().performClick()
 
-        waitForView(withId(CommonR.id.editUsername))
+        waitForSignInScreen()
         onMain {
             assertTrue(playback.state.value.queue.entries.isEmpty())
             assertTrue(!playback.state.value.isPlaying)

@@ -8,7 +8,7 @@ import org.jellyfin.mobile.R
 import org.junit.Test
 
 /**
- * Connect (Compose `ConnectScreen`) -> Login (classic-View `LoginFragment`) -> lands on
+ * Connect (Compose `ConnectScreen`) -> Login (common's Compose `LoginScreen`) -> lands on
  * `LibraryFragment`. Runs against the real local Vault server (see [BaseE2ETest]).
  */
 class LoginFlowE2ETest : LoggedInE2ETest() {
