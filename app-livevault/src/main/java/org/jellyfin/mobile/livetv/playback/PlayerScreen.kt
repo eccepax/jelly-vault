@@ -100,10 +100,6 @@ fun PlayerScreen(
     video: @Composable () -> Unit,
     inPictureInPicture: Boolean = false,
 ) {
-    if (inPictureInPicture) {
-        PictureInPictureContent(state, video)
-        return
-    }
     val focus = remember { FocusRequester() }
     var overlayRequests by remember { mutableIntStateOf(0) }
     var overlayHidden by remember { mutableIntStateOf(-1) }
@@ -124,32 +120,45 @@ fun PlayerScreen(
             .then(if (playing) Modifier.testTag(PlayerScreenTags.VIDEO_PLAYING) else Modifier)
             .focusRequester(focus)
             .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionUp, Key.ChannelUp -> onZap(+1)
-                    Key.DirectionDown, Key.ChannelDown -> onZap(-1)
-                    Key.DirectionCenter, Key.Enter, Key.DirectionLeft, Key.DirectionRight -> overlayRequests++
-                    else -> return@onPreviewKeyEvent false
-                }
-                true
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { overlayRequests++ },
+            .then(
+                if (inPictureInPicture) {
+                    Modifier
+                } else {
+                    Modifier
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (event.key) {
+                                Key.DirectionUp, Key.ChannelUp -> onZap(+1)
+                                Key.DirectionDown, Key.ChannelDown -> onZap(-1)
+                                Key.DirectionCenter, Key.Enter, Key.DirectionLeft, Key.DirectionRight ->
+                                    overlayRequests++
+                                else -> return@onPreviewKeyEvent false
+                            }
+                            true
+                        }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { overlayRequests++ }
+                },
+            ),
     ) {
+        // Always here, in or out of the floating window: moving it would make a new PlayerView,
+        // re-attaching the player to a new surface with a black flash on every switch
         video()
-        Center(state, onRetry, onExit, onShowFree)
-        if (overlayVisible) Overlay(state.channel, onZap, onExit)
+        if (inPictureInPicture) {
+            PictureInPictureContent(state)
+        } else {
+            Center(state, onRetry, onExit, onShowFree)
+            if (overlayVisible) Overlay(state.channel, onZap, onExit)
+        }
     }
 }
 
-/** The floating window is too small to read or tap: the video, or a sign the channel failed. */
+/** The floating window is too small to read or tap: over the video, only a sign the channel failed. */
 @Composable
-private fun PictureInPictureContent(state: WatchUiState, video: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        video()
+private fun PictureInPictureContent(state: WatchUiState) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (state.playback is PlaybackState.Failed) {
             Icon(
                 Icons.Filled.Warning,

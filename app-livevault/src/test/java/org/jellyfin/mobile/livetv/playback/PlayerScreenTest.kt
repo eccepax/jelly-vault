@@ -2,6 +2,10 @@ package org.jellyfin.mobile.livetv.playback
 
 import android.app.Application
 import androidx.compose.material.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
@@ -198,6 +202,34 @@ class PlayerScreenTest {
 
         composeRule.onNodeWithText("Bulls").assertDoesNotExist()
         composeRule.onNodeWithTag(PlayerScreenTags.FAILED_SMALL).assertIsDisplayed()
+    }
+
+    @Test
+    fun `going into the floating window and back keeps the same video, without a black flash`() {
+        var videosMade = 0
+        var inPictureInPicture by mutableStateOf(false)
+        composeRule.setContent {
+            PlayerScreen(
+                state = WatchUiState(PlaybackState.Playing(bulls.id), bulls, videoStarted = true),
+                onZap = {},
+                onRetry = {},
+                onExit = {},
+                onShowFree = {},
+                // Stands in for the PlayerView, which re-attaching to a new surface makes flicker
+                video = {
+                    remember { videosMade++ }
+                    Text("video", Modifier.testTag(VIDEO))
+                },
+                inPictureInPicture = inPictureInPicture,
+            )
+        }
+
+        inPictureInPicture = true
+        composeRule.waitForIdle()
+        inPictureInPicture = false
+        composeRule.waitForIdle()
+
+        videosMade shouldBe 1
     }
 }
 
