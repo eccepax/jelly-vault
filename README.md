@@ -65,9 +65,9 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Android 8.0 (API 26) or later
 - A running Jellyfin server with an audiobook, ebook, and/or music library, or Live TV set up for LiveVault
 
-## Support
+## Contributing
 
-If you enjoy these apps, tips are appreciated: [cash.app/$bgkingsley](https://cash.app/$bgkingsley)
+Bug reports, ideas and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
@@ -82,3 +82,7 @@ Significant portions of this codebase — including the original fork/restructur
 ## License
 
 GNU General Public License v2.0 — see [LICENSE](LICENSE.md) for details. This project inherits the license of the upstream jellyfin-android project.
+
+## Support
+
+If you enjoy these apps, tips are appreciated: [cash.app/$bgkingsley](https://cash.app/$bgkingsley)
