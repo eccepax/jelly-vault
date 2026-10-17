@@ -43,6 +43,15 @@ class BackupRulesTest {
     }
 
     @Test
+    fun `LiveVault's list of streams it left open on the server stays behind too`() {
+        // On another phone, or after a restore, they'd be closed on a server that long since has
+        val ledger = "sharedpref" to "live_streams.xml"
+        rules("backup_rules.xml") shouldContain ledger
+        rules("data_extraction_rules.xml", "cloud-backup") shouldContain ledger
+        rules("data_extraction_rules.xml", "device-transfer") shouldContain ledger
+    }
+
+    @Test
     fun `settings still come along`() {
         val sharedPrefs = "sharedpref" to "."
         rules("backup_rules.xml") shouldNotContain sharedPrefs
