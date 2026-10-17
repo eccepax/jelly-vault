@@ -69,11 +69,6 @@
         </service>
 
 
-        <receiver
-            android:name="androidx.mediarouter.media.MediaTransferReceiver"
-            android:exported="true"
-            tools:ignore="ExportedReceiver" />
-
         <provider
             android:name="org.jellyfin.mobile.common.ui.content.ImageProvider"
             android:authorities="${applicationId}.image-provider"

@@ -82,7 +82,6 @@ dependencies {
 
     // Media
     implementation(libs.androidx.media)
-    implementation(libs.androidx.mediarouter)
     implementation(libs.bundles.androidx.media3)
 
     // Common module
