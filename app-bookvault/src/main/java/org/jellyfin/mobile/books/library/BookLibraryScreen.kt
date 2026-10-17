@@ -13,7 +13,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Checkbox
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
@@ -46,6 +48,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.LibraryViewMode
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
@@ -234,9 +237,15 @@ private fun LibraryContent(state: BookLibraryUiState, actions: BookLibraryAction
     }
 }
 
+/** Another sort, filter or search is a different list, which starts from its top. */
+private val BookLibraryUiState.scrollKey: String
+    get() = "$sort|$progressFilter|$tagFilter|$downloadedOnly|$query"
+
 @Composable
 private fun BookList(state: BookLibraryUiState, onOpen: (BaseItemDto) -> Unit, onLongPress: (BaseItemDto) -> Unit) {
-    LazyColumn(modifier = Modifier.fillMaxSize().testTag(VaultTestTags.LIBRARY_LIST)) {
+    val list = rememberLazyListState()
+    ScrollToTopOnChange(state.scrollKey) { list.scrollToItem(0) }
+    LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag(VaultTestTags.LIBRARY_LIST)) {
         items(state.books, key = { it.id.toString() }) { book ->
             MediaListRow(
                 title = book.name.orEmpty(),
@@ -255,7 +264,10 @@ private fun BookList(state: BookLibraryUiState, onOpen: (BaseItemDto) -> Unit, o
 
 @Composable
 private fun BookShelf(state: BookLibraryUiState, onOpen: (BaseItemDto) -> Unit, onLongPress: (BaseItemDto) -> Unit) {
+    val grid = rememberLazyGridState()
+    ScrollToTopOnChange(state.scrollKey) { grid.scrollToItem(0) }
     LazyVerticalGrid(
+        state = grid,
         columns = GridCells.Adaptive(SHELF_MIN_CARD_WIDTH),
         contentPadding = PaddingValues(VaultSpacing.Large),
         horizontalArrangement = Arrangement.spacedBy(VaultSpacing.Large),

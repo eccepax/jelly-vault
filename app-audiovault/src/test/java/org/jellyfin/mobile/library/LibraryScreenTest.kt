@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
@@ -179,6 +180,30 @@ class LibraryScreenTest {
         items.value = listOf(dune) + rest
 
         composeRule.onNodeWithText("Dune").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a new sort goes back to the top, not somewhere in the middle of the new order`() {
+        val books = (1..LONG_LIST).map { book("Book $it") }
+        val state = mutableStateOf(defaults.copy(items = books))
+        composeRule.setContent { AppTheme(VaultBrand.AudioVault) { LibraryScreen(state.value, actions) } }
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).performScrollToIndex(LONG_LIST / 2)
+
+        state.value = state.value.copy(items = books.reversed(), sort = SortOption.AUTHOR)
+
+        composeRule.onNodeWithText("Book $LONG_LIST").assertIsDisplayed()
+    }
+
+    @Test
+    fun `showing only downloads goes back to the top too`() {
+        val books = (1..LONG_LIST).map { book("Book $it") }
+        val state = mutableStateOf(defaults.copy(items = books))
+        composeRule.setContent { AppTheme(VaultBrand.AudioVault) { LibraryScreen(state.value, actions) } }
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).performScrollToIndex(LONG_LIST - 1)
+
+        state.value = state.value.copy(items = books.drop(2), downloadedOnly = true)
+
+        composeRule.onNodeWithText("Book 3").assertIsDisplayed()
     }
 
     // --- top bar ------------------------------------------------------------------------------------

@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
@@ -247,7 +248,14 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
             state.items.isEmpty() && state.loading -> LoadingState()
             state.items.isEmpty() && state.error != null -> ErrorState(state.error, onRetry = actions.onRefresh)
             state.items.isEmpty() -> EmptyState(stringResource(R.string.library_empty), icon = Icons.Filled.Headphones)
-            else -> LibraryList(state.items, state.downloadedIds, state.hiddenIds, actions)
+            else -> LibraryList(
+                state.items,
+                state.downloadedIds,
+                state.hiddenIds,
+                actions,
+                // Another folder, sort, filter or search is a different list
+                scrollKey = "${state.title}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
+            )
         }
         PullRefreshIndicator(
             refreshing = state.loading && state.items.isNotEmpty(),
@@ -260,7 +268,8 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
 /**
  * The items, each row given only whether it's downloaded and hidden: a download finishing then
  * redraws just its own row (with the whole id set, every row would redraw, as the list adapter
- * once did, reloading every cover). [row] draws one row; tests swap it to count redraws.
+ * once did, reloading every cover). [row] draws one row; tests swap it to count redraws. A new
+ * [scrollKey] goes back to the top.
  */
 @Composable
 internal fun LibraryList(
@@ -268,11 +277,13 @@ internal fun LibraryList(
     downloadedIds: Set<String>,
     hiddenIds: Set<String>,
     actions: LibraryActions,
+    scrollKey: String = "",
     row: @Composable (item: LibraryItem, downloaded: Boolean, hidden: Boolean) -> Unit = { item, downloaded, hidden ->
         LibraryRow(item, downloaded, hidden, actions)
     },
 ) {
     val listState = rememberLazyListState()
+    ScrollToTopOnChange(scrollKey) { listState.scrollToItem(0) }
     // The list holds its place by the item on top, so a new first item (an un-hidden book, a new
     // sort) would land just above the screen; at the top, stay at the top so it's seen
     LaunchedEffect(items.firstOrNull()?.id) {

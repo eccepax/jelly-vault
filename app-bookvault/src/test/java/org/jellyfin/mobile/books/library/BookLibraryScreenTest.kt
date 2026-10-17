@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.books.library
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import io.kotest.matchers.shouldBe
@@ -281,5 +283,39 @@ class BookLibraryScreenTest {
         openMenuItem("Settings")
 
         events shouldBe listOf("settings")
+    }
+
+    // --- going back to the top --------------------------------------------------------------------
+
+    private val longShelf = (1..LONG_LIST).map { book("Book $it") }
+
+    private fun showChanging(state: androidx.compose.runtime.MutableState<BookLibraryUiState>) {
+        composeRule.setContent { BookLibraryScreen(state = state.value, actions = BookLibraryActions()) }
+    }
+
+    @Test
+    fun `a new sort takes the list back to the top`() {
+        val state = mutableStateOf(BookLibraryUiState(books = longShelf))
+        showChanging(state)
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).performScrollToIndex(LONG_LIST - 1)
+
+        state.value = state.value.copy(books = longShelf.reversed(), sort = BookSortOption.AUTHOR)
+
+        composeRule.onNodeWithText("Book $LONG_LIST").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a new filter takes the shelf back to the top`() {
+        val state = mutableStateOf(BookLibraryUiState(books = longShelf, viewMode = LibraryViewMode.SHELF))
+        showChanging(state)
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_GRID).performScrollToIndex(LONG_LIST - 1)
+
+        state.value = state.value.copy(books = longShelf.drop(2), progressFilter = ProgressFilter.UNREAD)
+
+        composeRule.onNodeWithText("Book 3").assertIsDisplayed()
+    }
+
+    private companion object {
+        const val LONG_LIST = 40
     }
 }
