@@ -94,13 +94,18 @@ Each app's main screens are screenshotted as they look on a phone in dark mode w
 ./gradlew recordRoborazziDebug   # approve the current look
 ```
 
-The end-to-end tests (`scripts/run-e2e-tests.sh`) run against a real Jellyfin server. Point them at yours in `local.properties` (never commit this file):
+### Server tests
 
-```properties
-e2e.hostname=http://10.0.2.2:8096
-e2e.username=...
-e2e.password=...
+The contract tests (`*ContractTest`, part of `./gradlew test`) and the end-to-end tests (`scripts/run-e2e-tests.sh`) run against a real Jellyfin: a disposable one in [`test-server/`](test-server/README.md), seeded with generated media. It needs only Docker:
+
+```bash
+test-server/up.sh    # Jellyfin on :8097 with music, audiobooks, books and Live TV
+export VAULT_TEST_USERNAME=vault-test VAULT_TEST_PASSWORD=vault-test
+./gradlew test                                          # contract tests now run instead of skipping
+E2E_MODULE=app-tunevault scripts/run-e2e-tests.sh       # e2e, on an emulator
 ```
+
+Without credentials the server tests are skipped, so a plain `./gradlew test` passes with no server. `VAULT_TEST_HOSTNAME` (default `http://localhost:8097`) and `VAULT_TEST_E2E_HOSTNAME` (default `http://10.0.2.2:8097`, as the emulator sees the host) point the tests at another server. Instead of the environment, all four settings can live in `local.properties` (`contract.hostname`, `e2e.hostname`, `e2e.username`, `e2e.password`; never commit it). When any `VAULT_TEST_*` variable is set, `local.properties` is ignored, so one server's credentials are never sent to another's address.
 
 ### Release builds
 
