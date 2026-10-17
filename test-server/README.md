@@ -42,14 +42,15 @@ own database volume:
 JELLYFIN_VERSION=latest ./reset.sh
 ```
 
-When bumping the default, change it in `docker-compose.yml` and in the CI matrix
-(`.github/workflows/app-test.yaml`).
+The default is the version every PR is tested against. Renovate opens a PR when Jellyfin releases a
+newer one, and that PR's test run shows whether the apps still work with it. The older versions the
+apps support are tested weekly (see `.github/workflows/app-test.yaml`).
 
 ## Settings
 
 | Variable | Default | |
 |---|---|---|
-| `JELLYFIN_VERSION` | `10.11.6` | Jellyfin image tag |
+| `JELLYFIN_VERSION` | `12.2` | Jellyfin image tag |
 | `VAULT_TEST_PORT` | `8097` | Host port (8097 so it runs beside a real Jellyfin on 8096) |
 | `SEED_TASK_TIMEOUT` | `600` | Seconds `seed.py` waits for each library scan, guide refresh or normalization |
 

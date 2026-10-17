@@ -3,5 +3,19 @@
   "extends": [
     "github>jellyfin/.github//renovate-presets/gradle",
     ":dependencyDashboard"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The Jellyfin version PRs test against: the test server's default",
+      "managerFilePatterns": [
+        "/^test-server/docker-compose\\.yml$/"
+      ],
+      "matchStrings": [
+        "JELLYFIN_VERSION:-(?<currentValue>[0-9][0-9.]*)"
+      ],
+      "depNameTemplate": "jellyfin/jellyfin",
+      "datasourceTemplate": "docker"
+    }
   ]
 }

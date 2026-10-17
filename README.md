@@ -63,7 +63,7 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 ## Requirements
 
 - Android 8.0 (API 26) or later
-- Jellyfin server 10.10 or newer (tested on 10.10, 10.11 and 12), with an audiobook, ebook, and/or music library, or Live TV set up for LiveVault
+- Jellyfin server 10.10.7 or newer, with an audiobook, ebook, and/or music library, or Live TV set up for LiveVault
 
 ## Contributing
 

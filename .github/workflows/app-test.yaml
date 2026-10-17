@@ -7,27 +7,29 @@ on:
       - release-*
   pull_request:
   schedule:
-    # Weekly, so a new Jellyfin release that breaks the apps shows up without waiting for a PR.
+    # Weekly, every Jellyfin version the apps support, so a break in an older one shows up too.
     - cron: '17 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
-    # The pinned leg keeps the plain "Test" name that checks refer to.
-    name: ${{ matrix.jellyfin == 'latest' && 'Test (Jellyfin latest)' || 'Test' }}
+    # "pinned" is test-server/docker-compose.yml's default (Renovate bumps it), the only version PRs
+    # test, and keeps the plain "Test" name that checks refer to.
+    name: ${{ matrix.jellyfin == 'pinned' && 'Test' || format('Test (Jellyfin {0})', matrix.jellyfin) }}
     runs-on: ubuntu-24.04
-    # A new Jellyfin release can't block PRs, but its leg still shows red as a warning. The weekly run
-    # doesn't excuse it, so a break there fails the workflow and sends GitHub's failure email.
-    continue-on-error: ${{ matrix.jellyfin == 'latest' && github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
-        # The pinned version matches test-server/docker-compose.yml's default; bump them together.
-        jellyfin: ['10.11.6', 'latest']
+        # Weekly (or by hand): the oldest supported release (10.10.7; 10.10.0 has a playlist bug), the
+        # first and last 10.11 (its patches changed tag filtering and artist names), the first 12.x
+        # (which dropped the api_key token), and latest, for a release Renovate hasn't proposed yet.
+        jellyfin: ${{ fromJSON(contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && '["pinned", "10.10.7", "10.11.0", "10.11.11", "12.0", "latest"]' || '["pinned"]') }}
     env:
-      JELLYFIN_VERSION: ${{ matrix.jellyfin }}
+      # Empty for pinned, so the test server uses its default.
+      JELLYFIN_VERSION: ${{ matrix.jellyfin != 'pinned' && matrix.jellyfin || '' }}
       VAULT_TEST_HOSTNAME: http://localhost:8097
       VAULT_TEST_USERNAME: vault-test
       VAULT_TEST_PASSWORD: vault-test
@@ -57,10 +59,10 @@ jobs:
       - name: Start the test server (Jellyfin ${{ matrix.jellyfin }})
         run: test-server/up.sh
       - name: Run test task, with coverage
-        if: ${{ matrix.jellyfin != 'latest' }}
+        if: ${{ matrix.jellyfin == 'pinned' }}
         run: ./gradlew test koverHtmlReport
       - name: Run the server tests
-        if: ${{ matrix.jellyfin == 'latest' }}
+        if: ${{ matrix.jellyfin != 'pinned' }}
         run: >-
           ./gradlew --continue
           :common:testDebugUnitTest --tests '*ContractTest'
@@ -80,17 +82,17 @@ jobs:
           path: test-server-logs.txt
       - name: Upload coverage report
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: ${{ !cancelled() && matrix.jellyfin != 'latest' }}
+        if: ${{ !cancelled() && matrix.jellyfin == 'pinned' }}
         with:
           name: coverage
           retention-days: 14
           path: build/reports/kover/html/
       - name: Compare screenshots with the approved ones
-        if: ${{ matrix.jellyfin != 'latest' }}
+        if: ${{ matrix.jellyfin == 'pinned' }}
         run: ./gradlew verifyRoborazziDebug --tests '*ScreenshotTest'
       - name: Upload screenshot comparisons
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: ${{ failure() && matrix.jellyfin != 'latest' }}
+        if: ${{ failure() && matrix.jellyfin == 'pinned' }}
         with:
           name: screenshot-comparisons
           retention-days: 14

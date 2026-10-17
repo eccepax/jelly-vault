@@ -1,10 +1,11 @@
 # A disposable Jellyfin for the vault apps' contract and e2e tests. See README.md.
-# JELLYFIN_VERSION picks the server version; each version keeps its own config volume.
+# JELLYFIN_VERSION picks the server version; each version keeps its own config volume. The default
+# is the version PRs test against; Renovate bumps it (both places below), see renovate.json.
 name: vault-test-server
 
 services:
   jellyfin:
-    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-10.11.6}
+    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-12.2}
     ports:
       - "${VAULT_TEST_PORT:-8097}:8096"
     environment:
@@ -36,4 +37,4 @@ services:
 
 volumes:
   config:
-    name: vault-test-config-${JELLYFIN_VERSION:-10.11.6}
+    name: vault-test-config-${JELLYFIN_VERSION:-12.2}
