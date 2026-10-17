@@ -34,6 +34,8 @@ data class LoginUiState(
     val error: LoginMessage? = null,
     /** The Quick Connect code to approve from a signed-in device, while waiting for that. */
     val quickConnectCode: String? = null,
+    /** Signing in would cross the internet unencrypted; see [signsInUnencryptedOverInternet]. */
+    val insecureServer: Boolean = false,
 )
 
 /** What the sign-in screen can do. */

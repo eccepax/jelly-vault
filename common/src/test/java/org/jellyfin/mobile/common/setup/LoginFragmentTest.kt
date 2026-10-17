@@ -27,10 +27,13 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.R
+import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.common.data.entity.ServerEntity
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
 import org.jellyfin.mobile.common.setup.quickconnect.SignedInUser
 import org.jellyfin.mobile.common.ui.VaultTestTags
@@ -60,7 +63,10 @@ class LoginFragmentTest {
 
     private val passwordSignIn = mockk<PasswordSignIn>()
     private val apiClientController = mockk<ApiClientController>(relaxed = true)
-    private val mainViewModel = mockk<MainViewModel>(relaxed = true)
+    private val serverState = MutableStateFlow<ServerState>(ServerState.Pending)
+    private val mainViewModel = mockk<MainViewModel>(relaxed = true) {
+        every { serverState } returns this@LoginFragmentTest.serverState
+    }
 
     @Before
     fun setUp() {
@@ -103,6 +109,24 @@ class LoginFragmentTest {
 
         coVerify { apiClientController.setupUser(1L, "alice-id", "token") }
         coVerify { mainViewModel.refreshState() }
+    }
+
+    @Test
+    fun `signing in to a server on the internet over plain HTTP warns`() {
+        serverState.value = ServerState.Available(ServerEntity(hostname = "http://vault.example.com:8096"))
+
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use {
+            composeRule.onNodeWithTag(VaultTestTags.LOGIN_INSECURE_SERVER).assertExists()
+        }
+    }
+
+    @Test
+    fun `a server on the home network doesn't`() {
+        serverState.value = ServerState.Available(ServerEntity(hostname = "http://192.168.1.5:8096"))
+
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use {
+            composeRule.onNodeWithTag(VaultTestTags.LOGIN_INSECURE_SERVER).assertDoesNotExist()
+        }
     }
 
     @Test

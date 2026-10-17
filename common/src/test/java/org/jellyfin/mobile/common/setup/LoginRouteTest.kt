@@ -10,6 +10,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.junit.Rule
@@ -25,7 +26,9 @@ class LoginRouteTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val mainViewModel = mockk<MainViewModel>(relaxed = true)
+    private val mainViewModel = mockk<MainViewModel>(relaxed = true) {
+        every { serverState } returns MutableStateFlow<ServerState>(ServerState.Pending)
+    }
     private val loginViewModel = mockk<LoginViewModel>(relaxed = true) {
         every { state } returns MutableStateFlow(LoginUiState())
     }
