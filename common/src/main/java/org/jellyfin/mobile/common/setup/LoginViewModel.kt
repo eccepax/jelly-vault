@@ -65,6 +65,7 @@ class LoginViewModel(
         if (name.isBlank()) return fail(R.string.login_error_missing_username)
         val serverId = appPreferences.currentServerId ?: return fail(R.string.login_error_missing_server)
 
+        stopQuickConnect()
         _state.value = LoginUiState(busy = true)
         viewModelScope.launch {
             val error = try {
@@ -97,7 +98,7 @@ class LoginViewModel(
     fun startQuickConnect(onSignedIn: suspend () -> Unit) {
         val serverId = appPreferences.currentServerId ?: return fail(R.string.login_error_missing_server)
         _state.value = LoginUiState()
-        quickConnectJob?.cancel()
+        stopQuickConnect()
         quickConnectJob = viewModelScope.launch {
             quickConnectSignIn(quickConnect).collect { state ->
                 _state.value = when (state) {
@@ -112,6 +113,21 @@ class LoginViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * The screen has gone: stop waiting for a Quick Connect code and forget the last error. In a
+     * Compose app this ViewModel outlives the screen, so otherwise the code would keep polling the
+     * server, and could even sign in to one the user has since changed away from.
+     */
+    fun leave() {
+        stopQuickConnect()
+        _state.value = LoginUiState()
+    }
+
+    private fun stopQuickConnect() {
+        quickConnectJob?.cancel()
+        quickConnectJob = null
     }
 
     private suspend fun save(serverId: Long, user: SignedInUser, onSignedIn: suspend () -> Unit) {

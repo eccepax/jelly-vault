@@ -167,8 +167,55 @@ class LoginViewModelTest {
             LoginUiState(error = LoginMessage(R.string.login_quick_connect_unavailable))
     }
 
+    private fun waitingForApproval() {
+        coEvery { quickConnect.isEnabled() } returns true
+        coEvery { quickConnect.request() } returns QuickConnectRequest("123456", "secret")
+        coEvery { quickConnect.isApproved(any()) } returns false
+    }
+
+    @Test
+    fun `signing in with a password stops waiting for quick connect`() = runTest(dispatcher) {
+        waitingForApproval()
+        coEvery { passwordSignIn.signIn(any(), any()) } throws ApiClientException("Invalid username or password")
+        val viewModel = viewModel()
+
+        viewModel.startQuickConnect(onSignedIn = { signedIn++ })
+        viewModel.signIn("alice", "wrong", onSignedIn = { signedIn++ })
+        advanceTimeBy(QUICK_CONNECT_EXPIRES_MS * 2)
+
+        // The password's error stays, not overwritten by the code expiring out of sight
+        viewModel.state.value shouldBe
+            LoginUiState(error = LoginMessage(R.string.login_error_failed, "Invalid username or password"))
+        coVerify(exactly = 0) { quickConnect.isApproved(any()) }
+    }
+
+    @Test
+    fun `leaving the screen stops waiting for quick connect`() = runTest(dispatcher) {
+        waitingForApproval()
+        val viewModel = viewModel()
+
+        viewModel.startQuickConnect(onSignedIn = { signedIn++ })
+        viewModel.leave()
+        advanceTimeBy(QUICK_CONNECT_EXPIRES_MS * 2)
+
+        viewModel.state.value shouldBe LoginUiState()
+        coVerify(exactly = 0) { quickConnect.isApproved(any()) }
+    }
+
+    @Test
+    fun `leaving the screen forgets the last error, so it isn't there next time`() = runTest(dispatcher) {
+        coEvery { passwordSignIn.signIn(any(), any()) } throws ApiClientException("Invalid username or password")
+        val viewModel = viewModel()
+
+        viewModel.signIn("alice", "wrong", onSignedIn = { signedIn++ })
+        viewModel.leave()
+
+        viewModel.state.value shouldBe LoginUiState()
+    }
+
     private companion object {
         const val SERVER_ID = 7L
         const val QUICK_CONNECT_WAIT_MS = 10_000L
+        const val QUICK_CONNECT_EXPIRES_MS = 10 * 60_000L
     }
 }

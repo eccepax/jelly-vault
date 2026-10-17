@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.common.setup
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +46,11 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun LoginRoute(mainViewModel: MainViewModel, loginViewModel: LoginViewModel = koinViewModel()) {
     val state by loginViewModel.state.collectAsState()
+    val activity = LocalActivity.current
+    DisposableEffect(loginViewModel) {
+        // A rotation comes straight back to this screen, so a code being shown carries on
+        onDispose { if (activity?.isChangingConfigurations != true) loginViewModel.leave() }
+    }
     val actions = remember(mainViewModel, loginViewModel) {
         LoginActions(
             onSignIn = { username, password -> loginViewModel.signIn(username, password, mainViewModel::refreshState) },
