@@ -40,9 +40,6 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         get() = sharedPreferences.getBoolean(Constants.PREF_LIBRARY_GLOBAL_FLATTEN, true)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_LIBRARY_GLOBAL_FLATTEN, value) }
 
-    val chromecastEnabled: Boolean
-        get() = sharedPreferences.getBoolean(Constants.PREF_CHROMECAST_ENABLED, false)
-
     var playbackSpeed: Float
         get() = sharedPreferences.getFloat(Constants.PREF_PLAYBACK_SPEED, 1f)
         set(value) = sharedPreferences.edit { putFloat(Constants.PREF_PLAYBACK_SPEED, value) }

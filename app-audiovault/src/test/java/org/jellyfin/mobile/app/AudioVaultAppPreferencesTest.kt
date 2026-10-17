@@ -87,15 +87,6 @@ class AudioVaultAppPreferencesTest {
         preferences.exoPlayerAllowPressSpeedUp shouldBe false
     }
 
-    @Test
-    fun `chromecastEnabled reads its own key and defaults to false`() {
-        preferences.chromecastEnabled shouldBe false
-
-        fakeSharedPreferences.edit().putBoolean(Constants.PREF_CHROMECAST_ENABLED, true).apply()
-
-        preferences.chromecastEnabled shouldBe true
-    }
-
     // --- librarySortOption / libraryGlobalFlattened / playbackSpeed ----------------------------
 
     @Test

@@ -45,7 +45,6 @@ androidx-media = "1.7.1"
 androidx-mediarouter = "1.8.1"
 androidx-media3 = "1.8.0"
 jellyfin-androidx-media = "1.8.0+1"
-playservices = "22.1.0"
 
 # Room
 androidx-room = "2.7.2"
@@ -143,11 +142,8 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "androidx-media3" }
 androidx-media3-database = { module = "androidx.media3:media3-database", version.ref = "androidx-media3" }
 androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "androidx-media3" }
-androidx-media3-cast = { module = "androidx.media3:media3-cast", version.ref = "androidx-media3" }
 androidx-media3-test-utils = { module = "androidx.media3:media3-test-utils", version.ref = "androidx-media3" }
 androidx-media3-test-utils-robolectric = { module = "androidx.media3:media3-test-utils-robolectric", version.ref = "androidx-media3" }
-playservices-cast = { group = "com.google.android.gms", name = "play-services-cast", version.ref = "playservices" }
-playservices-castframework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "playservices" }
 jellyfin-androidx-media3-ffmpeg-decoder = { module = "org.jellyfin.media3:media3-ffmpeg-decoder", version.ref = "jellyfin-androidx-media" }
 
 # Room
@@ -210,10 +206,6 @@ androidx-media3 = [
     "androidx-media3-exoplayer-hls",
     "androidx-media3-datasource-okhttp",
     "jellyfin-androidx-media3-ffmpeg-decoder",
-]
-playservices = [
-    "playservices-cast",
-    "playservices-castframework",
 ]
 androidx-room = ["androidx-room-runtime"]
 kotest = ["kotest-runner", "kotest-assertions", "kotest-property"]

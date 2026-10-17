@@ -42,7 +42,7 @@ EMULATOR="$ANDROID_HOME/emulator/emulator.exe"
 
 case "$MODULE" in
     app-audiovault)
-        GRADLE_TASK=":app-audiovault:connectedLibreDebugAndroidTest"
+        GRADLE_TASK=":app-audiovault:connectedDebugAndroidTest"
         E2E_PACKAGE="org.jellyfin.mobile.e2e"
         ;;
     app-bookvault)

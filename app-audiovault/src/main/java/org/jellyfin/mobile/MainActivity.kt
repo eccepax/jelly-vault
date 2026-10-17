@@ -19,8 +19,6 @@ import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
-import org.jellyfin.mobile.player.cast.Chromecast
-import org.jellyfin.mobile.player.cast.IChromecast
 import org.jellyfin.mobile.setup.ConnectFragment
 import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.mobile.utils.BluetoothPermissionHelper
@@ -37,7 +35,6 @@ class MainActivity : AppCompatActivity() {
     val mainViewModel: MainViewModel by viewModel()
     private val appPreferences: AudioVaultAppPreferences by inject()
     val bluetoothPermissionHelper: BluetoothPermissionHelper = BluetoothPermissionHelper(this, get())
-    val chromecast: IChromecast = Chromecast()
     private val permissionRequestHelper: PermissionRequestHelper by inject()
 
     /**
@@ -98,11 +95,6 @@ class MainActivity : AppCompatActivity() {
 
         // Handle back presses
         onBackPressedDispatcher.addCallback(this, onBackPressed = onBackPressedCallback)
-
-        // Setup Chromecast (only when enabled in preferences to avoid background device scanning)
-        if (appPreferences.chromecastEnabled) {
-            chromecast.initializePlugin(this)
-        }
     }
 
     private fun handleServerState(state: ServerState) {
@@ -141,11 +133,6 @@ class MainActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         onBackPressedDispatcher.onBackPressed()
         return true
-    }
-
-    override fun onDestroy() {
-        chromecast.destroy()
-        super.onDestroy()
     }
 }
 

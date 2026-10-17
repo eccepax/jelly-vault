@@ -20,7 +20,6 @@ object Constants {
     const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"
     const val PREF_LIBRARY_SORT_OPTION = "pref_library_sort_option"
     const val PREF_LIBRARY_GLOBAL_FLATTEN = "pref_library_global_flatten"
-    const val PREF_CHROMECAST_ENABLED = "pref_chromecast_enabled"
     const val PREF_PLAYBACK_SPEED = "pref_playback_speed"
     const val PREF_SKIP_SILENCE = "pref_skip_silence"
 
