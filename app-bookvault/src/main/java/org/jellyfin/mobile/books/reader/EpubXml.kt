@@ -3,6 +3,7 @@ package org.jellyfin.mobile.books.reader
 import org.w3c.dom.Element
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
 import java.net.URLDecoder
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -36,6 +37,13 @@ private val UNTRUSTED_XML_FEATURES = listOf(
 internal fun resolveEpubHref(baseDir: File, href: String): File {
     val path = href.substringBefore('#').replace("+", "%2B")
     return File(baseDir, URLDecoder.decode(path, Charsets.UTF_8.name()))
+}
+
+/** Whether this file is inside [dir], once any ".." and links in its path are resolved. */
+internal fun File.isInside(dir: File): Boolean = try {
+    canonicalPath.startsWith(dir.canonicalPath + File.separator)
+} catch (_: IOException) {
+    false
 }
 
 /**

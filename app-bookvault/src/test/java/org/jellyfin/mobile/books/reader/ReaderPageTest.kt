@@ -59,6 +59,12 @@ class ReaderPageTest {
     }
 
     @Test
+    fun `pictures and fonts written into the chapter itself load`() {
+        isReaderRequestAllowed("data:image/png;base64,iVBORw0KGgo=", book) shouldBe true
+        isReaderRequestAllowed("DATA:image/svg+xml,%3Csvg%2F%3E", book) shouldBe true
+    }
+
+    @Test
     fun `the reader's text settings come with the page, after the book's own styles`() {
         val html = """<html><head><link rel="stylesheet" href="book.css"/></head><body>Hi</body></html>"""
 
@@ -92,6 +98,33 @@ class ReaderPageTest {
 
         styled.indexOf("<style") shouldBeAfter styled.indexOf("<TITLE>")
         styled.indexOf("<style") shouldBeBefore styled.indexOf("</HEAD>")
+    }
+
+    @Test
+    fun `a closing head tag later on, in a comment say, doesn't move the styles`() {
+        val html = "<html><head><title>x</title></head><body><!-- </head> --><p>Hi</p></body></html>"
+
+        val styled = styledChapterHtml(html, "font-size:100%;", false)
+
+        styled.indexOf("<style") shouldBeBefore styled.indexOf("<body>")
+    }
+
+    @Test
+    fun `a closing head tag with a space before its bracket is found too`() {
+        val styled = styledChapterHtml("<html><head><title>x</title></head ><body/></html>", "font-size:100%;", false)
+
+        styled.indexOf("<style") shouldBeAfter styled.indexOf("<title>")
+        styled.indexOf("<style") shouldBeBefore styled.indexOf("</head >")
+    }
+
+    @Test
+    fun `without a closing head tag the styles still go after the doctype, so the page isn't in quirks mode`() {
+        val html = """<?xml version="1.0"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head/><body/></html>"""
+
+        val styled = styledChapterHtml(html, "font-size:100%;", false)
+
+        styled shouldStartWith "<?xml"
+        styled.indexOf("<style") shouldBeAfter styled.indexOf("<html")
     }
 
     private infix fun Int.shouldBeAfter(other: Int) = (this > other && other >= 0) shouldBe true

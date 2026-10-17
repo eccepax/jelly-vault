@@ -58,6 +58,13 @@ class ReaderWebViewTest {
     }
 
     @Test
+    fun `pictures written into the chapter itself load`() {
+        val client = shadowOf(webView).webViewClient.shouldNotBeNull()
+
+        client.shouldInterceptRequest(webView, request("data:image/png;base64,iVBORw0KGgo=")).shouldBeNull()
+    }
+
+    @Test
     fun `links don't leave the book`() {
         val client = shadowOf(webView).webViewClient.shouldNotBeNull()
 
