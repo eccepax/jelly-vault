@@ -14,7 +14,7 @@ data class EpubTextSettings(
     val fontFamily: EpubFontFamily = EpubFontFamily.SERIF,
     val lineSpacing: Float = 1.0f,
 ) {
-    /** CSS declarations applied to `document.documentElement.style` — see `EpubChapterAdapter`. */
+    /** CSS declarations for the chapter's root element, added to its page by [styledChapterHtml]. */
     fun toCssText(): String {
         val percent = (fontScale * PERCENT_MULTIPLIER).toInt()
         return "font-size:$percent%;font-family:${fontFamily.cssValue};line-height:$lineSpacing;"

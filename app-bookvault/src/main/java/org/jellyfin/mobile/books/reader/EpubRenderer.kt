@@ -31,6 +31,10 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     val chapterCount: Int get() = spineFiles.size
 
+    /** Where the open book is extracted; the reader loads nothing from outside it. */
+    var bookDir: File? = null
+        private set
+
     suspend fun openFile(epubFile: File, bookItemId: String) = withContext(Dispatchers.IO) {
         close()
         val dir = File(context.cacheDir, "epub_$bookItemId")
@@ -39,6 +43,7 @@ class EpubRenderer(private val context: Context) : Closeable {
             dir.mkdirs()
             extractEpub(epubFile, dir)
         }
+        bookDir = dir
         spineFiles = parseSpine(dir)
         bookToc = buildTableOfContents(dir)
         tocEntries = bookToc.takeIf { it.isNotEmpty() } ?: fallbackToc()
@@ -141,6 +146,7 @@ class EpubRenderer(private val context: Context) : Closeable {
     }
 
     override fun close() {
+        bookDir = null
         spineFiles = emptyList()
         bookToc = emptyList()
     }

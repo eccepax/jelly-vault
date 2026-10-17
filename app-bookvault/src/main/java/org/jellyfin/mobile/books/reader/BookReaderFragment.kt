@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.books.reader
 
-import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -8,9 +7,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
@@ -279,6 +276,7 @@ class BookReaderFragment : Fragment() {
         val adapter = EpubChapterAdapter(
             chapterCount = { viewModel.totalPages.value },
             getChapterFile = { viewModel.getChapterFile(it) },
+            bookDir = { viewModel.getBookDir() },
             nightMode = { viewModel.nightMode.value },
             textSettings = { textSettings },
         )
@@ -421,6 +419,7 @@ private class PdfPageAdapter(
 private class EpubChapterAdapter(
     private val chapterCount: () -> Int,
     private val getChapterFile: (Int) -> File?,
+    private val bookDir: () -> File?,
     private val nightMode: () -> Boolean,
     private val textSettings: () -> EpubTextSettings,
 ) : RecyclerView.Adapter<EpubChapterAdapter.Holder>() {
@@ -432,26 +431,23 @@ private class EpubChapterAdapter(
     // Unique view type per position prevents recycling stale WebView content
     override fun getItemViewType(position: Int) = position
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-        val wv = WebView(parent.context).apply {
+        // EPUBs are untrusted: no scripts, and nothing but the book's own files (see readerWebView)
+        val wv = readerWebView(parent.context, bookDir).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            @Suppress("DEPRECATION")
-            settings.allowFileAccess = true
-            @Suppress("DEPRECATION")
-            settings.allowFileAccessFromFileURLs = true
-            settings.javaScriptEnabled = true
         }
         return Holder(wv)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val file = getChapterFile(position) ?: return
+        // The book's table of contents could name any file as a chapter; only its own are shown
+        val dir = bookDir() ?: return
+        if (!isReaderRequestAllowed(file.toURI().toString(), dir)) return
         val isNight = nightMode()
-        val textCss = textSettings().toCssText()
         val baseUrl = "file://${file.parentFile!!.absolutePath}/"
         val html = try { file.readText() } catch (e: IOException) { return }
 
@@ -466,22 +462,8 @@ private class EpubChapterAdapter(
             null,
         )
 
-        holder.webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                return request.url.scheme != "file"
-            }
-
-            override fun onPageFinished(view: WebView, url: String) {
-                // Text-appearance settings apply to every chapter, regardless of night mode.
-                view.evaluateJavascript("document.documentElement.style.cssText+='$textCss'", null)
-                if (isNight) {
-                    view.evaluateJavascript(
-                        "document.documentElement.style.filter='invert(1) hue-rotate(180deg)'",
-                        null,
-                    )
-                }
-            }
-        }
-        holder.webView.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+        // The text settings and night mode come with the page, as a stylesheet: no scripts needed
+        val page = styledChapterHtml(html, textSettings().toCssText(), isNight)
+        holder.webView.loadDataWithBaseURL(baseUrl, page, "text/html", "UTF-8", null)
     }
 }
