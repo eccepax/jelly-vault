@@ -2,6 +2,7 @@ package org.jellyfin.mobile.music
 
 import android.app.Application
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.music.app.tuneAppModule
 import org.jellyfin.mobile.music.data.tuneDatabaseModule
 import org.jellyfin.mobile.music.downloads.downloadsModule
@@ -15,7 +16,7 @@ import timber.log.Timber
 /** The Koin modules the app starts with. */
 val tuneVaultModules = listOf(
     tuneAppModule,
-    apiModule(ClientInfo("TuneVault", BuildConfig.VERSION_NAME)),
+    apiModule(ClientInfo("TuneVault", BuildConfig.VERSION_NAME), VaultBrand.TuneVault),
     tuneDatabaseModule,
     downloadsModule,
 )

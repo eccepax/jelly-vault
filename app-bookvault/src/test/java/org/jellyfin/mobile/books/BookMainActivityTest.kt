@@ -20,6 +20,7 @@ import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.data.entity.ServerEntity
 import org.jellyfin.mobile.common.setup.LoginFragment
 import org.jellyfin.mobile.common.setup.LoginViewModel
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -77,6 +78,7 @@ class BookMainActivityTest {
                     single { mockk<ApiClientController>(relaxed = true) }
                     // The sign-in screen's, once LoginFragment is shown
                     viewModel { LoginViewModel(mockk(), mockk(), mockk(relaxed = true), mockk(relaxed = true)) }
+                    single { VaultBrand.BookVault }
                 },
             )
         }

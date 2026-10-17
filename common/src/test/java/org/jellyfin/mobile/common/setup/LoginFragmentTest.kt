@@ -1,7 +1,10 @@
 package org.jellyfin.mobile.common.setup
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Looper
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -17,6 +20,7 @@ import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.floats.shouldBeLessThanOrEqual
+import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -30,6 +34,8 @@ import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
 import org.jellyfin.mobile.common.setup.quickconnect.SignedInUser
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -42,6 +48,7 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /** The sign-in screen as AudioVault and BookVault show it: in a fragment, wired to the server. */
 @RunWith(RobolectricTestRunner::class)
@@ -68,6 +75,8 @@ class LoginFragmentTest {
                     single { mockk<QuickConnect>(relaxed = true) }
                     single { apiClientController }
                     single { appPreferences }
+                    // Not common's default Jellyfin blue, so the screen is seen to take the app's own
+                    single { VaultBrand.BookVault }
                     viewModel { mainViewModel }
                     // On the main thread, so the test sees the sign-in finish without waiting on another
                     viewModel { LoginViewModel(get(), get(), get(), get(), Dispatchers.Main) }
@@ -126,7 +135,27 @@ class LoginFragmentTest {
         }
     }
 
+    @Test
+    @Config(sdk = [SCREENSHOT_SDK])
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `the sign-in button is in the app's own brand`() {
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use { scenario ->
+            val button = composeRule.onNode(hasText(string(R.string.login_button)) and hasClickAction())
+                .fetchSemanticsNode().boundsInRoot
+            scenario.onFragment { fragment ->
+                val view = fragment.requireView()
+                val pixels = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(pixels))
+
+                // Just inside the left edge, clear of the rounded corners and the centered label
+                pixels.getPixel(button.left.toInt() + EDGE_INSET_PX, button.center.y.toInt()) shouldBe
+                    VaultBrand.BookVault.accent.toArgb()
+            }
+        }
+    }
+
     private companion object {
+        const val EDGE_INSET_PX = 8
         const val STATUS_BAR_PX = 63
         const val NAV_BAR_PX = 42
     }

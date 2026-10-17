@@ -8,6 +8,7 @@ import org.jellyfin.mobile.books.data.bookDatabaseModule
 import org.jellyfin.mobile.books.downloads.bookDownloadsModule
 import org.jellyfin.mobile.books.utils.BookTree
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.fragment.koin.fragmentFactory
@@ -18,7 +19,7 @@ import timber.log.Timber
 @OptIn(UnstableApi::class)
 val bookVaultModules = listOf(
     bookAppModule,
-    apiModule(ClientInfo("BookVault", BuildConfig.VERSION_NAME)),
+    apiModule(ClientInfo("BookVault", BuildConfig.VERSION_NAME), VaultBrand.BookVault),
     bookDatabaseModule,
     bookDownloadsModule,
 )

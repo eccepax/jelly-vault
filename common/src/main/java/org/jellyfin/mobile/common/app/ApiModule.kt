@@ -10,6 +10,7 @@ import org.jellyfin.mobile.common.setup.LoginViewModel
 import org.jellyfin.mobile.common.setup.PasswordSignIn
 import org.jellyfin.mobile.common.setup.quickconnect.JellyfinQuickConnect
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -17,9 +18,11 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
-fun apiModule(clientInfo: ClientInfo) = module {
+fun apiModule(clientInfo: ClientInfo, brand: VaultBrand) = module {
     // Also which app and version this is, e.g. for Settings' About
     single { clientInfo }
+    // The app's look, for shared screens that can't know which app they're in
+    single { brand }
     single {
         createJellyfin {
             context = androidContext()

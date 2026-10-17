@@ -8,6 +8,7 @@ import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
@@ -43,6 +44,8 @@ class LoginScreenshotTest {
                     single { mockk<AppPreferences>(relaxed = true) }
                     viewModel { mockk<MainViewModel>(relaxed = true) }
                     viewModel { LoginViewModel(get(), get(), get(), get()) }
+                    // common's own accent, as before the brand came from the app
+                    single { VaultBrand.Jellyfin }
                 },
             )
         }
