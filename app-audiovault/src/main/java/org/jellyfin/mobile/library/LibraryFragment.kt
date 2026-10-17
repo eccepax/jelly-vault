@@ -50,6 +50,9 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
     private var hasPlayer by mutableStateOf(false)
     private var isPlaying by mutableStateOf(false)
     private var nowPlayingTitle by mutableStateOf("")
+
+    // The player exists from sign-in on; the mini player only means something once a book is loaded
+    private var hasBook by mutableStateOf(false)
     private var nowPlayingCover by mutableStateOf<String?>(null)
     private var miniPlayerListener: Player.Listener? = null
 
@@ -118,7 +121,7 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
             downloadedOnly = downloadedOnly,
             showHidden = showHidden,
             itemMenu = itemMenu,
-            nowPlaying = if (hasPlayer) NowPlayingBar(nowPlayingTitle, nowPlayingCover, isPlaying) else null,
+            nowPlaying = if (hasPlayer && hasBook) NowPlayingBar(nowPlayingTitle, nowPlayingCover, isPlaying) else null,
         )
     }
 
@@ -151,6 +154,7 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
             miniPlayerListener = listener
         }
         playerViewModel.queueManager.currentMediaSource.observe(viewLifecycleOwner) { mediaSource ->
+            hasBook = true
             nowPlayingTitle = mediaSource.getName(requireContext())
             nowPlayingCover = coverUrl(mediaSource.itemId, coverSize)
         }
