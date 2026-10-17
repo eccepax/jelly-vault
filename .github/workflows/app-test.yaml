@@ -6,14 +6,30 @@ on:
       - main
       - release-*
   pull_request:
+  schedule:
+    # Weekly, so a new Jellyfin release that breaks the apps shows up without waiting for a PR.
+    - cron: '17 6 * * 1'
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Test
+    # The pinned leg keeps the plain "Test" name that checks refer to.
+    name: ${{ matrix.jellyfin == 'latest' && 'Test (Jellyfin latest)' || 'Test' }}
     runs-on: ubuntu-24.04
+    # A new Jellyfin release can't block PRs, but its leg still shows red as a warning.
+    continue-on-error: ${{ matrix.jellyfin == 'latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The pinned version matches test-server/docker-compose.yml's default; bump them together.
+        jellyfin: ['10.11.6', 'latest']
+    env:
+      JELLYFIN_VERSION: ${{ matrix.jellyfin }}
+      VAULT_TEST_HOSTNAME: http://localhost:8097
+      VAULT_TEST_USERNAME: vault-test
+      VAULT_TEST_PASSWORD: vault-test
     steps:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -24,20 +40,50 @@ jobs:
           java-version: 21
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+      - name: Restore generated test media
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            test-server/.data/media
+            test-server/.data/downloads
+          key: test-server-media-${{ hashFiles('test-server/fixtures.json', 'test-server/generate_media.py') }}
+      - name: Start the test server (Jellyfin ${{ matrix.jellyfin }})
+        run: test-server/up.sh
       - name: Run test task, with coverage
+        if: ${{ matrix.jellyfin != 'latest' }}
         run: ./gradlew test koverHtmlReport
+      - name: Run the server tests
+        if: ${{ matrix.jellyfin == 'latest' }}
+        run: >-
+          ./gradlew --continue
+          :common:testDebugUnitTest --tests '*ContractTest'
+          :app-audiovault:testDebugUnitTest --tests '*ContractTest'
+          :app-bookvault:testDebugUnitTest --tests '*ContractTest'
+          :app-livevault:testDebugUnitTest --tests '*ContractTest'
+          :app-tunevault:testDebugUnitTest --tests '*ContractTest'
+      - name: Save the test server's logs
+        if: ${{ failure() }}
+        run: docker compose -f test-server/docker-compose.yml logs --no-color > test-server-logs.txt
+      - name: Upload the test server's logs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ failure() }}
+        with:
+          name: test-server-logs-${{ matrix.jellyfin }}
+          retention-days: 14
+          path: test-server-logs.txt
       - name: Upload coverage report
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.jellyfin != 'latest' }}
         with:
           name: coverage
           retention-days: 14
           path: build/reports/kover/html/
       - name: Compare screenshots with the approved ones
+        if: ${{ matrix.jellyfin != 'latest' }}
         run: ./gradlew verifyRoborazziDebug --tests '*ScreenshotTest'
       - name: Upload screenshot comparisons
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: ${{ failure() }}
+        if: ${{ failure() && matrix.jellyfin != 'latest' }}
         with:
           name: screenshot-comparisons
           retention-days: 14
