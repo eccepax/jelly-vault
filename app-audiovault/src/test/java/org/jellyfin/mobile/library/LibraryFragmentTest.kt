@@ -63,12 +63,14 @@ class LibraryFragmentTest {
     private val itemsFlow = MutableStateFlow<List<LibraryItem>>(emptyList())
     private val downloadedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val hiddenIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val filterQueryFlow = MutableStateFlow("")
 
     @Before
     fun setUp() {
         every { libraryViewModel.items } returns itemsFlow
         every { libraryViewModel.downloadedIds } returns downloadedIdsFlow
         every { libraryViewModel.hiddenIds } returns hiddenIdsFlow
+        every { libraryViewModel.filterQuery } returns filterQueryFlow
         every { libraryViewModel.title } returns MutableStateFlow("Library")
         every { libraryViewModel.canGoUp } returns MutableStateFlow(false)
         every { libraryViewModel.isLoading } returns MutableStateFlow(false)
@@ -235,6 +237,31 @@ class LibraryFragmentTest {
         }
 
         emitted() shouldBe ActivityEvent.OpenSettings
+    }
+
+    @Test
+    fun `after a rotation the search box still shows the search filtering the list`() {
+        filterQueryFlow.value = "potter"
+
+        launch().use { scenario ->
+            composeRule.onNodeWithText("potter").assertExists()
+
+            scenario.recreate()
+
+            composeRule.onNodeWithText("potter").assertExists()
+        }
+    }
+
+    @Test
+    fun `when the search is cleared, the box empties too`() {
+        filterQueryFlow.value = "potter"
+
+        launch().use {
+            // As opening a folder does
+            filterQueryFlow.value = ""
+
+            composeRule.onNodeWithText("potter").assertDoesNotExist()
+        }
     }
 
     private companion object {

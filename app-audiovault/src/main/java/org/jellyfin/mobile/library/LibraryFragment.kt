@@ -43,7 +43,6 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
     private var _binding: FragmentComposeBinding? = null
     private val binding get() = _binding!!
 
-    private var query by mutableStateOf("")
     private var itemMenu by mutableStateOf<ItemMenu?>(null)
 
     // The mini player's parts arrive separately: the player, then (or before) what's loaded in it
@@ -67,10 +66,7 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
         val coverSize = resources.getDimensionPixelSize(R.dimen.movie_thumbnail_list_size)
         val actions = LibraryActions(
             onUp = { viewModel.goUp() },
-            onQueryChange = {
-                query = it
-                viewModel.setFilterQuery(it)
-            },
+            onQueryChange = viewModel::setFilterQuery,
             onSort = viewModel::setSortOption,
             onDownloadedOnly = { viewModel.showDownloadedOnly.value = it },
             onShowHidden = { viewModel.showHiddenItems.value = it },
@@ -108,6 +104,8 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
         val sort by viewModel.sortOption.collectAsState()
         val downloadedOnly by viewModel.showDownloadedOnly.collectAsState()
         val showHidden by viewModel.showHiddenItems.collectAsState()
+        // The ViewModel's, so it outlives a rotation and empties when a folder change clears it
+        val query by viewModel.filterQuery.collectAsState()
         return LibraryUiState(
             title = title,
             canGoUp = canGoUp,

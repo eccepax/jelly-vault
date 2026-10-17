@@ -63,6 +63,9 @@ class LibraryViewModel(
 
     private val _rawItems = MutableStateFlow<List<LibraryItem>>(emptyList())
     private val _filterQuery = MutableStateFlow("")
+
+    /** The search filtering [items], for the search box to show; cleared on moving between folders. */
+    val filterQuery: StateFlow<String> = _filterQuery.asStateFlow()
     val showDownloadedOnly = MutableStateFlow(false)
     private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
