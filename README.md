@@ -1,19 +1,17 @@
 # AudioVault, BookVault, TuneVault & LiveVault
 
-Four Android apps for a self-hosted [Jellyfin](https://jellyfin.org) server, each built around a single content type instead of Jellyfin's full media catalog:
+Four Android apps for a self-hosted [Jellyfin](https://jellyfin.org) server, one for each kind of media:
 
-- **AudioVault** — audiobook playback via a native ExoPlayer (Media3) audio experience.
-- **BookVault** — EPUB/PDF reading, with scroll and paginated modes and dark-mode support.
-- **TuneVault** — music playback for your Jellyfin music library.
-- **LiveVault** — live TV from your Jellyfin server's tuners, for phones, tablets, and Google TV.
-
-All four are forks of [jellyfin-android](https://github.com/jellyfin/jellyfin-android). The original Jellyfin Android app is a full-featured media client built by the Jellyfin community — these apps strip it down, remove the general-purpose WebView/video pipeline, and rebuild around one content type each.
+- **AudioVault**: audiobooks
+- **BookVault**: ebooks (EPUB and PDF)
+- **TuneVault**: music
+- **LiveVault**: live TV, on phones, tablets, and Google TV
 
 ## Download
 
 Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the apps install side by side.
 
-None of the apps need Google Play services. Chromecast isn't supported.
+None of the apps need Google Play services. None of them cast, but LiveVault runs on Google TV devices, Chromecast with Google TV included.
 
 Each APK has a `.sha256` checksum next to it. To check an APK really comes from this project, compare its signing certificate (`apksigner verify --print-certs <apk>`, or what Obtainium/AppVerifier show) against:
 
@@ -26,25 +24,24 @@ Each APK has a `.sha256` checksum next to it. To check an APK really comes from 
 
 To get updates automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium).
 
-## AudioVault: what's different from jellyfin-android
+## AudioVault
 
-- Audio-only playback via ExoPlayer — no WebView, no video
-- Audiobook library browser with folder navigation and a global flat view
-- Resume position synced with Jellyfin (progress reported on play, pause, and stop)
-- Sleep timer with end-of-chapter support
-- Audiobook-optimized skip intervals (10 s back / 30 s forward)
-- Chapter markers on the seek bar
-- Per-book tracklist for multi-file audiobooks
-- Playback speed control with hold-to-speed-up
+- Audiobook library with folder browsing and an "all audiobooks" view
+- Resume position synced with Jellyfin
+- Sleep timer, including end of chapter
+- 10 s back / 30 s forward skips, chapter markers, and a track list for multi-file books
+- Playback speed control, with hold-to-speed-up
 - Offline downloads
 
-## BookVault: what's different from jellyfin-android
+## BookVault
 
-- EPUB and PDF reading via a native reader — no general-purpose WebView browsing
-- Scroll mode (continuous, chapter-nav buttons) and paginated mode (swipe between chapters)
-- Dark mode with a properly inverted reading background, not just inverted text
-- Adjustable EPUB text size and line spacing, tap-to-jump table of contents, and bookmarks
+- EPUB and PDF reading
+- Scroll mode and paginated mode
+- Dark mode with a properly inverted reading background
+- Adjustable EPUB text size and line spacing
+- Tap-to-jump table of contents, and bookmarks
 - Reading progress synced with Jellyfin
+- Offline downloads
 
 ## TuneVault
 
@@ -53,15 +50,15 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Favorites and playlists
 - Offline downloads
 - Sleep timer and volume levelling
-- Playback reported to Jellyfin
 
 ## LiveVault
 
 - Channel list with tags, favorites, search, and what's on now
-- Live playback on phones, tablets, and Google TV, with channel up/down from the remote
-- Streams are always closed when you stop, switch, or leave, so a tuner with a single connection isn't left held
-- When a channel's provider login is busy, says so and offers free channels instead
-- Remembers the last channel and filter, and offers to continue watching
+- Channel up/down from a TV remote
+- Picture-in-picture on phones and tablets
+- Closes every stream when you stop, switch, or leave, so a tuner with a single connection is never left held
+- If your TV provider's login is already in use, it tells you and offers free channels instead
+- Continue watching your last channel
 
 ## Building
 
@@ -116,9 +113,7 @@ Bump `app.version` in the app's `gradle.properties` before each release.
 
 ### Chromecast
 
-None of the apps cast. AudioVault's cast code, left over from jellyfin-android's WebView bridge and never
-working here, was removed rather than kept half-done. If casting comes back, it should be one implementation
-for all four apps: Media3's `CastPlayer` swapped in behind each app's media session, in `common-media`. Cast
+None of the apps cast. If casting is added, it should be one implementation for all four apps: Media3's `CastPlayer` swapped in behind each app's media session, in `common-media`. Cast
 needs Google Play services, so each app would then also get a build variant with them, next to one without.
 
 ## Requirements
