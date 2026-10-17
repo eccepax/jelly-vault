@@ -14,7 +14,6 @@ import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.music.BuildConfig
 import org.jellyfin.mobile.music.account.SettingsViewModel
 import org.jellyfin.mobile.music.account.tuneVaultSignOut
 import org.jellyfin.mobile.music.catalog.AccountInfo
@@ -200,7 +199,7 @@ val tuneAppModule = module {
             sleepTimer = get<SleepTimerVisibility>(),
             levelling = get<VolumeLevellingSetting>(),
             signOut = { signOut() },
-            appVersion = BuildConfig.VERSION_NAME,
+            app = get(),
         )
     }
 }

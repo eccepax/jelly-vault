@@ -98,8 +98,7 @@ fun SettingsScreen(
                 Divider()
                 AccountSection(state, onSignOut)
                 Divider()
-                // The name as the bug form lists it (not app_name, which debug builds change)
-                AboutSettings(appName = "TuneVault", version = state.appVersion)
+                AboutSettings(appName = state.appName, version = state.appVersion)
             }
         }
     }

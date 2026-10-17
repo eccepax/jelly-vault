@@ -75,10 +75,11 @@ import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultColors
 import org.jellyfin.mobile.common.ui.theme.focusBorder
-import org.jellyfin.mobile.livetv.BuildConfig
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.sdk.model.ClientInfo
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import java.time.Instant
 import org.jellyfin.mobile.common.R as CommonR
@@ -87,12 +88,14 @@ import org.jellyfin.mobile.common.R as CommonR
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
  * on tablets and TVs; cards and chips are focusable, so a TV remote's D-pad moves through them.
  * [onTv], the remote starts on the channel to continue (else the first one) rather than on search.
+ * The menu names [app] and its version, for a bug report.
  */
 @Composable
 fun ChannelsScreen(
     state: ChannelsUiState,
     now: Instant,
     onTv: Boolean = false,
+    app: ClientInfo,
     actions: ChannelsActions,
 ) {
     val startFocus = remember { FocusRequester() }
@@ -106,6 +109,7 @@ fun ChannelsScreen(
                 query = (state as? ChannelsUiState.Loaded)?.filter?.query.orEmpty(),
                 onQueryChange = actions.onQueryChange,
                 onSignOut = actions.onSignOut,
+                app = app,
             )
             when (state) {
                 ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
@@ -140,10 +144,10 @@ fun ChannelsScreen(
 }
 
 @Composable
-private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit) {
+private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit, app: ClientInfo) {
     Column {
         // The same bar as the other apps' main screens
-        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut) })
+        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut, app) })
         SearchField(
             query = query,
             onQueryChange = onQueryChange,
@@ -156,7 +160,7 @@ private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: ()
 }
 
 @Composable
-private fun MoreMenu(onSignOut: () -> Unit) {
+private fun MoreMenu(onSignOut: () -> Unit, app: ClientInfo) {
     var expanded by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
     // Read here: the menu is its own window, whose composition has its own handler
@@ -174,15 +178,14 @@ private fun MoreMenu(onSignOut: () -> Unit) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.channels_more_options))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            val appName = "LiveVault" // as the bug form lists it
             // Which version this is, for a bug report; there's no settings screen to show it on
             DropdownMenuItem(onClick = {}, enabled = false) {
-                Text(stringResource(CommonR.string.about_app_version, appName, BuildConfig.VERSION_NAME))
+                Text(stringResource(CommonR.string.about_app_version, app.name, app.version))
             }
             DropdownMenuItem(
                 onClick = {
                     expanded = false
-                    uriHandler.openUri(bugReportUrl(appName, BuildConfig.VERSION_NAME))
+                    uriHandler.openUri(bugReportUrl(app.name, app.version))
                 },
             ) {
                 Text(stringResource(CommonR.string.report_bug))
@@ -449,6 +452,8 @@ fun ChannelsRoute(
     onChannelClick: (channel: LiveChannel, lineup: List<LiveChannel>) -> Unit,
     onSignOut: () -> Unit,
     viewModel: ChannelsViewModel = koinViewModel(),
+    // The app's name as the server knows it and the bug form lists it
+    app: ClientInfo = koinInject(),
 ) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
@@ -468,6 +473,7 @@ fun ChannelsRoute(
         state = state,
         now = now,
         onTv = onTv,
+        app = app,
         actions = ChannelsActions(
             onQueryChange = viewModel::onQueryChange,
             onTagSelect = viewModel::selectTag,

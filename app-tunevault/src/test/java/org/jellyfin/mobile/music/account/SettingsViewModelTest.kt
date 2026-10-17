@@ -14,6 +14,7 @@ import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.downloads.FakeDownloadSettings
 import org.jellyfin.mobile.music.playback.SetVolumeLevelling
 import org.jellyfin.mobile.music.playback.ShowSleepTimer
+import org.jellyfin.sdk.model.ClientInfo
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -46,7 +47,7 @@ class SettingsViewModelTest {
             signOuts++
             signOutFinishes?.await()
         },
-        appVersion = "1.2.3",
+        app = ClientInfo("TuneVault", "1.2.3"),
     )
 
     @BeforeEach
@@ -64,6 +65,8 @@ class SettingsViewModelTest {
         val state = viewModel().state.value
 
         state.account shouldBe vault
+        // The app's own name and version, as the server knows it and the bug form lists it
+        state.appName shouldBe "TuneVault"
         state.appVersion shouldBe "1.2.3"
     }
 

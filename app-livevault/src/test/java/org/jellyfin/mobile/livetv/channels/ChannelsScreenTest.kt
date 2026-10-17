@@ -32,11 +32,11 @@ import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import org.jellyfin.mobile.common.ui.components.bugReportUrl
-import org.jellyfin.mobile.livetv.BuildConfig
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.sdk.model.ClientInfo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,6 +72,9 @@ class ChannelsScreenTest {
         filter: ChannelFilter = ChannelFilter(),
     ) = ChannelsUiState.Loaded(channels = channels, tags = listOf("Free", "My Teams", "Sports"), filter = filter)
 
+    // Not the app's real name and version, so the menu is seen to show the ones it's given
+    private val app = ClientInfo("LiveVault Test", "9.9.9")
+
     private fun show(state: ChannelsUiState, onTv: Boolean = false) {
         composeRule.setContent {
             // A TV has no touch screen: the remote's D-pad keeps it in keyboard input mode, which
@@ -96,6 +99,7 @@ class ChannelsScreenTest {
                         state = state,
                         now = now,
                         onTv = onTv,
+                        app = app,
                         actions = ChannelsActions(
                             onQueryChange = { query = it },
                             onTagSelect = { tagSelected = it },
@@ -200,7 +204,7 @@ class ChannelsScreenTest {
         val many = List(60) { channel("${it + 1}", "Channel ${it + 1}", tags = listOf("Sports")) }
         var state by mutableStateOf(loaded(channels = many))
         composeRule.setContent {
-            ChannelsScreen(state = state, now = now, actions = ChannelsActions({}, {}, {}, {}, {}, {}, {}))
+            ChannelsScreen(state = state, now = now, app = app, actions = ChannelsActions({}, {}, {}, {}, {}, {}, {}))
         }
         composeRule.onNodeWithTag(ChannelsScreenTags.GRID).performScrollToIndex(many.lastIndex)
 
@@ -297,10 +301,10 @@ class ChannelsScreenTest {
         show(loaded())
 
         composeRule.onNodeWithContentDescription("More options").performClick()
-        composeRule.onNodeWithText("LiveVault ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
+        composeRule.onNodeWithText("LiveVault Test 9.9.9").assertIsDisplayed()
         composeRule.onNodeWithText("Report a bug").performClick()
 
-        opened shouldBe listOf(bugReportUrl("LiveVault", BuildConfig.VERSION_NAME))
+        opened shouldBe listOf(bugReportUrl("LiveVault Test", "9.9.9"))
     }
 
     @Test
