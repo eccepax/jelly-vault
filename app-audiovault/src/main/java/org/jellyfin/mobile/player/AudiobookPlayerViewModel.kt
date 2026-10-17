@@ -27,10 +27,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.BuildConfig
-import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.app.PLAYER_EVENT_CHANNEL
 import org.jellyfin.mobile.common.data.dao.UserDao
@@ -50,7 +52,6 @@ import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.jellyfin.mobile.player.ui.AudiobookDisplayPreferences
 import org.jellyfin.mobile.player.ui.PlayState
-import org.jellyfin.mobile.player.ui.playermenuhelper.PlayerMenuHelper
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.Constants.SUPPORTED_AUDIOBOOK_PLAYBACK_ACTIONS
 import org.jellyfin.mobile.utils.applyDefaultAudioAttributes
@@ -80,7 +81,6 @@ import org.jellyfin.sdk.model.api.PlaybackStartInfo
 import org.jellyfin.sdk.model.api.PlaybackStopInfo
 import org.jellyfin.sdk.model.api.RepeatMode
 import org.jellyfin.sdk.model.extensions.inWholeTicks
-import org.jellyfin.sdk.model.extensions.ticks
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -91,7 +91,6 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import org.jellyfin.mobile.common.R as CommonR
 
 private const val SLEEP_TIMER_TICK_INTERVAL_MS = 1000L
 private const val SLEEP_TIMER_NOTIFICATION_UPDATE_INTERVAL_TICKS = 60
@@ -141,11 +140,13 @@ class AudiobookPlayerViewModel(application: Application) :
     val player: LiveData<ExoPlayer?> get() = _player
     val playerState: LiveData<Int> get() = _playerState
 
-    // Player Menus
-    private var playerMenuHelper: PlayerMenuHelper? = null
-
     // Media Segments Ask to Skip
     private var askToSkipMediaSegments: List<MediaSegmentDto> = emptyList()
+
+    private val _skipSegment = MutableStateFlow<MediaSegmentDto?>(null)
+
+    /** The segment (an intro, an outro) being played that the player offers to skip; null when none. */
+    val skipSegment: StateFlow<MediaSegmentDto?> = _skipSegment.asStateFlow()
 
     private val _error = MutableLiveData<String>()
     val error: LiveData<String> = _error
@@ -156,8 +157,10 @@ class AudiobookPlayerViewModel(application: Application) :
     private var fallbackPreferExtensionRenderers = false
     private var playSpeed = 1f
 
+    /** The speed chosen, which holding fast-forward doesn't change though the player plays faster. */
+    val playbackSpeed: Float get() = playSpeed
+
     private var progressUpdateJob: Job? = null
-    private var chapterMarkingUpdateJob: Job? = null
     private var skipMediaSegmentUpdateJob: Job? = null
 
     /**
@@ -334,20 +337,6 @@ class AudiobookPlayerViewModel(application: Application) :
         progressUpdateJob?.cancel()
     }
 
-    private fun startChapterMarkingUpdates() {
-        chapterMarkingUpdateJob?.cancel()
-        chapterMarkingUpdateJob = viewModelScope.launch {
-            while (true) {
-                delay(Constants.CHAPTER_MARKING_UPDATE_DELAY.coerceAtLeast(1L))
-                playerOrNull?.setWatchedChapterMarkings()
-            }
-        }
-    }
-
-    private fun stopChapterMarkingUpdates() {
-        chapterMarkingUpdateJob?.cancel()
-    }
-
     private fun startSkipMediaSegmentUpdates() {
         skipMediaSegmentUpdateJob?.cancel()
         skipMediaSegmentUpdateJob = viewModelScope.launch {
@@ -389,31 +378,13 @@ class AudiobookPlayerViewModel(application: Application) :
         }
     }
 
-    private fun Player.setWatchedChapterMarkings() {
-        val playbackPosition = (currentPosition + this@AudiobookPlayerViewModel.transcodingStartOffset).milliseconds
-        val chapters = mediaSourceOrNull?.item?.chapters ?: return
-        val startPositions = chapters.map { c -> c.startPositionTicks.ticks }
-        val chapterMarkings = playerMenuHelper?.chapterMarkings?.markings
-            ?.mapNotNull { it.get() }
-            ?: emptyList()
-
-        startPositions.zip(chapterMarkings).forEach { (pos, marking) ->
-            val color = if (playbackPosition >= pos) CommonR.color.jellyfin_accent else R.color.playback_timebar_unplayed
-            marking.setColor(color)
-        }
-    }
-
     private fun Player.updateSkipMediaSegmentButton() {
         val mediaSegments = askToSkipMediaSegments
         if (mediaSegments.isEmpty()) return
 
         val playbackPosition = (currentPosition + this@AudiobookPlayerViewModel.transcodingStartOffset).milliseconds
         val currentMediaSegment = mediaSegments.find { seg -> playbackPosition in seg.start..seg.end }
-        if (currentMediaSegment != null) {
-            playerMenuHelper?.skipMediaSegmentButton?.showSkipSegmentButton(currentMediaSegment)
-        } else {
-            playerMenuHelper?.skipMediaSegmentButton?.hideSkipSegmentButton()
-        }
+        _skipSegment.value = currentMediaSegment
     }
 
     /**
@@ -543,6 +514,7 @@ class AudiobookPlayerViewModel(application: Application) :
 
     private fun applyMediaSegments(jellyfinMediaSource: JellyfinMediaSource) {
         askToSkipMediaSegments = emptyList()
+        _skipSegment.value = null
 
         viewModelScope.launch {
             if (jellyfinMediaSource.item != null) {
@@ -865,15 +837,11 @@ class AudiobookPlayerViewModel(application: Application) :
     private fun updateProgressJobs(playWhenReady: Boolean, playbackState: Int) {
         if (playbackState == Player.STATE_READY && playWhenReady) {
             startProgressUpdates()
-            if (!playerMenuHelper?.chapterMarkings?.markings.isNullOrEmpty()) {
-                startChapterMarkingUpdates()
-            }
             if (askToSkipMediaSegments.isNotEmpty()) {
                 startSkipMediaSegmentUpdates()
             }
         } else {
             stopProgressUpdates()
-            stopChapterMarkingUpdates()
             stopSkipMediaSegmentUpdates()
         }
     }
@@ -891,7 +859,6 @@ class AudiobookPlayerViewModel(application: Application) :
 
     override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
         super.onPositionDiscontinuity(oldPosition, newPosition, reason)
-        playerOrNull?.setWatchedChapterMarkings()
         playerOrNull?.updateSkipMediaSegmentButton()
     }
 
@@ -905,10 +872,6 @@ class AudiobookPlayerViewModel(application: Application) :
         ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         releasePlayer()
         mediaSession.release()
-    }
-
-    fun setPlayerMenuHelper(menuHelper: PlayerMenuHelper?) {
-        playerMenuHelper = menuHelper
     }
 
     // Sleep timer controls

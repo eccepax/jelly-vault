@@ -12,7 +12,8 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ui.screens.connect.ConnectScreen
 import org.jellyfin.mobile.common.ui.screens.connect.StyledTextButton
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
@@ -42,7 +43,7 @@ class ConnectFragment : Fragment() {
         val encounteredConnectionError = arguments?.getBoolean(Constants.FRAGMENT_CONNECT_EXTRA_ERROR) == true
 
         composeView.setContent {
-            AppTheme {
+            AppTheme(VaultBrand.AudioVault) {
                 ConnectScreen(
                     mainViewModel = mainViewModel,
                     showExternalConnectionError = encounteredConnectionError,

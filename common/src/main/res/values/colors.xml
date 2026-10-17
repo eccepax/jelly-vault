@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand and base colors -->
+    <!-- The shared neutrals; they match VaultColors in ui/theme (AppThemeTest checks) -->
     <color name="jellyfin_primary">#202020</color>
     <color name="jellyfin_primary_dark">#101010</color>
-    <!-- Secondary -->
     <color name="jellyfin_accent">#00a4dc</color>
-
-    <!-- App colors -->
     <color name="theme_background">#101010</color>
+
+    <!-- Each app's accent; they match VaultBrand. An app picks its own by overriding vault_accent -->
+    <color name="vault_accent_audiovault">#ff5c72</color>
+    <color name="vault_accent_bookvault">#26a69a</color>
+    <color name="vault_accent_tunevault">#7986cb</color>
+    <color name="vault_accent_livevault">#00a4dc</color>
+    <color name="vault_accent">@color/jellyfin_accent</color>
 </resources>

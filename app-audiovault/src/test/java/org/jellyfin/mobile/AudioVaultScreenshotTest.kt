@@ -7,6 +7,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
@@ -35,6 +36,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /** AudioVault's main screens on a phone with 3-button navigation; see [captureWithSystemBars]. */
 @RunWith(RobolectricTestRunner::class)
@@ -75,6 +77,7 @@ class AudioVaultScreenshotTest {
             every { sortOption } returns MutableStateFlow(SortOption.TITLE)
             every { showDownloadedOnly } returns MutableStateFlow(false)
             every { showHiddenItems } returns MutableStateFlow(false)
+            every { filterQuery } returns MutableStateFlow("")
         }
         // A relaxed ApiClient's cached-API lookup returns the wrong type; covers come from a real ImageApi
         mockkStatic(API_CLIENT_EXTENSIONS)
@@ -90,7 +93,7 @@ class AudioVaultScreenshotTest {
             )
         }
 
-        launchFragmentInContainer<LibraryFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<LibraryFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { it.requireView().captureWithSystemBars("library") }
         }
     }
@@ -102,12 +105,13 @@ class AudioVaultScreenshotTest {
                 module {
                     single { apiClient }
                     single { mockk<AppPreferences>(relaxed = true) }
+                    single { mockk<AudioVaultAppPreferences>(relaxed = true) }
                     viewModel { mockedPlayerViewModelForPlayerFragment() }
                 },
             )
         }
 
-        launchFragmentInContainer<PlayerFragment>(themeResId = R.style.AppTheme).use { scenario ->
+        launchFragmentInContainer<PlayerFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { it.requireView().captureWithSystemBars("player") }
         }
     }

@@ -3,22 +3,17 @@ package org.jellyfin.mobile.common.ui
 import android.app.Activity
 import android.content.Intent
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.fragment.compose.AndroidFragment
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.common.setup.LoginRoute
 import org.jellyfin.mobile.common.ui.screens.connect.ConnectScreen
 
 /**
- * The top of a Compose app: connect to a server, sign in, then [signedIn]. Its activity must be a
- * FragmentActivity (the sign-in form is common's LoginFragment) and must pass the activity-scoped
- * [mainViewModel], the same instance LoginFragment gets from activityViewModel().
+ * The top of a Compose app: connect to a server, sign in, then [signedIn]. Its activity must pass
+ * the activity-scoped [mainViewModel], which the sign-in screen tells once the user is saved.
  */
 @Composable
 fun VaultRoot(
@@ -28,7 +23,7 @@ fun VaultRoot(
     signedIn: @Composable () -> Unit,
 ) {
     val serverState by mainViewModel.serverState.collectAsState()
-    // Re-resolved on every serverState emission: LoginFragment persists the user, then calls
+    // Re-resolved on every serverState emission: signing in persists the user, then calls
     // MainViewModel.refreshState(), which emits a fresh ServerState.Available.
     when (resolveRootScreen(serverState, appPreferences.currentUserId)) {
         RootScreen.Splash -> Unit
@@ -37,7 +32,7 @@ fun VaultRoot(
             showExternalConnectionError = false,
             logoRes = logoRes,
         )
-        RootScreen.Login -> AndroidFragment<LoginFragment>(Modifier.fillMaxSize().systemBarsPadding())
+        RootScreen.Login -> LoginRoute(mainViewModel)
         RootScreen.SignedIn -> signedIn()
     }
 }

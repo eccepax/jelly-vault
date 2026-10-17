@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/eccepax/jelly-vault/discussions
+    about: Setting up, how something works, or anything that isn't a bug or a feature idea.

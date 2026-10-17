@@ -24,7 +24,6 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.BuildConfig
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
-import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.player.AudioPlaybackService
 import org.jellyfin.mobile.player.PlayerHost
@@ -51,15 +50,11 @@ private const val MINUTES_PER_HOUR = 60L
 
 class PlayerNotificationHelper(private val viewModel: PlayerHost) : KoinComponent {
     private val context: Context = viewModel.app
-    private val appPreferences: AudioVaultAppPreferences by inject()
     private val notificationManager: NotificationManager? by lazy { context.getSystemService() }
     private val imageApi: ImageApi = get<ApiClient>().imageApi
     private val imageLoader: ImageLoader by inject()
     private val downloadDao: DownloadDao by inject()
     private val receiverRegistered = AtomicBoolean(false)
-
-    val allowBackgroundAudio: Boolean
-        get() = appPreferences.exoPlayerAllowBackgroundAudio
 
     private val notificationActionReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {

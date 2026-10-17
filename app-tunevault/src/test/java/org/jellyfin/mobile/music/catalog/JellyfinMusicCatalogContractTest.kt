@@ -143,6 +143,15 @@ class JellyfinMusicCatalogContractTest {
     }
 
     @Test
+    fun `a track's artist page lists the track's album`() = runBlocking<Unit> {
+        val album = catalog.albums().first { it.artist.isNotBlank() }
+        val track = catalog.albumTracks(album.id).first()
+
+        val artistId = track.artistId.shouldNotBeNull()
+        catalog.artistAlbums(artistId).map { it.id } shouldContain album.id
+    }
+
+    @Test
     fun `artist by unknown id is null`() = runBlocking<Unit> {
         catalog.artist("00000000000000000000000000000001") shouldBe null
     }

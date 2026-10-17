@@ -13,7 +13,7 @@ All four are forks of [jellyfin-android](https://github.com/jellyfin/jellyfin-an
 
 Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the apps install side by side.
 
-None of the apps need Google Play services. Chromecast isn't supported yet.
+None of the apps need Google Play services. Chromecast isn't supported.
 
 Each APK has a `.sha256` checksum next to it. To check an APK really comes from this project, compare its signing certificate (`apksigner verify --print-certs <apk>`, or what Obtainium/AppVerifier show) against:
 
@@ -68,8 +68,8 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 Requires Android Studio or the Android command-line tools and a JDK.
 
 ```bash
-# AudioVault (the proprietary flavor adds Google Play services for future Chromecast work; casting doesn't work yet)
-./gradlew :app-audiovault:assembleLibreDebug
+# AudioVault
+./gradlew :app-audiovault:assembleDebug
 
 # BookVault
 ./gradlew :app-bookvault:assembleDebug
@@ -90,8 +90,8 @@ Requires Android Studio or the Android command-line tools and a JDK.
 Each app's main screens are screenshotted as they look on a phone in dark mode with 3-button navigation, and compared with approved images in `src/test/screenshots/`. GitHub's checks fail if a screen changes:
 
 ```bash
-./gradlew verifyRoborazziDebug :app-audiovault:verifyRoborazziLibreDebug   # compare; diffs land in build/outputs/roborazzi/
-./gradlew recordRoborazziDebug :app-audiovault:recordRoborazziLibreDebug   # approve the current look
+./gradlew verifyRoborazziDebug   # compare; diffs land in build/outputs/roborazzi/
+./gradlew recordRoborazziDebug   # approve the current look
 ```
 
 The end-to-end tests (`scripts/run-e2e-tests.sh`) run against a real Jellyfin server. Point them at yours in `local.properties` (never commit this file):
@@ -108,11 +108,18 @@ Each app is signed with its own key, kept outside the repo:
 
 ```bash
 scripts/create-signing-keys.sh   # once: creates the keys in ../vault-keys and wires each app to its key
-./gradlew :app-audiovault:assembleLibreRelease :app-bookvault:assembleRelease :app-tunevault:assembleRelease \n    :app-livevault:assembleRelease
+./gradlew assembleRelease
 scripts/package-release.sh       # collects signed APKs + checksums into build/release/
 ```
 
 Bump `app.version` in the app's `gradle.properties` before each release.
+
+### Chromecast
+
+None of the apps cast. AudioVault's cast code, left over from jellyfin-android's WebView bridge and never
+working here, was removed rather than kept half-done. If casting comes back, it should be one implementation
+for all four apps: Media3's `CastPlayer` swapped in behind each app's media session, in `common-media`. Cast
+needs Google Play services, so each app would then also get a build variant with them, next to one without.
 
 ## Requirements
 

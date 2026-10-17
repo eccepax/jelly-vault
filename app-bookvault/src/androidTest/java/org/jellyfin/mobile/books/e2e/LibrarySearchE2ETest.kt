@@ -1,45 +1,46 @@
 package org.jellyfin.mobile.books.e2e
 
-import androidx.recyclerview.widget.RecyclerView
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.typeText
-import androidx.test.espresso.matcher.ViewMatchers.hasMinimumChildCount
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.hamcrest.Matchers.allOf
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.books.R
+import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
  * `BookLibraryViewModel`'s search filters the already-loaded list client-side by name/author/
  * series (see `filterAndSortBooks`/`BookLibraryFilter` in the unit suite) — no extra network round
  * trip. Searches for a title known to exist on the real Vault library ("Palestine") rather than a
- * generic term, so the assertion that the list actually narrowed isn't just luck.
+ * generic term, and checks the library showed other books first, so the list narrowing isn't luck.
  */
 class LibrarySearchE2ETest : LoggedInE2ETest() {
+
+    private val otherBooks = hasTestTag(VaultTestTags.LIBRARY_ITEM) and
+        !hasText(QUERY, substring = true, ignoreCase = true)
 
     @Test
     fun searchingFiltersTheLibraryList() {
         loginAndWaitForLibrary()
-        waitForView(allOf(withId(R.id.recycler_view_list), hasMinimumChildCount(1)))
-        val fullCount = itemCount()
+        assert(composeRule.onAllNodes(otherBooks).fetchSemanticsNodes().isNotEmpty()) {
+            "Expected the library to show books other than \"$QUERY\" before searching"
+        }
 
-        onView(withId(R.id.action_search)).perform(click())
-        onView(withId(androidx.appcompat.R.id.search_src_text)).perform(typeText("Palestine"))
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.action_search)).performClick()
+        composeRule.onNodeWithTag(VaultTestTags.SEARCH_FIELD).performTextInput(QUERY)
 
-        waitForView(allOf(withId(R.id.recycler_view_list), hasMinimumChildCount(1)))
-        val filteredCount = itemCount()
-
-        assert(filteredCount in 1 until fullCount) {
-            "Expected the search to narrow the list (full=$fullCount, filtered=$filteredCount)"
+        composeRule.waitUntil(timeoutMillis = WAIT_TIMEOUT_MS) {
+            composeRule.onAllNodes(otherBooks).fetchSemanticsNodes().isEmpty() &&
+                libraryItems().fetchSemanticsNodes().isNotEmpty()
         }
     }
 
-    private fun itemCount(): Int {
-        var count = -1
-        onView(withId(R.id.recycler_view_list)).check { view, _ ->
-            count = (view as RecyclerView).adapter?.itemCount ?: -1
-        }
-        return count
+    private companion object {
+        const val QUERY = "Palestine"
     }
 }

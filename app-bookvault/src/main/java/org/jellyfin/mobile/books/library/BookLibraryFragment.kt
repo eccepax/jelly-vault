@@ -2,28 +2,25 @@ package org.jellyfin.mobile.books.library
 
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.SearchView
-import androidx.core.view.isVisible
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
-import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.LibraryViewMode
-import org.jellyfin.mobile.books.databinding.FragmentLibraryBinding
+import org.jellyfin.mobile.books.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.books.reader.BookReaderFragment
 import org.jellyfin.mobile.books.settings.BookSettingsFragment
-import org.jellyfin.mobile.common.ui.utils.padForNavigationBar
-import org.jellyfin.mobile.common.ui.utils.padForStatusBar
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -35,227 +32,79 @@ class BookLibraryFragment : Fragment() {
     private val libraryId: String? get() = arguments?.getString(ARG_LIBRARY_ID)
     private val viewModel: BookLibraryViewModel by viewModel { parametersOf(libraryId) }
 
-    private var _binding: FragmentLibraryBinding? = null
+    private var _binding: FragmentComposeBinding? = null
     private val binding get() = _binding!!
 
-    private val listAdapter = BookListAdapter(
-        onBookClick = { book -> book.id?.let { openReader(it.toString()) } },
-        onBookLongClick = { book -> showDownloadDialog(book) },
-    )
-    private val shelfAdapter = BookShelfAdapter(
-        onBookClick = { book -> book.id?.let { openReader(it.toString()) } },
-        onBookLongClick = { book -> showDownloadDialog(book) },
-    )
+    private var viewMode by mutableStateOf(LibraryViewMode.LIST)
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        _binding = FragmentLibraryBinding.inflate(inflater, container, false)
-        return binding.root
+        _binding = FragmentComposeBinding.inflate(inflater, container, false)
+        return binding.composeView
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        setupToolbar()
-        setupRecyclerViews()
-        applyViewMode(bookAppPreferences.getLibraryViewMode(libraryId ?: "global"))
-        observeViewModel()
-    }
-
-    private fun setupToolbar() {
-        binding.toolbar.padForStatusBar()
-        binding.root.padForNavigationBar()
-
-        binding.toolbar.setTitle(R.string.library)
-        binding.toolbar.inflateMenu(R.menu.menu_library)
-        setupSearchView()
-        binding.toolbar.setOnMenuItemClickListener { item -> onMenuItemClick(item) }
-    }
-
-    private fun setupSearchView() {
-        val searchItem = binding.toolbar.menu.findItem(R.id.action_search)
-        val searchView = searchItem.actionView as SearchView
-        searchView.queryHint = getString(R.string.search_hint)
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?) = true
-            override fun onQueryTextChange(newText: String?): Boolean {
-                viewModel.searchQuery.value = newText.orEmpty()
-                return true
+        ViewCompat.requestApplyInsets(binding.composeView)
+        viewMode = bookAppPreferences.getLibraryViewMode(viewModeKey)
+        val actions = BookLibraryActions(
+            onOpen = { book -> book.id?.let { openReader(it.toString()) } },
+            onDownload = ::download,
+            onRemoveDownload = viewModel::deleteDownload,
+            onToggleViewMode = ::toggleViewMode,
+            onQueryChange = { viewModel.searchQuery.value = it },
+            onSort = { viewModel.sortOption.value = it },
+            onProgressFilter = { viewModel.progressFilter.value = it },
+            onTagFilter = { viewModel.tagFilter.value = it },
+            onDownloadedOnly = { viewModel.showDownloadedOnly.value = it },
+            onSettings = ::openSettings,
+            onRetry = viewModel::loadBooks,
+        )
+        binding.composeView.setContent {
+            AppTheme(VaultBrand.BookVault) {
+                BookLibraryScreen(collectState(), actions)
             }
-        })
-        searchItem.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
-            override fun onMenuItemActionExpand(item: MenuItem) = true
-            override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
-                viewModel.searchQuery.value = ""
-                return true
-            }
-        })
+        }
     }
 
-    private fun onMenuItemClick(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.action_toggle_view -> {
-            toggleViewMode()
-            true
-        }
-        R.id.action_sort -> {
-            showSortDialog()
-            true
-        }
-        R.id.action_filter_progress -> {
-            showProgressFilterDialog()
-            true
-        }
-        R.id.action_filter_tag -> {
-            showTagFilterDialog()
-            true
-        }
-        R.id.action_filter_downloaded -> {
-            viewModel.showDownloadedOnly.value = !viewModel.showDownloadedOnly.value
-            item.isChecked = viewModel.showDownloadedOnly.value
-            true
-        }
-        R.id.action_settings -> {
-            openSettings()
-            true
-        }
-        else -> false
+    @Composable
+    private fun collectState(): BookLibraryUiState {
+        val books by viewModel.filteredBooks.collectAsState()
+        val loading by viewModel.loading.collectAsState()
+        val error by viewModel.error.collectAsState()
+        val downloadedIds by viewModel.downloadedIds.collectAsState()
+        val query by viewModel.searchQuery.collectAsState()
+        val sort by viewModel.sortOption.collectAsState()
+        val progressFilter by viewModel.progressFilter.collectAsState()
+        val tagFilter by viewModel.tagFilter.collectAsState()
+        val downloadedOnly by viewModel.showDownloadedOnly.collectAsState()
+        // Tags come from every loaded book, so a new list of books may bring new ones
+        val availableTags = remember(books) { viewModel.getAvailableTags() }
+        return BookLibraryUiState(
+            books = books,
+            loading = loading,
+            error = error,
+            downloadedIds = downloadedIds,
+            viewMode = viewMode,
+            query = query,
+            sort = sort,
+            progressFilter = progressFilter,
+            tagFilter = tagFilter,
+            availableTags = availableTags,
+            downloadedOnly = downloadedOnly,
+        )
     }
+
+    private val viewModeKey: String get() = libraryId ?: "global"
 
     private fun toggleViewMode() {
-        val currentMode = bookAppPreferences.getLibraryViewMode(libraryId ?: "global")
-        val newMode = if (currentMode == LibraryViewMode.LIST) LibraryViewMode.SHELF else LibraryViewMode.LIST
-        bookAppPreferences.setLibraryViewMode(libraryId ?: "global", newMode)
-        applyViewMode(newMode)
+        viewMode = if (viewMode == LibraryViewMode.LIST) LibraryViewMode.SHELF else LibraryViewMode.LIST
+        bookAppPreferences.setLibraryViewMode(viewModeKey, viewMode)
     }
 
-    private fun setupRecyclerViews() {
-        binding.recyclerViewList.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = listAdapter
-        }
-        binding.recyclerViewShelf.apply {
-            layoutManager = GridLayoutManager(requireContext(), 2)
-            adapter = shelfAdapter
-        }
-    }
-
-    private fun observeViewModel() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { observeFilteredBooks() }
-                launch { observeLoading() }
-                launch { observeError() }
-                launch { observeDownloadedIds() }
-                launch { observeShowDownloadedOnly() }
-            }
-        }
-    }
-
-    private suspend fun observeFilteredBooks() {
-        viewModel.filteredBooks.collect { books ->
-            listAdapter.submitList(books)
-            shelfAdapter.submitList(books)
-            binding.textEmpty.isVisible = books.isEmpty() && !viewModel.loading.value
-        }
-    }
-
-    private suspend fun observeLoading() {
-        viewModel.loading.collect { loading ->
-            binding.progressBar.isVisible = loading
-        }
-    }
-
-    private suspend fun observeError() {
-        viewModel.error.collect { error ->
-            if (error != null) {
-                binding.textEmpty.text = error
-                binding.textEmpty.isVisible = true
-            }
-        }
-    }
-
-    private suspend fun observeDownloadedIds() {
-        viewModel.downloadedIds.collect { ids ->
-            listAdapter.updateDownloadedIds(ids)
-            shelfAdapter.updateDownloadedIds(ids)
-        }
-    }
-
-    private suspend fun observeShowDownloadedOnly() {
-        viewModel.showDownloadedOnly.collect { downloadedOnly ->
-            binding.toolbar.menu.findItem(R.id.action_filter_downloaded)?.isChecked = downloadedOnly
-        }
-    }
-
-    private fun applyViewMode(mode: LibraryViewMode) {
-        binding.recyclerViewList.isVisible = mode == LibraryViewMode.LIST
-        binding.recyclerViewShelf.isVisible = mode == LibraryViewMode.SHELF
-    }
-
-    internal fun showDownloadDialog(book: BaseItemDto) {
-        val itemId = book.id?.toString() ?: return
-        val isDownloaded = itemId in viewModel.downloadedIds.value
-        if (isDownloaded) {
-            AlertDialog.Builder(requireContext())
-                .setTitle(book.name)
-                .setMessage(getString(R.string.remove_download))
-                .setPositiveButton(android.R.string.ok) { _, _ -> viewModel.deleteDownload(book) }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
-        } else {
-            viewModel.downloadBook(book)
-            Toast.makeText(requireContext(), getString(R.string.downloading_book), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun showSortDialog() {
-        val options = arrayOf(
-            getString(R.string.sort_title),
-            getString(R.string.sort_author),
-            getString(R.string.sort_date_added),
-        )
-        val currentIndex = viewModel.sortOption.value.ordinal
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.sort_by)
-            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
-                viewModel.sortOption.value = BookSortOption.entries[which]
-                dialog.dismiss()
-            }
-            .show()
-    }
-
-    /** "All tags", then each tag a loaded book has; just a note when no book has any. */
-    private fun showTagFilterDialog() {
-        val tags = viewModel.getAvailableTags()
-        val builder = AlertDialog.Builder(requireContext()).setTitle(R.string.filter_tag)
-        if (tags.isEmpty()) {
-            builder.setMessage(R.string.filter_no_tags).setPositiveButton(android.R.string.ok, null).show()
-            return
-        }
-        val options = arrayOf(getString(R.string.filter_all_tags)) + tags
-        val currentIndex = viewModel.tagFilter.value?.let { tags.indexOf(it) + 1 } ?: 0
-        builder
-            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
-                viewModel.tagFilter.value = tags.getOrNull(which - 1)
-                dialog.dismiss()
-            }
-            .show()
-    }
-
-    private fun showProgressFilterDialog() {
-        val options = arrayOf(
-            getString(R.string.filter_all),
-            getString(R.string.filter_unread),
-            getString(R.string.filter_in_progress),
-            getString(R.string.filter_finished),
-        )
-        val currentIndex = viewModel.progressFilter.value.ordinal
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.filter_progress)
-            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
-                viewModel.progressFilter.value = ProgressFilter.entries[which]
-                dialog.dismiss()
-            }
-            .show()
+    /** Starts downloading [book] at once; a download needs no confirming, unlike removing one. */
+    private fun download(book: BaseItemDto) {
+        viewModel.downloadBook(book)
+        Toast.makeText(requireContext(), getString(R.string.downloading_book), Toast.LENGTH_SHORT).show()
     }
 
     private fun openReader(bookItemId: String) {

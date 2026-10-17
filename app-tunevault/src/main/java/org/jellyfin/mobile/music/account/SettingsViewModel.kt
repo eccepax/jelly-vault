@@ -15,12 +15,15 @@ import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.downloads.DownloadSettings
 import org.jellyfin.mobile.music.playback.SetVolumeLevelling
 import org.jellyfin.mobile.music.playback.ShowSleepTimer
+import org.jellyfin.sdk.model.ClientInfo
 import timber.log.Timber
 
 data class SettingsUiState(
     /** Null until loaded, or if it can't be; signing out works either way. */
     val account: Account? = null,
     val streamingQuality: StreamingQuality = StreamingQuality.ORIGINAL,
+    /** The app's name as the bug form lists it (not app_name, which debug builds change). */
+    val appName: String = "",
     val appVersion: String = "",
     val signingOut: Boolean = false,
     val downloadQuality: StreamingQuality = StreamingQuality.ORIGINAL,
@@ -38,13 +41,14 @@ class SettingsViewModel(
     private val sleepTimer: ShowSleepTimer,
     private val levelling: SetVolumeLevelling,
     private val signOut: suspend () -> Unit,
-    appVersion: String,
+    app: ClientInfo,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         SettingsUiState(
             streamingQuality = preferences.streamingQuality,
-            appVersion = appVersion,
+            appName = app.name,
+            appVersion = app.version,
             downloadQuality = preferences.downloadQuality,
             downloadOnWifiOnly = preferences.downloadOnWifiOnly,
             removeDownloadsOnSignOut = preferences.removeDownloadsOnSignOut,

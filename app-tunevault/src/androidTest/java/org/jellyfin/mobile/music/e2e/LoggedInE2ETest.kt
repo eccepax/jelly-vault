@@ -19,8 +19,7 @@ import org.junit.Rule
 
 /**
  * Base for any e2e test that needs to start from the signed-in library. The connect screen is
- * common's Compose `ConnectScreen`; login is common's classic-View `LoginFragment` (hosted inside
- * TuneVault's Compose tree), so it's driven with Espresso.
+ * common's Compose `ConnectScreen`, and login is common's Compose `LoginScreen`.
  */
 abstract class LoggedInE2ETest : SignedInE2ETest<TuneMainActivity>(TuneMainActivity::class.java) {
 

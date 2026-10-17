@@ -28,7 +28,6 @@ androidx-lifecycle = "2.9.4"
 androidx-constraintlayout = "2.2.1"
 google-material = "1.13.0"
 androidx-viewpager2 = "1.1.0"
-modernandroidpreferences = "2.4.0-beta2"
 
 # Compose
 compose = "1.9.4"
@@ -46,7 +45,6 @@ androidx-media = "1.7.1"
 androidx-mediarouter = "1.8.1"
 androidx-media3 = "1.8.0"
 jellyfin-androidx-media = "1.8.0+1"
-playservices = "22.1.0"
 
 # Room
 androidx-room = "2.7.2"
@@ -101,7 +99,6 @@ androidx-activity = { group = "androidx.activity", name = "activity", version.re
 androidx-fragment = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "androidx-fragment" }
 androidx-fragment-testing = { group = "androidx.fragment", name = "fragment-testing", version.ref = "androidx-fragment" }
 androidx-fragment-testing-manifest = { group = "androidx.fragment", name = "fragment-testing-manifest", version.ref = "androidx-fragment" }
-androidx-fragment-compose = { group = "androidx.fragment", name = "fragment-compose", version.ref = "androidx-fragment" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidx-activity" }
 androiddesugarlibs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androiddesugarlibs" }
 
@@ -116,7 +113,6 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 google-material = { group = "com.google.android.material", name = "material", version.ref = "google-material" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidx-constraintlayout" }
 androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "androidx-viewpager2" }
-modernandroidpreferences = { group = "de.maxr1998", name = "modernandroidpreferences", version.ref = "modernandroidpreferences" }
 
 # Compose
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "compose" }
@@ -146,11 +142,8 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "androidx-media3" }
 androidx-media3-database = { module = "androidx.media3:media3-database", version.ref = "androidx-media3" }
 androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "androidx-media3" }
-androidx-media3-cast = { module = "androidx.media3:media3-cast", version.ref = "androidx-media3" }
 androidx-media3-test-utils = { module = "androidx.media3:media3-test-utils", version.ref = "androidx-media3" }
 androidx-media3-test-utils-robolectric = { module = "androidx.media3:media3-test-utils-robolectric", version.ref = "androidx-media3" }
-playservices-cast = { group = "com.google.android.gms", name = "play-services-cast", version.ref = "playservices" }
-playservices-castframework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "playservices" }
 jellyfin-androidx-media3-ffmpeg-decoder = { module = "org.jellyfin.media3:media3-ffmpeg-decoder", version.ref = "jellyfin-androidx-media" }
 
 # Room
@@ -213,10 +206,6 @@ androidx-media3 = [
     "androidx-media3-exoplayer-hls",
     "androidx-media3-datasource-okhttp",
     "jellyfin-androidx-media3-ffmpeg-decoder",
-]
-playservices = [
-    "playservices-cast",
-    "playservices-castframework",
 ]
 androidx-room = ["androidx-room-runtime"]
 kotest = ["kotest-runner", "kotest-assertions", "kotest-property"]

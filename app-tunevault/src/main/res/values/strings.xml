@@ -24,7 +24,6 @@
     </plurals>
     <string name="albums_empty">No albums found</string>
     <string name="albums_error">Couldn\'t load albums</string>
-    <string name="retry">Retry</string>
     <string name="back">Back</string>
     <string name="unknown_artist">Unknown artist</string>
     <string name="artists_empty">No artists found</string>
@@ -66,7 +65,6 @@
     <string name="sleep_off">Turn off</string>
     <string name="sleeps_in">Sleeps in %1$s</string>
     <string name="sleeps_after_song">Sleeps after this song</string>
-    <string name="offline_banner">Offline · showing your downloads</string>
     <string name="your_downloads">Your downloads</string>
     <string name="offline_nothing_downloaded">You\'re offline, and nothing is downloaded yet.</string>
     <string name="downloads_empty">Download albums and playlists to play them without a connection.</string>
@@ -99,14 +97,12 @@
     <string name="remove_all_yes">Yes, remove all</string>
     <string name="sign_out_removes_downloads">Downloads on this device will be removed.</string>
     <string name="settings_account">Account</string>
-    <string name="settings_about">About</string>
     <string name="account_server">%1$s · %2$s</string>
     <string name="sign_out">Sign out</string>
     <string name="sign_out_confirm">Sign out of %1$s?</string>
     <string name="sign_out_confirm_unknown">Sign out?</string>
     <string name="sign_out_yes">Yes, sign out</string>
     <string name="signing_out">Signing out…</string>
-    <string name="app_version">TuneVault %1$s</string>
     <string name="streaming_quality">Streaming quality</string>
     <string name="streaming_quality_note">Lower quality uses less data. Applies from the next song.</string>
     <string name="quality_original">Original</string>
@@ -124,7 +120,6 @@
     <string name="search_title">Search</string>
     <string name="search_hint">Search your music</string>
     <string name="search_idle">Find artists, albums and songs</string>
-    <string name="search_clear">Clear search</string>
     <string name="search_no_results">No results for “%1$s”</string>
     <string name="search_error">Search failed</string>
     <string name="album_result_subtitle">Album · %1$s</string>

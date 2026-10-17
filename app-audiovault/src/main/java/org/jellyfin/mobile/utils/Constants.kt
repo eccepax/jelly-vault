@@ -16,13 +16,10 @@ object Constants {
     const val PREF_INSTANCE_URL = "pref_instance_url"
     const val PREF_IGNORE_BLUETOOTH_PERMISSION = "pref_ignore_bluetooth_permission"
     const val PREF_DOWNLOAD_METHOD = "pref_download_method"
-    const val PREF_MUSIC_NOTIFICATION_ALWAYS_DISMISSIBLE = "pref_music_notification_always_dismissible"
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
-    const val PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO = "pref_exoplayer_allow_background_audio"
     const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"
     const val PREF_LIBRARY_SORT_OPTION = "pref_library_sort_option"
     const val PREF_LIBRARY_GLOBAL_FLATTEN = "pref_library_global_flatten"
-    const val PREF_CHROMECAST_ENABLED = "pref_chromecast_enabled"
     const val PREF_PLAYBACK_SPEED = "pref_playback_speed"
     const val PREF_SKIP_SILENCE = "pref_skip_silence"
 
@@ -49,7 +46,6 @@ object Constants {
     // Video player constants
     const val LANGUAGE_UNDEFINED = "und"
     const val PLAYER_TIME_UPDATE_RATE = 10000L
-    const val CHAPTER_MARKING_UPDATE_DELAY = 1000L
     const val SKIP_MEDIA_SEGMENT_UPDATE_DELAY = 1000L
 
     // Audiobook-specific skip intervals

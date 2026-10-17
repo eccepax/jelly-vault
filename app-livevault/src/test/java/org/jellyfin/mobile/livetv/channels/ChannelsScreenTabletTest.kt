@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.catalog.channel
+import org.jellyfin.sdk.model.ClientInfo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,6 +32,7 @@ class ChannelsScreenTabletTest {
             ChannelsScreen(
                 state = ChannelsUiState.Loaded(listOf(first, second), tags = emptyList(), filter = ChannelFilter()),
                 now = Instant.EPOCH,
+                app = ClientInfo("LiveVault", "1.0"),
                 actions = ChannelsActions(
                     onQueryChange = {},
                     onTagSelect = {},

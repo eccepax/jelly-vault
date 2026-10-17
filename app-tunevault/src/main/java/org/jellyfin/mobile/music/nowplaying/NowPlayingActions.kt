@@ -11,4 +11,11 @@ data class NowPlayingActions(
     val onToggleShuffle: () -> Unit = {},
     val onOpenQueue: () -> Unit = {},
     val onToggleFavorite: () -> Unit = {},
+    val onOpenAlbum: (albumId: String) -> Unit = {},
+    val onOpenArtist: (artistId: String) -> Unit = {},
 )
+
+/** Test tags for [NowPlayingScreen]. */
+object NowPlayingTags {
+    const val COVER = "now_playing_cover"
+}

@@ -2,6 +2,7 @@ package org.jellyfin.mobile.common.app
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.ui.graphics.Color
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -10,6 +11,7 @@ import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.data.dao.ServerDao
 import org.jellyfin.mobile.common.data.dao.UserDao
 import org.jellyfin.mobile.common.server.ServerSession
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.JellyfinOptions
 import org.jellyfin.sdk.api.client.ApiClient
@@ -25,7 +27,7 @@ class ApiModuleTest {
 
     @Test
     fun `needs nothing from an app beyond its preferences, account tables and sign-out`() {
-        apiModule(ClientInfo("test", "1")).verify(
+        apiModule(ClientInfo("test", "1"), VaultBrand.Jellyfin).verify(
             extraTypes = listOf(
                 // Android
                 Context::class,
@@ -35,6 +37,8 @@ class ApiModuleTest {
                 JellyfinOptions::class,
                 JellyfinOptions.Builder::class,
                 ApiClient::class,
+                // The app's brand is handed in whole; its accent isn't looked up
+                Color::class,
                 // What each app provides
                 AppPreferences::class,
                 ServerDao::class,

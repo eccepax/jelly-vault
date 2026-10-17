@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import org.jellyfin.mobile.app.applicationModule
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.data.databaseModule
 import org.jellyfin.mobile.downloads.audioDownloadsModule
 import org.jellyfin.mobile.utils.JellyTree
@@ -18,7 +19,7 @@ import timber.log.Timber
 @OptIn(UnstableApi::class)
 val audioVaultModules = listOf(
     applicationModule,
-    apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME)),
+    apiModule(ClientInfo("AudioVault", BuildConfig.VERSION_NAME), VaultBrand.AudioVault),
     databaseModule,
     audioDownloadsModule,
 )

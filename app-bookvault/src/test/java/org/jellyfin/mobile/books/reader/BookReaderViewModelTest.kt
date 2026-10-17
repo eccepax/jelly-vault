@@ -237,6 +237,49 @@ class BookReaderViewModelTest {
         viewModel.totalPages.value shouldBe 2
     }
 
+    // --- loading again, as the fragment does when it's recreated (rotation) ---------------------
+
+    @Test
+    fun `loading the same book again keeps night mode as the reader left it`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        viewModel.toggleNightMode()
+
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+
+        viewModel.nightMode.value shouldBe true
+    }
+
+    @Test
+    fun `loading the same book again stays on the chapter being read`() = runTest {
+        coEvery { bookProgressDao.upsertProgress(any()) } returns Unit
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        viewModel.setPage(1)
+
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+
+        viewModel.currentPage.value shouldBe 1
+    }
+
+    @Test
+    fun `a book that failed to load is tried again`() = runTest {
+        val badFile = File(cacheDir, "bad.bin").apply { writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03)) }
+        coEvery { bookFiles.fileFor("book-1") } returns badFile
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        viewModel.error.value shouldBe "Unsupported book format"
+
+        coEvery { bookFiles.fileFor("book-1") } returns File(cacheDir, "source.epub")
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+
+        viewModel.error.value shouldBe null
+        viewModel.bookType.value shouldBe BookType.EPUB
+    }
+
     // --- detectBookType --------------------------------------------------------------------------
 
     @Test

@@ -63,6 +63,9 @@ class LibraryViewModel(
 
     private val _rawItems = MutableStateFlow<List<LibraryItem>>(emptyList())
     private val _filterQuery = MutableStateFlow("")
+
+    /** The search filtering [items], for the search box to show; cleared on moving between folders. */
+    val filterQuery: StateFlow<String> = _filterQuery.asStateFlow()
     val showDownloadedOnly = MutableStateFlow(false)
     private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
@@ -491,7 +494,7 @@ class LibraryViewModel(
      * Refresh current view/folder.
      *
      * @param force When true in global-flat mode, bypasses the in-memory and Room caches and
-     *   re-fetches from Jellyfin. Used by the SwipeRefreshLayout pull-to-refresh gesture.
+     *   re-fetches from Jellyfin. Used by the library's pull-to-refresh gesture.
      */
     fun refresh(force: Boolean = false) {
         val current = folderStack.lastOrNull()

@@ -11,12 +11,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.library.BookLibraryFragment
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
+import org.jellyfin.mobile.books.library.BookSortOption
+import org.jellyfin.mobile.books.library.ProgressFilter
 import org.jellyfin.mobile.books.setup.BookConnectFragment
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.data.entity.ServerEntity
 import org.jellyfin.mobile.common.setup.LoginFragment
+import org.jellyfin.mobile.common.setup.LoginViewModel
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -58,6 +62,10 @@ class BookMainActivityTest {
         every { libraryViewModel.error } returns MutableStateFlow(null)
         every { libraryViewModel.downloadedIds } returns MutableStateFlow(emptySet())
         every { libraryViewModel.showDownloadedOnly } returns MutableStateFlow(false)
+        every { libraryViewModel.searchQuery } returns MutableStateFlow("")
+        every { libraryViewModel.sortOption } returns MutableStateFlow(BookSortOption.TITLE)
+        every { libraryViewModel.progressFilter } returns MutableStateFlow(ProgressFilter.ALL)
+        every { libraryViewModel.tagFilter } returns MutableStateFlow(null)
 
         startKoin {
             modules(
@@ -68,6 +76,9 @@ class BookMainActivityTest {
                     // Needed once BookConnectFragment's ComposeView actually renders (ServerSelection
                     // resolves it directly via Koin) — not otherwise exercised by this test.
                     single { mockk<ApiClientController>(relaxed = true) }
+                    // The sign-in screen's, once LoginFragment is shown
+                    viewModel { LoginViewModel(mockk(), mockk(), mockk(relaxed = true), mockk(relaxed = true)) }
+                    single { VaultBrand.BookVault }
                 },
             )
         }

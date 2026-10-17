@@ -2,20 +2,18 @@ package org.jellyfin.mobile.e2e
 
 import android.net.Uri
 import android.os.Build
-import androidx.recyclerview.widget.RecyclerView
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.longClick
-import androidx.test.espresso.contrib.RecyclerViewActions.actionOnItemAtPosition
 import androidx.test.espresso.matcher.RootMatchers.isDialog
-import androidx.test.espresso.matcher.ViewMatchers.hasMinimumChildCount
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.hamcrest.Matchers.allOf
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
@@ -26,6 +24,9 @@ import org.junit.Test
 // "Download" on a multi-track audiobook queues every track in parallel, and even the first to finish
 // is a real network transfer, so this needs a generous timeout.
 private const val DOWNLOAD_TIMEOUT_MS = 180_000L
+
+/** Isabel Wilkerson's "Caste" on the Vault: split into many short tracks, the first well under 1 MB. */
+private const val SMALL_TRACKS_BOOK = "Caste"
 
 /**
  * Long-press -> Download really downloads through the shared download engine. Finished means a
@@ -50,14 +51,15 @@ class DownloadE2ETest : LoggedInE2ETest() {
     @Test
     fun downloadingALibraryItemPersistsItLocally() {
         loginAndWaitForLibrary()
-        waitForView(allOf(withId(R.id.recycler_view), hasMinimumChildCount(1)))
         assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
 
-        onView(withId(R.id.recycler_view))
-            .perform(actionOnItemAtPosition<RecyclerView.ViewHolder>(0, longClick()))
+        // A book of short tracks: the test waits for one whole track, and the first item in the
+        // library can be a book of 200 MB files that the emulator can't fetch within the timeout
+        searchLibrary(SMALL_TRACKS_BOOK)
+        libraryItems()[0].performTouchInput { longClick() }
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        onView(withText(context.getString(R.string.download_action))).inRoot(isDialog()).perform(click())
+        composeRule.onNodeWithText(context.getString(R.string.download_action)).performClick()
 
         // First-ever download on a fresh install: MainActivity.requestDownload (SystemUtils.kt)
         // asks which network types are allowed before it'll proceed at all. Mobile data allows any

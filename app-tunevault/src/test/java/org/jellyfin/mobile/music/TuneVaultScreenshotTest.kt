@@ -7,7 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.music.catalog.album
 import org.jellyfin.mobile.music.domain.track
 import org.jellyfin.mobile.music.home.HomeScreen
@@ -57,7 +58,7 @@ class TuneVaultScreenshotTest {
             favoriteTracks = listOf(track("lm").copy(title = "London May"), track("om").copy(title = "Our Home")),
         )
         composeRule.setContent {
-            AppTheme {
+            AppTheme(VaultBrand.TuneVault) {
                 // Laid out as the signed-in app arranges it: the selected tab above the bottom bar
                 Column(Modifier.fillMaxSize()) {
                     MainTabs(
@@ -89,7 +90,7 @@ class TuneVaultScreenshotTest {
             durationMs = 180_000L,
         )
         composeRule.setContent {
-            AppTheme { NowPlayingScreen(state = playing, actions = NowPlayingActions()) }
+            AppTheme(VaultBrand.TuneVault) { NowPlayingScreen(state = playing, actions = NowPlayingActions()) }
         }
         capture("now-playing")
     }

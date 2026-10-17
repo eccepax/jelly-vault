@@ -15,7 +15,6 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
@@ -26,8 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -41,14 +41,8 @@ fun AddToPlaylistScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(
-                title = {
-                    Text(
-                        stringResource(R.string.add_to_playlist_title, state.track.title),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
+            VaultTopBar(
+                title = stringResource(R.string.add_to_playlist_title, state.track.title),
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
@@ -68,7 +62,7 @@ fun AddToPlaylistScreen(
                         Text(
                             text = pluralStringResource(R.plurals.song_count, playlist.trackCount, playlist.trackCount),
                             style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                            color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
                         )
                     }
                 }

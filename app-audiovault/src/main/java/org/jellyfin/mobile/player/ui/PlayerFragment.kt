@@ -1,40 +1,32 @@
 package org.jellyfin.mobile.player.ui
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.MenuItem
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
+import androidx.annotation.StringRes
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.TimeBar
-import coil3.load
-import coil3.request.error
-import coil3.request.fallback
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.databinding.ExoPlayerControlViewBinding
-import org.jellyfin.mobile.databinding.FragmentPlayerBinding
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.interaction.PlayOptions
-import org.jellyfin.mobile.player.sleeptimer.SleepTimerDialogFragment
-import org.jellyfin.mobile.player.sleeptimer.SleepTimerManager
-import org.jellyfin.mobile.player.ui.playermenuhelper.PlayerMenuHelper
-import org.jellyfin.mobile.utils.BackPressInterceptor
+import org.jellyfin.mobile.player.sleeptimer.SleepTimerManager.SleepTimerDuration
+import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.extensions.getParcelableCompat
 import org.jellyfin.mobile.utils.extensions.keepScreenOn
@@ -42,23 +34,16 @@ import org.jellyfin.mobile.utils.toast
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.ImageType
-import org.jellyfin.sdk.model.api.MediaSegmentDto
+import org.jellyfin.sdk.model.api.MediaStream
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 import timber.log.Timber
-import java.util.Locale
 
 private const val TICKS_PER_MILLISECOND = 10_000L
-private const val MILLISECONDS_PER_SECOND = 1000
-private const val SECONDS_PER_HOUR = 3600
-private const val SECONDS_PER_MINUTE = 60
 private const val PROGRESS_UPDATE_INTERVAL_MS = 250L
+private const val MAX_AUDIO_STREAMS_DISPLAY = 5
 
-// 250ms update interval * 8 ticks =~ 2 seconds between verbose progress-tick log lines.
-private const val LOG_EVERY_N_TICKS = 8
-
-@Suppress("TooManyFunctions")
-class PlayerFragment : Fragment(), BackPressInterceptor {
+class PlayerFragment : Fragment() {
     private val apiClient: ApiClient by inject()
     private val appPreferences: AudioVaultAppPreferences by inject()
 
@@ -66,48 +51,21 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     // This allows audio to keep playing when back is pressed, and the mini player bar on the
     // library screen to remain active and reopen the player without restarting playback.
     private val viewModel: AudiobookPlayerViewModel by activityViewModel()
-    private var _playerBinding: FragmentPlayerBinding? = null
-    private val playerBinding: FragmentPlayerBinding get() = _playerBinding!!
-    private val playerView get() = playerBinding.playerView
-    private val loadingIndicator: View get() = playerBinding.loadingIndicator
-    private val albumCover get() = playerBinding.albumCover
-    private var _playerControlsBinding: ExoPlayerControlViewBinding? = null
-    private val playerControlsBinding: ExoPlayerControlViewBinding get() = _playerControlsBinding!!
-    private val toolbar: Toolbar get() = playerBinding.toolbar
-    private val durationText get() = playerControlsBinding.exoDuration
-    private var playerMenus: PlayerMenus? = null
-    private var playerListener: Player.Listener? = null
+
+    private var _binding: FragmentComposeBinding? = null
+    private val binding get() = _binding!!
+
+    /** All of what the screen shows, but the skip segment, which the ViewModel publishes itself. */
+    private var state by mutableStateOf(PlayerUiState())
     private var progressUpdateJob: Job? = null
     private var mediaDurationMs: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Timber.d("onCreate: viewModel instance = %s", viewModel)
-        // Observe ViewModel — single registration point for the Player.Listener.
         viewModel.player.observe(this) { player ->
             Timber.d("player LiveData changed: player=%s", player)
-            if (player == null) {
-                parentFragmentManager.popBackStack()
-            } else {
-                // Connect PlayerView when the view already exists (no-op on first launch before onViewCreated).
-                if (_playerBinding != null) {
-                    playerView.player = player
-                    updatePlayPauseButton(player.playWhenReady)
-                }
-                // Always (re-)register the listener so we never end up with zero or two copies.
-                playerListener?.let { player.removeListener(it) }
-                playerListener = object : Player.Listener {
-                    // onIsPlayingChanged intentionally omitted: isPlaying flips false during HLS
-                    // buffering even though playWhenReady stays true (user hasn't pressed pause).
-                    // Driving the icon off isPlaying causes it to flicker to PLAY while buffering.
-                    // The 250ms progress loop and onPlayWhenReadyChanged keep the icon correct.
-                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                        if (_playerControlsBinding != null) updatePlayPauseButton(playWhenReady)
-                    }
-                }
-                player.addListener(playerListener!!)
-            }
+            if (player == null) parentFragmentManager.popBackStack()
         }
         viewModel.error.observe(this) { message ->
             val safeMessage = message.ifEmpty { requireContext().getString(R.string.player_error_unspecific_exception) }
@@ -141,309 +99,150 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        _playerBinding = FragmentPlayerBinding.inflate(inflater, container, false)
-        // Important: search from mainContent, NOT from root. The root also contains PlayerView,
-        // which internally inflates exo_player_control_view.xml (same layout name) and gives its
-        // root the same id=player_controls. A root-level findViewByID finds that GONE internal
-        // view first, resulting in a zero-size binding that never receives touches.
-        _playerControlsBinding = ExoPlayerControlViewBinding.bind(playerBinding.mainContent.findViewById(R.id.player_controls))
-        return playerBinding.root
+        _binding = FragmentComposeBinding.inflate(inflater, container, false)
+        return binding.composeView
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        setupWindowInsets()
-
-        // Enable marquee scrolling on the title
-        playerBinding.nowPlayingTitle.isSelected = true
-
-        // Handle toolbar back button
-        toolbar.setNavigationOnClickListener { parentFragmentManager.popBackStack() }
-
-        // Create playback menus
-        playerMenus = PlayerMenus(this, playerBinding, playerControlsBinding)
-
-        observePlayerState()
-        observeCurrentMediaSource()
-        setupOverflowMenu()
-        setupPlaybackButtons()
-        setupSeekBar()
-
-        // Reconnect player if it already exists (handles orientation changes).
-        // Listener management is handled exclusively by the observer in onCreate.
-        viewModel.playerOrNull?.let { player ->
-            playerView.player = player
-            updatePlayPauseButton(player.playWhenReady)
+        ViewCompat.requestApplyInsets(binding.composeView)
+        val actions = PlayerActions(
+            onBack = { parentFragmentManager.popBackStack() },
+            onPlayPause = ::togglePlayPause,
+            onRewind = viewModel::rewind,
+            onFastForward = viewModel::fastForward,
+            onHoldSpeedUp = { holding -> viewModel.setPressSpeedUp(holding, Constants.HOLD_SPEEDUP_MULTIPLIER) },
+            onPreviousChapter = viewModel::previousChapter,
+            onNextChapter = viewModel::nextChapter,
+            // Through the ViewModel, so transcoded streams restart from the right offset
+            onSeek = viewModel::seekToPosition,
+            onSpeed = { speed -> if (viewModel.setPlaybackSpeed(speed)) state = state.copy(speed = speed) },
+            onSleepTimer = ::chooseSleepTimer,
+            onTrack = viewModel::skipToQueueItem,
+            onSkipSegment = { viewModel.skipMediaSegment(viewModel.skipSegment.value) },
+        )
+        binding.composeView.setContent {
+            AppTheme(VaultBrand.AudioVault) {
+                val skipSegment by viewModel.skipSegment.collectAsState()
+                PlayerScreen(state.copy(skipSegment = skipSegment != null), actions)
+            }
         }
+        // As things stand now, not 250ms from now when the progress loop first looks
+        state = state.copy(
+            holdToSpeedUp = appPreferences.exoPlayerAllowPressSpeedUp,
+            isPlaying = viewModel.playerOrNull?.playWhenReady == true,
+            sleepTimerActive = viewModel.isSleepTimerActive,
+        )
 
-        startProgressUpdates()
-    }
-
-    private fun setupWindowInsets() {
-        // Apply system bar insets so the seek bar isn't hidden behind gesture navigation
-        ViewCompat.setOnApplyWindowInsetsListener(playerBinding.root) { _, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            playerBinding.mainContent.updatePadding(top = systemBars.top)
-            playerControlsBinding.root.updatePadding(bottom = systemBars.bottom)
-            insets
-        }
-        ViewCompat.requestApplyInsets(playerBinding.root)
-    }
-
-    private fun observePlayerState() {
-        // Keep loading spinner in sync with ExoPlayer state
         viewModel.playerState.observe(viewLifecycleOwner) { playerState ->
-            val isPlaying = viewModel.playerOrNull?.isPlaying == true
-            requireActivity().window.keepScreenOn = isPlaying
-            playerBinding.loadingIndicator.isVisible = playerState == Player.STATE_BUFFERING
+            requireActivity().window.keepScreenOn = viewModel.playerOrNull?.isPlaying == true
+            state = state.copy(buffering = playerState == Player.STATE_BUFFERING)
         }
+        viewModel.queueManager.currentMediaSource.observe(viewLifecycleOwner, ::showMediaSource)
     }
 
-    private fun observeCurrentMediaSource() {
-        // Update title + cover once the view exists (fixes "title never appears" when value emitted early)
-        viewModel.queueManager.currentMediaSource.observe(viewLifecycleOwner) { mediaSource ->
-            playerBinding.nowPlayingTitle.text = mediaSource.getName(requireContext())
-            // Use Jellyfin runtime as duration fallback — HLS transcodes expose unknown duration to ExoPlayer
-            mediaDurationMs = mediaSource.runTime.inWholeMilliseconds.takeIf { it > 0 }
-                ?: mediaSource.item?.runTimeTicks?.let { ticks -> ticks / TICKS_PER_MILLISECOND }?.takeIf { it > 0 }
-            val hasNext = viewModel.queueManager.hasNext()
-            val hasPrevious = viewModel.queueManager.hasPrevious()
-            playerMenus?.onQueueItemChanged(mediaSource, hasNext, hasPrevious)
-            // Show tracklist option whenever there are multiple tracks in the queue
-            toolbar.menu.findItem(R.id.action_tracklist)?.isVisible =
-                viewModel.queueManager.queueSize > 1
-            loadAlbumCover(mediaSource)
-        }
+    private fun togglePlayPause() {
+        val player = viewModel.playerOrNull
+        val willPlay = player?.playWhenReady == true
+        if (willPlay) viewModel.pause() else viewModel.play()
+        state = state.copy(isPlaying = !willPlay)
     }
 
-    private fun setupOverflowMenu() {
-        // Overflow menu (3 dots) for secondary actions
-        toolbar.menu.clear()
-        toolbar.inflateMenu(R.menu.player_overflow_menu)
-        toolbar.setOnMenuItemClickListener { item: MenuItem ->
-            when (item.itemId) {
-                R.id.action_speed -> {
-                    playerMenus?.showSpeedMenu(viewModel.playerOrNull?.playbackParameters?.speed ?: 1f)
-                    true
-                }
-                R.id.action_sleep_timer -> {
-                    showSleepTimerDialog()
-                    true
-                }
-                R.id.action_tracklist -> {
-                    val names = viewModel.queueManager.getTrackNames()
-                    val currentIndex = viewModel.queueManager.currentIndex
-                    playerMenus?.showTracklist(names, currentIndex) { index ->
-                        viewModel.skipToQueueItem(index)
-                    }
-                    true
-                }
-                R.id.action_playback_info -> {
-                    playerMenus?.togglePlaybackInfo()
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    private fun setupPlaybackButtons() {
-        // Wire up all playback buttons directly here
-        playerControlsBinding.exoPlayPause.setOnClickListener {
-            val player = viewModel.playerOrNull
-            Timber.d("play/pause clicked: player=%s playWhenReady=%s", player, player?.playWhenReady)
-            val willPlay = player?.playWhenReady == true
-            if (willPlay) viewModel.pause() else viewModel.play()
-            updatePlayPauseButton(!willPlay)
-        }
-        playerControlsBinding.previousButton.setOnClickListener {
-            Timber.d("rewind clicked")
-            viewModel.rewind()
-        }
-        playerControlsBinding.nextButton.setOnClickListener {
-            Timber.d("fastForward clicked")
-            viewModel.fastForward()
-        }
-        setupHoldToSpeedUp(playerControlsBinding.nextButton)
-        playerControlsBinding.previousChapterButton.setOnClickListener {
-            Timber.d("previousChapter clicked")
-            viewModel.previousChapter()
-        }
-        playerControlsBinding.nextChapterButton.setOnClickListener {
-            Timber.d("nextChapter clicked")
-            viewModel.nextChapter()
-        }
-    }
-
-    /**
-     * Holding [button] plays at [Constants.HOLD_SPEEDUP_MULTIPLIER] until the finger lifts or slides
-     * off, when the "Hold to speed up" setting is on; a tap keeps doing what the button does. The
-     * lift that ends a hold is consumed, so it doesn't also count as a tap (taps still go through
-     * performClick, hence the suppression).
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupHoldToSpeedUp(button: View) {
-        var holding = false
-        button.setOnLongClickListener {
-            holding = appPreferences.exoPlayerAllowPressSpeedUp
-            if (holding) onPressSpeedUp(true)
-            holding
-        }
-        button.setOnTouchListener { view, event ->
-            val released = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
-            if (holding && released) {
-                holding = false
-                onPressSpeedUp(false)
-                view.isPressed = false
-                true
+    private fun showMediaSource(mediaSource: JellyfinMediaSource) {
+        // Jellyfin's runtime stands in for the length: transcoded streams don't tell ExoPlayer theirs
+        mediaDurationMs = mediaSource.runTime.inWholeMilliseconds.takeIf { it > 0 }
+            ?: mediaSource.item?.runTimeTicks?.let { ticks -> ticks / TICKS_PER_MILLISECOND }?.takeIf { it > 0 }
+        val chapters = mediaSource.item?.chapters.orEmpty()
+        val runTimeTicks = mediaSource.item?.runTimeTicks
+        val queue = viewModel.queueManager
+        val coverSize = resources.getDimensionPixelSize(R.dimen.movie_thumbnail_list_size) * 2
+        state = state.copy(
+            title = mediaSource.getName(requireContext()),
+            coverUrl = apiClient.imageApi.getItemImageUrl(
+                itemId = mediaSource.itemId,
+                imageType = ImageType.PRIMARY,
+                maxWidth = coverSize,
+                maxHeight = coverSize,
+                tag = mediaSource.item?.imageTags?.get(ImageType.PRIMARY),
+            ),
+            chapterStarts = if (runTimeTicks != null && runTimeTicks > 0) {
+                chapters.map { (it.startPositionTicks.toFloat() / runTimeTicks).coerceIn(0f, 1f) }
             } else {
-                false
-            }
-        }
-    }
-
-    private fun setupSeekBar() {
-        // Only onScrubStop matters here; the other two callbacks are intentional no-ops.
-        playerControlsBinding.exoProgress.addListener(object : TimeBar.OnScrubListener {
-            @Suppress("EmptyFunctionBlock")
-            override fun onScrubStart(timeBar: TimeBar, position: Long) = Unit
-
-            @Suppress("EmptyFunctionBlock")
-            override fun onScrubMove(timeBar: TimeBar, position: Long) = Unit
-            override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
-                if (!canceled) {
-                    // position is the absolute target (bar is set with absolute values);
-                    // route through ViewModel so TRANSCODE streams restart from the right offset.
-                    viewModel.seekToPosition(position)
-                }
-            }
-        })
-    }
-
-    @UnstableApi
-    private fun loadAlbumCover(mediaSource: org.jellyfin.mobile.player.source.JellyfinMediaSource) {
-        val binding = _playerBinding ?: return
-        val itemId = mediaSource.itemId
-        val imageTag = mediaSource.item?.imageTags?.get(ImageType.PRIMARY)
-
-        val imageUrl = apiClient.imageApi.getItemImageUrl(
-            itemId = itemId,
-            imageType = ImageType.PRIMARY,
-            maxWidth = resources.getDimensionPixelSize(R.dimen.movie_thumbnail_list_size) * 2, // Larger for album cover
-            maxHeight = resources.getDimensionPixelSize(R.dimen.movie_thumbnail_list_size) * 2,
-            tag = imageTag,
-        )
-
-        binding.albumCover.load(imageUrl) {
-            fallback(R.drawable.ic_audiobook_white_64)
-            error(R.drawable.ic_audiobook_white_64)
-        }
-    }
-
-    private fun updatePlayPauseButton(isPlaying: Boolean) {
-        val binding = _playerControlsBinding ?: return
-        binding.exoPlayPause.setImageResource(
-            if (isPlaying) R.drawable.ic_pause_black_42dp else R.drawable.ic_play_black_42dp,
+                emptyList()
+            },
+            // Chapters, or other tracks in the queue, to move between
+            showChapterButtons = chapters.isNotEmpty() || queue.hasPrevious() || queue.hasNext(),
+            tracks = queue.getTrackNames(),
+            currentTrack = queue.currentIndex,
+            playbackInfo = playbackInfoOf(mediaSource),
         )
     }
 
-    private fun updateProgress(position: Long, duration: Long) {
-        val binding = _playerControlsBinding ?: return
-        val localDurationMs = mediaDurationMs
-        val safeDuration = when {
-            duration != C.TIME_UNSET && duration > 0 -> duration
-            localDurationMs != null -> localDurationMs
-            else -> 0L
+    private fun playbackInfoOf(mediaSource: JellyfinMediaSource): String {
+        val playMethod = getString(R.string.playback_info_play_method, mediaSource.playMethod)
+        val audioStreams = streamsInfo(mediaSource.audioStreams, R.string.playback_info_audio_streams) { stream ->
+            stream.language?.let { lang -> " ($lang)" }.orEmpty()
         }
-        binding.exoProgress.setPosition(position.coerceAtLeast(0L))
-        binding.exoProgress.setBufferedPosition(viewModel.adjustedBufferedPosition)
-        binding.exoProgress.setDuration(safeDuration)
-        binding.exoPosition.text = formatTime(position)
-        binding.exoDuration.text = if (safeDuration > 0) formatTime(safeDuration) else "--:--"
+        return listOf(playMethod, audioStreams).joinToString("\n\n")
     }
 
-    internal fun formatTime(timeMs: Long): String {
-        val totalSeconds = (timeMs / MILLISECONDS_PER_SECOND).toInt()
-        val hours = totalSeconds / SECONDS_PER_HOUR
-        val minutes = (totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
-        val seconds = totalSeconds % SECONDS_PER_MINUTE
-        return if (hours > 0) {
-            String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
+    private fun streamsInfo(streams: List<MediaStream>, @StringRes prefix: Int, suffix: (MediaStream) -> String) =
+        streams.joinToString(
+            "\n",
+            "${getString(prefix)}:\n",
+            limit = MAX_AUDIO_STREAMS_DISPLAY,
+            truncated = getString(R.string.playback_info_and_x_more, streams.size - MAX_AUDIO_STREAMS_DISPLAY),
+        ) { stream ->
+            val title = stream.displayTitle?.takeUnless(String::isEmpty)
+                ?: getString(R.string.playback_info_stream_unknown_title)
+            "- $title${suffix(stream)}"
         }
+
+    private fun chooseSleepTimer(choice: SleepTimerChoice) {
+        when (choice) {
+            SleepTimerChoice.TurnOff -> {
+                viewModel.cancelSleepTimer()
+                requireContext().toast(R.string.sleep_timer_off)
+            }
+            SleepTimerChoice.EndOfChapter -> {
+                viewModel.startSleepTimerEndOfChapter()
+                requireContext().toast(R.string.sleep_timer_set_end_of_chapter)
+            }
+            is SleepTimerChoice.For -> {
+                viewModel.startSleepTimer(choice.duration)
+                val length = getString(
+                    when (choice.duration) {
+                        SleepTimerDuration.FIFTEEN_MINUTES -> R.string.sleep_timer_15_min
+                        SleepTimerDuration.THIRTY_MINUTES -> R.string.sleep_timer_30_min
+                        SleepTimerDuration.FORTY_FIVE_MINUTES -> R.string.sleep_timer_45_min
+                        SleepTimerDuration.SIXTY_MINUTES -> R.string.sleep_timer_60_min
+                    },
+                )
+                requireContext().toast(getString(R.string.sleep_timer_set, length))
+            }
+        }
+        state = state.copy(sleepTimerActive = viewModel.isSleepTimerActive)
     }
 
+    /** Follows the player about 4 times a second; it has no event for the position moving. */
     private fun startProgressUpdates() {
         progressUpdateJob?.cancel()
         progressUpdateJob = lifecycleScope.launch {
-            var tickCount = 0
             while (true) {
-                delay(PROGRESS_UPDATE_INTERVAL_MS) // Update ~4x/sec; lighter than 100ms
-                tickCount++
-                if (_playerControlsBinding != null) {
-                    val player = viewModel.playerOrNull
-                    if (player != null) {
-                        val adjustedPos = viewModel.adjustedCurrentPosition
-                        if (tickCount % LOG_EVERY_N_TICKS == 0) { // avoid log spam
-                            Timber.d(
-                                "progress tick #%d: pos=%d dur=%d playing=%s playWhenReady=%s state=%d",
-                                tickCount,
-                                adjustedPos,
-                                player.duration,
-                                player.isPlaying,
-                                player.playWhenReady,
-                                player.playbackState,
-                            )
-                        }
-                        updateProgress(adjustedPos, player.duration)
-                        updatePlayPauseButton(player.playWhenReady)
-                    } else {
-                        if (tickCount % LOG_EVERY_N_TICKS == 0) {
-                            Timber.w("progress tick #%d: playerOrNull is null", tickCount)
-                        }
-                    }
-                }
+                delay(PROGRESS_UPDATE_INTERVAL_MS)
+                val player = viewModel.playerOrNull ?: continue
+                val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: mediaDurationMs ?: 0L
+                state = state.copy(
+                    // The icon follows playWhenReady, not isPlaying, which flickers false while buffering
+                    isPlaying = player.playWhenReady,
+                    positionMs = viewModel.adjustedCurrentPosition.coerceAtLeast(0L),
+                    durationMs = duration,
+                    // The speed chosen, not the player's, which is faster while fast-forward is held
+                    speed = viewModel.playbackSpeed.takeIf { it > 0f } ?: state.speed,
+                    sleepTimerActive = viewModel.isSleepTimerActive,
+                )
             }
         }
-    }
-
-    private fun showSleepTimerDialog() {
-        // Register before showing so the result is never missed, even after recreation.
-        parentFragmentManager.setFragmentResultListener(
-            SleepTimerDialogFragment.REQUEST_KEY,
-            viewLifecycleOwner,
-        ) { _, bundle ->
-            val durationName = bundle.getString(SleepTimerDialogFragment.KEY_DURATION)
-            val endOfChapter = bundle.getBoolean(SleepTimerDialogFragment.KEY_END_OF_CHAPTER, false)
-            val turnOff = bundle.getBoolean(SleepTimerDialogFragment.KEY_TURN_OFF, false)
-            when {
-                turnOff -> {
-                    viewModel.cancelSleepTimer()
-                    requireContext().toast(R.string.sleep_timer_off)
-                }
-                endOfChapter -> {
-                    viewModel.startSleepTimerEndOfChapter()
-                    requireContext().toast(R.string.sleep_timer_set_end_of_chapter)
-                }
-                durationName != null -> {
-                    val duration = SleepTimerManager.SleepTimerDuration.valueOf(durationName)
-                    viewModel.startSleepTimer(duration)
-                    val durationText = when (duration) {
-                        SleepTimerManager.SleepTimerDuration.FIFTEEN_MINUTES -> getString(R.string.sleep_timer_15_min)
-                        SleepTimerManager.SleepTimerDuration.THIRTY_MINUTES -> getString(R.string.sleep_timer_30_min)
-                        SleepTimerManager.SleepTimerDuration.FORTY_FIVE_MINUTES -> getString(
-                            R.string.sleep_timer_45_min,
-                        )
-                        SleepTimerManager.SleepTimerDuration.SIXTY_MINUTES -> getString(R.string.sleep_timer_60_min)
-                    }
-                    requireContext().toast(getString(R.string.sleep_timer_set, durationText))
-                }
-            }
-        }
-        SleepTimerDialogFragment.newInstance(timerActive = viewModel.isSleepTimerActive)
-            .show(parentFragmentManager, "SleepTimerDialog")
     }
 
     override fun onPause() {
@@ -454,58 +253,16 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
 
     override fun onResume() {
         super.onResume()
+        state = state.copy(holdToSpeedUp = appPreferences.exoPlayerAllowPressSpeedUp)
         // Always restart: a book still loading when the screen was left has no player yet, and the
         // loop waits for one; skipping it here left the progress frozen once playback started.
         startProgressUpdates()
     }
 
-    /**
-     * @return true if the playback speed was changed
-     */
-    fun onSpeedSelected(speed: Float): Boolean {
-        return viewModel.setPlaybackSpeed(speed)
-    }
-
-    fun onPressSpeedUp(isPressing: Boolean): Boolean {
-        return viewModel.setPressSpeedUp(isPressing, Constants.HOLD_SPEEDUP_MULTIPLIER)
-    }
-
-    fun onSkipToPrevious() {
-        viewModel.skipToPrevious()
-    }
-
-    fun onSkipToNext() {
-        viewModel.skipToNext()
-    }
-
-    fun onSkipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {
-        viewModel.skipMediaSegment(mediaSegmentDto)
-    }
-
     override fun onDestroyView() {
         super.onDestroyView()
-
         progressUpdateJob?.cancel()
         progressUpdateJob = null
-
-        // Prevent leaking the old Fragment view via ViewModel -> PlayerMenuHelper -> view references
-        viewModel.setPlayerMenuHelper(null)
-
-        viewModel.playerOrNull?.let { player ->
-            playerListener?.let { player.removeListener(it) }
-        }
-        playerListener = null
-
-        if (_playerBinding != null) {
-            playerView.player = null
-        }
-
-        _playerBinding = null
-        _playerControlsBinding = null
-        playerMenus = null
-    }
-
-    fun setPlayerMenuHelper(menuHelper: PlayerMenuHelper?) {
-        viewModel.setPlayerMenuHelper(menuHelper)
+        _binding = null
     }
 }

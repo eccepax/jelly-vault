@@ -390,6 +390,44 @@ class LibraryViewModelTest {
         viewModel.goUp() shouldBe false
     }
 
+    // --- search ----------------------------------------------------------------------------------
+
+    @Test
+    fun `the search shown is the one filtering`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+
+        viewModel.setFilterQuery("potter")
+
+        viewModel.filterQuery.value shouldBe "potter"
+    }
+
+    @Test
+    fun `opening a folder clears the search, so the box doesn't show one that no longer filters`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        viewModel.setFilterQuery("potter")
+
+        viewModel.openFolder(UUID.randomUUID(), "Chapter One")
+        viewModel.awaitSettled()
+
+        viewModel.filterQuery.value shouldBe ""
+    }
+
+    @Test
+    fun `going up clears the search too`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        viewModel.openFolder(UUID.randomUUID(), "Chapter One")
+        viewModel.awaitSettled()
+        viewModel.setFilterQuery("potter")
+
+        viewModel.goUp()
+        viewModel.awaitSettled()
+
+        viewModel.filterQuery.value shouldBe ""
+    }
+
     // --- sort ------------------------------------------------------------------------------------
 
     @Test

@@ -4,62 +4,80 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.data.entity.DownloadEntity
-import org.jellyfin.mobile.databinding.FragmentDownloadsBinding
+import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.player.interaction.PlayOptions
-import org.jellyfin.mobile.utils.applyWindowInsetsAsMargins
-import org.jellyfin.mobile.utils.withThemedContext
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.imageApi
+import org.jellyfin.sdk.model.api.ImageType
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
-import org.jellyfin.mobile.common.R as CommonR
 
 class DownloadsFragment : Fragment() {
     private val viewModel: DownloadsViewModel by viewModel()
     private val activityEventHandler: ActivityEventHandler by inject()
     private val apiClient: ApiClient by inject()
-    private lateinit var adapter: DownloadsAdapter
+
+    private var _binding: FragmentComposeBinding? = null
+    private val binding get() = _binding!!
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        val localInflater = inflater.withThemedContext(requireContext(), CommonR.style.AppTheme_Settings)
-        val binding = FragmentDownloadsBinding.inflate(localInflater, container, false)
-        binding.root.applyWindowInsetsAsMargins()
-        binding.toolbar.setTitle(R.string.downloads)
+        _binding = FragmentComposeBinding.inflate(inflater, container, false)
+        return binding.composeView
+    }
 
-        (requireActivity() as? AppCompatActivity)?.apply {
-            setSupportActionBar(binding.toolbar)
-            supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        }
-
-        adapter = DownloadsAdapter(
-            apiClient,
-            onItemClick = { download -> onDownloadItemClick(download) },
-            onItemHold = { download -> onDownloadItemHold(download) },
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        ViewCompat.requestApplyInsets(binding.composeView)
+        val actions = DownloadsActions(
+            onBack = { requireActivity().onBackPressedDispatcher.onBackPressed() },
+            onPlay = ::play,
+            onRemove = { activityEventHandler.emit(ActivityEvent.RemoveDownload(it.mediaSource)) },
         )
-        binding.recyclerView.adapter = adapter
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.downloads.collect { downloads ->
-                    adapter.submitList(downloads)
-                }
+        binding.composeView.setContent {
+            AppTheme(VaultBrand.AudioVault) {
+                DownloadsScreen(rows(), actions)
             }
         }
+    }
 
-        return binding.root
+    @Composable
+    private fun rows(): List<DownloadRow> {
+        val downloads by viewModel.downloads.collectAsState()
+        val context = LocalContext.current
+        val coverSize = remember { resources.getDimensionPixelSize(R.dimen.movie_thumbnail_list_size) }
+        return remember(downloads) {
+            downloads.map { download ->
+                val item = download.mediaSource.item
+                DownloadRow(
+                    download = download,
+                    title = download.mediaSource.getName(context),
+                    subtitle = listOfNotNull(item?.albumArtist, download.fileSize).joinToString(" · "),
+                    coverUrl = apiClient.imageApi.getItemImageUrl(
+                        itemId = download.mediaSource.itemId,
+                        imageType = ImageType.PRIMARY,
+                        maxWidth = coverSize,
+                        maxHeight = coverSize,
+                    ),
+                )
+            }
+        }
     }
 
     /** Plays [download]'s whole downloaded book, starting at [download]. */
-    internal fun onDownloadItemClick(download: DownloadEntity) {
+    private fun play(download: DownloadEntity) {
         val book = downloadedBookOf(download, viewModel.downloads.value)
         val playOptions = PlayOptions(
             ids = book.map { it.mediaSource.itemId },
@@ -73,7 +91,8 @@ class DownloadsFragment : Fragment() {
         activityEventHandler.emit(ActivityEvent.LaunchNativePlayer(playOptions))
     }
 
-    internal fun onDownloadItemHold(download: DownloadEntity) {
-        activityEventHandler.emit(ActivityEvent.RemoveDownload(download.mediaSource))
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

@@ -13,4 +13,6 @@ data class Track(
     val isFavorite: Boolean = false,
     /** The server's measured adjustment to a common loudness, in dB; null if not measured. */
     val normalizationGainDb: Float? = null,
+    /** The artist whose page this track leads to: its album's artist, else its own; null if none is known. */
+    val artistId: String? = null,
 )

@@ -31,4 +31,19 @@
     <string name="login_error_timeout">Connection timed out — check your server address and try again</string>
     <string name="pref_remove_downloads_on_sign_out">Remove downloads on sign out</string>
     <string name="pref_remove_downloads_on_sign_out_summary">Otherwise downloads stay on this device after signing out</string>
+
+    <!-- Shared components (ui/components); vault_ so they never override an app's own strings -->
+    <string name="vault_retry">Retry</string>
+    <string name="vault_cancel">Cancel</string>
+    <string name="vault_back">Back</string>
+    <string name="vault_more_options">More options</string>
+    <string name="vault_play">Play</string>
+    <string name="vault_pause">Pause</string>
+    <string name="vault_downloaded">Downloaded</string>
+    <string name="vault_search_clear">Clear search</string>
+    <string name="vault_offline_banner">Offline · showing your downloads</string>
+    <string name="settings_about">About</string>
+    <string name="about_app_version">%1$s %2$s</string>
+    <string name="report_bug">Report a bug</string>
+    <string name="report_bug_summary">Opens a form on GitHub</string>
 </resources>

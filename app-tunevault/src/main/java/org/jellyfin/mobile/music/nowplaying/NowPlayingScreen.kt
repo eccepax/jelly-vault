@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.music.nowplaying
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,12 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.PlayPauseButton
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.RepeatMode
 import org.jellyfin.mobile.music.library.AlbumCover
@@ -70,7 +74,14 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 }
             }
             Spacer(Modifier.height(16.dp))
-            AlbumCover(coverUrl = track?.coverUrl, modifier = Modifier.fillMaxWidth())
+            // The cover, title and album lead to the album; the artist to the artist's page.
+            // A song on no album has an empty albumId, with nothing to open.
+            val albumId = track?.albumId?.takeIf { it.isNotEmpty() }
+            val openAlbum = if (albumId != null) Modifier.clickable { actions.onOpenAlbum(albumId) } else Modifier
+            AlbumCover(
+                coverUrl = track?.coverUrl,
+                modifier = Modifier.fillMaxWidth().testTag(NowPlayingTags.COVER).then(openAlbum),
+            )
             Spacer(Modifier.height(24.dp))
             Text(
                 text = track?.title.orEmpty(),
@@ -78,12 +89,19 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = openAlbum,
             )
-            Text(text = track?.let { artistOrUnknown(it.artist) }.orEmpty(), style = MaterialTheme.typography.subtitle1)
+            val artistId = track?.artistId
+            Text(
+                text = track?.let { artistOrUnknown(it.artist) }.orEmpty(),
+                style = MaterialTheme.typography.subtitle1,
+                modifier = if (artistId != null) Modifier.clickable { actions.onOpenArtist(artistId) } else Modifier,
+            )
             Text(
                 text = track?.albumTitle.orEmpty(),
                 style = MaterialTheme.typography.body2,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
+                modifier = openAlbum,
             )
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
@@ -157,7 +175,11 @@ private fun ShuffleButton(isShuffled: Boolean, onClick: () -> Unit) {
         Icon(
             Icons.Filled.Shuffle,
             contentDescription = stringResource(if (isShuffled) R.string.shuffle_on else R.string.shuffle_off),
-            tint = if (isShuffled) MaterialTheme.colors.primary else LocalContentColor.current.copy(alpha = 0.6f),
+            tint = if (isShuffled) {
+                MaterialTheme.colors.primary
+            } else {
+                LocalContentColor.current.copy(alpha = VaultAlpha.SECONDARY)
+            },
         )
     }
 }
@@ -174,7 +196,7 @@ private fun RepeatButton(repeatMode: RepeatMode, onClick: () -> Unit) {
             if (repeatMode == RepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
             contentDescription = stringResource(description),
             tint = if (repeatMode == RepeatMode.OFF) {
-                LocalContentColor.current.copy(alpha = 0.6f)
+                LocalContentColor.current.copy(alpha = VaultAlpha.SECONDARY)
             } else {
                 MaterialTheme.colors.primary
             },

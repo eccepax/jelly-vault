@@ -11,6 +11,8 @@ import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.books.app.LibraryViewMode
 import org.jellyfin.mobile.books.library.BookLibraryFragment
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
+import org.jellyfin.mobile.books.library.BookSortOption
+import org.jellyfin.mobile.books.library.ProgressFilter
 import org.jellyfin.mobile.books.reader.BookReaderFragment
 import org.jellyfin.mobile.books.reader.BookReaderViewModel
 import org.jellyfin.mobile.books.reader.BookType
@@ -19,6 +21,7 @@ import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
+import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
@@ -64,8 +67,13 @@ class BookVaultScreenshotTest {
             every { filteredBooks } returns MutableStateFlow(books)
             every { loading } returns MutableStateFlow(false)
             every { error } returns MutableStateFlow(null)
-            every { downloadedIds } returns MutableStateFlow(emptySet())
+            every { downloadedIds } returns MutableStateFlow(setOf(books.first { it.name == "Dune" }.id.toString()))
             every { showDownloadedOnly } returns MutableStateFlow(false)
+            every { searchQuery } returns MutableStateFlow("")
+            every { sortOption } returns MutableStateFlow(BookSortOption.TITLE)
+            every { progressFilter } returns MutableStateFlow(ProgressFilter.ALL)
+            every { tagFilter } returns MutableStateFlow(null)
+            every { getAvailableTags() } returns emptyList()
         }
         startKoin {
             modules(
@@ -114,6 +122,7 @@ class BookVaultScreenshotTest {
             modules(
                 module {
                     single { preferences }
+                    single { ClientInfo("BookVault", "1.0.0") }
                     viewModel { mockk<MainViewModel>(relaxed = true) }
                 },
             )

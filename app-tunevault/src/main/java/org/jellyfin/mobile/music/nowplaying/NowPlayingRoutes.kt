@@ -14,6 +14,9 @@ import org.koin.compose.viewmodel.koinViewModel
 fun PlayerShell(
     viewModel: NowPlayingViewModel = koinViewModel(),
     bottomBar: (@Composable () -> Unit)? = null,
+    /** Open an album, or an artist's page, in the library (the player closes first). */
+    onOpenAlbum: (albumId: String) -> Unit = {},
+    onOpenArtist: (artistId: String) -> Unit = {},
     library: @Composable () -> Unit,
 ) {
     val sleepTimer: SleepTimer = koinInject()
@@ -47,6 +50,14 @@ fun PlayerShell(
                             onToggleShuffle = viewModel::toggleShuffle,
                             onOpenQueue = onOpenQueue,
                             onToggleFavorite = viewModel::toggleFavorite,
+                            onOpenAlbum = { albumId ->
+                                onCollapse()
+                                onOpenAlbum(albumId)
+                            },
+                            onOpenArtist = { artistId ->
+                                onCollapse()
+                                onOpenArtist(artistId)
+                            },
                         ),
                         sleepTimer = if (!sleepTimerShown) {
                             null

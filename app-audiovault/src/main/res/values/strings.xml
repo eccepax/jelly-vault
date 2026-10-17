@@ -1,9 +1,14 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
 
-    <string name="now_playing_title">Loading…</string>
 
     <string name="player_tracklist">Tracklist</string>
+    <string name="player_rewind">Back 10 seconds</string>
+    <string name="player_fast_forward">Forward 30 seconds</string>
+    <string name="player_previous_chapter">Previous chapter</string>
+    <string name="player_next_chapter">Next chapter</string>
     <string name="search_hint">Search</string>
+    <string name="close_search">Close search</string>
+    <string name="library_empty">No audiobooks to show</string>
     <string name="library_sort_by">Sort by</string>
     <string name="library_sort_title">Title</string>
     <string name="library_sort_author">Author</string>
@@ -23,12 +28,8 @@
     <string name="network_message">Do you want to allow the download to run over mobile data or roaming networks? Charges from your provider may apply. You can change this option later from settings.</string>
     <string name="wifi_only">WiFi Only</string>
     <string name="mobile_data">Mobile Data</string>
-    <string name="mobile_data_and_roaming">Mobile Data &amp; Roaming</string>
     <string name="wifi_only_summary">Media will be downloaded over WiFi only.</string>
     <string name="mobile_data_summary">Media will be downloaded over WiFi and mobile networks.</string>
-    <string name="mobile_data_and_roaming_summary">Media will be downloaded over WiFi, mobile and roaming networks.</string>
-    <string name="downloading">Downloading</string>
-    <string name="download_no_storage_permission">Cannot download files without storage permissions</string>
     <string name="download_action">Download</string>
     <string name="remove_download_action">Remove Download</string>
     <string name="hide_action">Hide</string>
@@ -54,39 +55,25 @@
     <string name="skip_media_segment">Skip</string>
 
     <string name="activity_name_settings">Settings</string>
-    <string name="pref_category_music_player">Music player</string>
-    <string name="pref_music_notification_always_dismissible_title">Dismissible player notification</string>
-    <string name="pref_music_notification_always_dismissible_summary_off">The notification can only be dismissed when playback is paused</string>
-    <string name="pref_music_notification_always_dismissible_summary_on">The notification can always be dismissed, even when playing media</string>
+    <string name="pref_category_playback">Playback</string>
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
     <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the fast-forward button to play faster until you let go</string>
-    <string name="pref_exoplayer_allow_background_audio">Background audio</string>
-    <string name="pref_exoplayer_allow_background_audio_summary">Allow playing videos in the background with audio-only</string>
     <string name="pref_skip_silence_title">Skip silence</string>
     <string name="pref_skip_silence_summary">Automatically speed through silent passages during playback</string>
 
     <string name="pref_category_downloads">Downloads</string>
-    <string name="pref_download_location">Download location</string>
     <string name="view_downloads">View downloads</string>
     <string name="downloads">Downloads</string>
+    <string name="downloads_empty">No downloaded audiobooks yet</string>
     <plurals name="downloading_tracks">
         <item quantity="one">Downloading %d track</item>
         <item quantity="other">Downloading %d tracks</item>
     </plurals>
-    <string name="library">Library</string>
-    <string name="download_notifications_description">Download notifications</string>
-    <string name="failed_information">Failed to retrieve media information</string>
-    <string name="failed_network_method_check">Please check your allowed download methods</string>
     <string name="confirm_deletion">Confirm deletion</string>
     <string name="confirm_deletion_desc">Do you want to delete %1$s?</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
-    <string name="thumbnail_desc">Thumbnail</string>
     <string name="runtime_with_progress">%1$s · %2$d%% played</string>
-    <string name="store_videos_in_internal_storage">Store videos in internal storage</string>
-    <string name="stored_videos_in_internal_storage_desc">Videos such as movies and TV shows will be stored in the app\'s internal storage. Allowing access from within the app.</string>
-    <string name="tv_show_desc">%1$s - S%2$dE%3$d</string>
-    <string name="downloaded">Downloaded %1$s</string>
     <string name="filter_downloaded_only">Downloaded only</string>
     <string name="show_hidden_items">Show hidden items</string>
     <string name="special_episode">Special</string>
@@ -100,7 +87,6 @@
     <string name="sleep_timer_turn_off">Turn off timer</string>
     <string name="sleep_timer_off">Sleep timer off</string>
     <string name="sleep_timer_set_end_of_chapter">Sleep timer set for the end of the chapter</string>
-    <string name="album_cover">Album cover</string>
 
     <string name="menu_speed">Playback speed</string>
     <string name="menu_sleep_timer">Sleep timer</string>
@@ -108,4 +94,8 @@
 
     <string name="pref_category_account">Account</string>
     <string name="pref_sign_out">Sign out</string>
+    <string name="sign_out_confirm">Sign out of this server?</string>
+    <string name="sign_out_keeps_downloads">Your downloaded audiobooks stay on this device.</string>
+    <string name="sign_out_removes_downloads">Your downloaded audiobooks will be removed from this device.</string>
+    <string name="sign_out_yes">Yes, sign out</string>
 </resources>

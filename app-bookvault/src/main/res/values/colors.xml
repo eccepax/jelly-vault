@@ -5,4 +5,7 @@
 
     <!-- Splash logo color -->
     <color name="splash_fill">#fafafa</color>
+
+    <!-- The app's accent, matching VaultBrand -->
+    <color name="vault_accent">@color/vault_accent_bookvault</color>
 </resources>

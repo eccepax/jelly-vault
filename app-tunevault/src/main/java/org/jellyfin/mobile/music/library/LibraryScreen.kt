@@ -8,7 +8,6 @@ import androidx.compose.material.ScrollableTabRow
 import androidx.compose.material.Surface
 import androidx.compose.material.Tab
 import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -18,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.music.R
 
 private val TABS = listOf(
@@ -41,7 +41,7 @@ fun LibraryScreen(
     val tabStates = rememberSaveableStateHolder()
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            TopAppBar(title = { Text(stringResource(R.string.library_title)) })
+            VaultTopBar(title = stringResource(R.string.library_title))
             ScrollableTabRow(selectedTabIndex = selected, edgePadding = 0.dp) {
                 TABS.forEachIndexed { index, label ->
                     Tab(

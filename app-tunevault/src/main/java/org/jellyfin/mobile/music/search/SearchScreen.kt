@@ -1,44 +1,35 @@
 package org.jellyfin.mobile.music.search
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.EmptyState
+import org.jellyfin.mobile.common.ui.components.ErrorState
+import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.MediaListRow
+import org.jellyfin.mobile.common.ui.components.SearchField
+import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.catalog.SearchResults
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
 import org.jellyfin.mobile.music.library.AlbumCover
 import org.jellyfin.mobile.music.library.ArtistRow
-import org.jellyfin.mobile.music.library.Centered
 import org.jellyfin.mobile.music.library.SongRow
 import org.jellyfin.mobile.music.library.TrackListActions
 import org.jellyfin.mobile.music.library.trackListActions
@@ -58,33 +49,17 @@ fun SearchScreen(
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text(stringResource(R.string.search_hint)) },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.search_clear))
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            SearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                placeholder = stringResource(R.string.search_hint),
+                modifier = Modifier.padding(top = VaultSpacing.Small),
             )
             when (state) {
-                SearchUiState.Idle -> Centered { Text(stringResource(R.string.search_idle)) }
-                SearchUiState.Searching -> Centered {
-                    CircularProgressIndicator(modifier = Modifier.testTag(SearchScreenTags.SEARCHING))
-                }
-                is SearchUiState.NoResults -> Centered { Text(stringResource(R.string.search_no_results, state.query)) }
-                SearchUiState.Error -> Centered {
-                    Text(stringResource(R.string.search_error))
-                    Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+                SearchUiState.Idle -> EmptyState(stringResource(R.string.search_idle))
+                SearchUiState.Searching -> LoadingState(Modifier.testTag(SearchScreenTags.SEARCHING))
+                is SearchUiState.NoResults -> EmptyState(stringResource(R.string.search_no_results, state.query))
+                SearchUiState.Error -> ErrorState(stringResource(R.string.search_error), onRetry = onRetry)
                 is SearchUiState.Results -> Results(
                     results = state.results,
                     onArtistClick = onArtistClick,
@@ -147,27 +122,12 @@ private fun LazyListScope.sectionHeader(title: Int) {
 
 @Composable
 private fun AlbumRow(album: Album, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        AlbumCover(coverUrl = album.coverUrl, modifier = Modifier.size(44.dp))
-        Column(modifier = Modifier.padding(start = 12.dp)) {
-            Text(
-                text = album.title,
-                style = MaterialTheme.typography.body1,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.album_result_subtitle, artistOrUnknown(album.artist)),
-                style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    MediaListRow(
+        title = album.title,
+        subtitle = stringResource(R.string.album_result_subtitle, artistOrUnknown(album.artist)),
+        cover = { AlbumCover(coverUrl = album.coverUrl) },
+        onClick = onClick,
+    )
 }
 
 @Composable

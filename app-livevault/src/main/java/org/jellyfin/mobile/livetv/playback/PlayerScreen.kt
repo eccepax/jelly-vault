@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +58,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.channels.channelDisplayName
 import org.jellyfin.mobile.livetv.channels.displayName
@@ -79,12 +81,14 @@ data class LoginInUse(val holders: List<ChannelSession>)
 object PlayerScreenTags {
     const val BUFFERING = "player_buffering"
     const val VIDEO_PLAYING = "player_video_playing"
+    const val FAILED_SMALL = "player_failed_small"
 }
 
 /**
  * Full-screen live TV: [video] underneath, and an overlay naming the channel that stays while
  * tuning or on a failure, and otherwise hides a few seconds after the last change or tap. The
- * remote's up/down (and channel keys) zap; on touch screens the overlay has buttons.
+ * remote's up/down (and channel keys) zap; on touch screens the overlay has buttons. In the
+ * picture-in-picture window, [inPictureInPicture], there's only the video (or a sign it failed).
  */
 @Composable
 fun PlayerScreen(
@@ -94,6 +98,7 @@ fun PlayerScreen(
     onExit: () -> Unit,
     onShowFree: () -> Unit,
     video: @Composable () -> Unit,
+    inPictureInPicture: Boolean = false,
 ) {
     val focus = remember { FocusRequester() }
     var overlayRequests by remember { mutableIntStateOf(0) }
@@ -115,24 +120,53 @@ fun PlayerScreen(
             .then(if (playing) Modifier.testTag(PlayerScreenTags.VIDEO_PLAYING) else Modifier)
             .focusRequester(focus)
             .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionUp, Key.ChannelUp -> onZap(+1)
-                    Key.DirectionDown, Key.ChannelDown -> onZap(-1)
-                    Key.DirectionCenter, Key.Enter, Key.DirectionLeft, Key.DirectionRight -> overlayRequests++
-                    else -> return@onPreviewKeyEvent false
-                }
-                true
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { overlayRequests++ },
+            .then(
+                if (inPictureInPicture) {
+                    Modifier
+                } else {
+                    Modifier
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (event.key) {
+                                Key.DirectionUp, Key.ChannelUp -> onZap(+1)
+                                Key.DirectionDown, Key.ChannelDown -> onZap(-1)
+                                Key.DirectionCenter, Key.Enter, Key.DirectionLeft, Key.DirectionRight ->
+                                    overlayRequests++
+                                else -> return@onPreviewKeyEvent false
+                            }
+                            true
+                        }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { overlayRequests++ }
+                },
+            ),
     ) {
+        // Always here, in or out of the floating window: moving it would make a new PlayerView,
+        // re-attaching the player to a new surface with a black flash on every switch
         video()
-        Center(state, onRetry, onExit, onShowFree)
-        if (overlayVisible) Overlay(state.channel, onZap, onExit)
+        if (inPictureInPicture) {
+            PictureInPictureContent(state)
+        } else {
+            Center(state, onRetry, onExit, onShowFree)
+            if (overlayVisible) Overlay(state.channel, onZap, onExit)
+        }
+    }
+}
+
+/** The floating window is too small to read or tap: over the video, only a sign the channel failed. */
+@Composable
+private fun PictureInPictureContent(state: WatchUiState) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (state.playback is PlaybackState.Failed) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = stringResource(R.string.player_failed),
+                tint = Color.White,
+                modifier = Modifier.testTag(PlayerScreenTags.FAILED_SMALL),
+            )
+        }
     }
 }
 
@@ -190,7 +224,7 @@ private fun LoginInUseMessage(loginInUse: LoginInUse) {
     )
     Text(
         stringResource(R.string.player_login_in_use_detail),
-        color = Color.White.copy(alpha = DIM_ALPHA),
+        color = Color.White.copy(alpha = VaultAlpha.SECONDARY),
         textAlign = TextAlign.Center,
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
     )
@@ -216,7 +250,9 @@ private fun Overlay(channel: LiveChannel?, onZap: (Int) -> Unit, onExit: () -> U
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = SCRIM_ALPHA), Color.Transparent)))
+                .background(
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = VaultAlpha.SCRIM), Color.Transparent)),
+                )
                 .safeDrawingPadding()
                 .padding(8.dp),
         ) {
@@ -263,7 +299,7 @@ private fun ChannelInfo(channel: LiveChannel, modifier: Modifier) {
         channel.nowPlaying?.let { program ->
             Text(
                 program.title,
-                color = Color.White.copy(alpha = DIM_ALPHA),
+                color = Color.White.copy(alpha = VaultAlpha.SECONDARY),
                 style = MaterialTheme.typography.body2,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -273,8 +309,6 @@ private fun ChannelInfo(channel: LiveChannel, modifier: Modifier) {
 }
 
 private const val OVERLAY_TIMEOUT_MS = 4_000L
-private const val SCRIM_ALPHA = 0.7f
-private const val DIM_ALPHA = 0.8f
 
 /**
  * The player for [viewModel]'s channel: full screen, back returns to the channels. Leaving the app
@@ -292,12 +326,16 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
         }
     }
     FullScreen()
+    // Leaving the app while a channel plays carries on in a floating window
+    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing)
+    val inPictureInPicture = rememberInPictureInPicture()
     PlayerScreen(
         state = state,
         onZap = viewModel::zap,
         onRetry = viewModel::retry,
         onExit = viewModel::exit,
         onShowFree = onShowFree,
+        inPictureInPicture = inPictureInPicture,
         video = {
             val exoPlayer = (viewModel.player as? ExoLivePlayer)?.exoPlayer
             AndroidView(

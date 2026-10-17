@@ -341,6 +341,16 @@ class AudiobookPlayerViewModelTest {
         verify { mockedPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.75f) }
     }
 
+    @Test
+    fun `holding the speed-up button doesn't change the speed chosen`() {
+        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1f)
+        viewModel.setPlaybackSpeed(1.75f)
+
+        viewModel.setPressSpeedUp(isPressing = true, speed = Constants.HOLD_SPEEDUP_MULTIPLIER)
+
+        viewModel.playbackSpeed shouldBe 1.75f
+    }
+
     // --- skip silence --------------------------------------------------------------------------
 
     @Test

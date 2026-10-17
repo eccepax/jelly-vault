@@ -6,7 +6,6 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
@@ -14,7 +13,6 @@ import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.Assert.assertNull
 import org.junit.Test
-import org.jellyfin.mobile.common.R as CommonR
 
 /** Signing out of LiveVault on the real Vault. Never opens a channel. */
 class SignOutE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class.java) {
@@ -40,7 +38,7 @@ class SignOutE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class
         composeRule.onNodeWithText("Sign out").performClick()
         composeRule.onNodeWithText("Yes, sign out").performClick()
 
-        waitForView(withId(CommonR.id.editUsername))
+        waitForSignInScreen()
         assertNull(koinGet<ApiClient>().accessToken)
 
         signIn()

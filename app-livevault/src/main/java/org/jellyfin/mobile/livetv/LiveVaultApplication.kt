@@ -2,6 +2,7 @@ package org.jellyfin.mobile.livetv
 
 import android.app.Application
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.livetv.app.liveAppModule
 import org.jellyfin.mobile.livetv.data.liveDatabaseModule
 import org.jellyfin.sdk.model.ClientInfo
@@ -12,7 +13,7 @@ import timber.log.Timber
 /** The Koin modules the app starts with. */
 val liveVaultModules = listOf(
     liveAppModule,
-    apiModule(ClientInfo("LiveVault", BuildConfig.VERSION_NAME)),
+    apiModule(ClientInfo("LiveVault", BuildConfig.VERSION_NAME), VaultBrand.LiveVault),
     liveDatabaseModule,
 )
 

@@ -7,14 +7,15 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.common.ui.utils.enableDarkEdgeToEdge
 import org.jellyfin.mobile.livetv.ui.LiveSignedIn
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-// AppCompatActivity (a FragmentActivity): common's LoginFragment is hosted inside the Compose tree.
-// MainViewModel is resolved here so it's the same activity-scoped instance LoginFragment gets.
+// MainViewModel is resolved here so it's the one activity-scoped instance that the sign-in screen
+// tells once the user is saved.
 class LiveMainActivity : AppCompatActivity() {
 
     private val mainViewModel: MainViewModel by viewModel()
@@ -26,7 +27,7 @@ class LiveMainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppTheme {
+            AppTheme(VaultBrand.LiveVault) {
                 VaultRoot(mainViewModel, appPreferences, logoRes = R.drawable.live_logo) { LiveSignedIn() }
             }
         }

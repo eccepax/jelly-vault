@@ -16,6 +16,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.flow.first
+import org.jellyfin.mobile.common.ui.theme.FocusOutlined
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

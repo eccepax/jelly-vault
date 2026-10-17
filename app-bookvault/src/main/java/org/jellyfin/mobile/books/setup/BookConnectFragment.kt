@@ -11,7 +11,8 @@ import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ui.screens.connect.ConnectScreen
-import org.jellyfin.mobile.common.ui.utils.AppTheme
+import org.jellyfin.mobile.common.ui.theme.AppTheme
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 
 class BookConnectFragment : Fragment() {
@@ -33,7 +34,7 @@ class BookConnectFragment : Fragment() {
         val encounteredConnectionError = arguments?.getBoolean(ARG_CONNECTION_ERROR) == true
 
         composeView.setContent {
-            AppTheme {
+            AppTheme(VaultBrand.BookVault) {
                 ConnectScreen(
                     mainViewModel = mainViewModel,
                     showExternalConnectionError = encounteredConnectionError,

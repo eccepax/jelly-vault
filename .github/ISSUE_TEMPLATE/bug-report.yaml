@@ -18,7 +18,9 @@ body:
     id: app-version
     attributes:
       label: App version
-      description: Settings → About, or the release you installed.
+      description: >-
+        Settings → About (LiveVault: the ⋮ menu on the channel list), or the release you
+        installed. Filled in for you when you use "Report a bug" there.
     validations:
       required: true
   - type: input

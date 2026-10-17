@@ -1,36 +1,44 @@
 package org.jellyfin.mobile.common.setup
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Looper
-import android.widget.Button
-import android.widget.EditText
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.testing.launchFragmentInContainer
-import androidx.lifecycle.Lifecycle
-import androidx.test.platform.app.InstrumentationRegistry
-import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
+import androidx.test.core.app.ApplicationProvider
+import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.floats.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
-import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.api.client.extensions.userApi
-import org.jellyfin.sdk.api.operations.UserApi
+import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
+import org.jellyfin.mobile.common.setup.quickconnect.SignedInUser
+import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.startKoin
@@ -40,39 +48,38 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import java.util.concurrent.TimeUnit
+import org.robolectric.annotation.GraphicsMode
 
+/** The sign-in screen as AudioVault and BookVault show it: in a fragment, wired to the server. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class LoginFragmentTest {
 
-    private val apiClient = mockk<ApiClient>(relaxed = true)
-    private val loginStarted = CompletableDeferred<Unit>()
-    private val loginCancelled = CompletableDeferred<Unit>()
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
+
+    private val passwordSignIn = mockk<PasswordSignIn>()
+    private val apiClientController = mockk<ApiClientController>(relaxed = true)
+    private val mainViewModel = mockk<MainViewModel>(relaxed = true)
 
     @Before
     fun setUp() {
-        mockkStatic(API_CLIENT_EXTENSIONS)
-        every { apiClient.userApi } returns UserApi(apiClient)
-        // The login request never answers, as if the server were slow; it only ends by being cancelled
-        coEvery { apiClient.request(any(), any(), any(), any(), any()) } coAnswers {
-            loginStarted.complete(Unit)
-            try {
-                awaitCancellation()
-            } finally {
-                loginCancelled.complete(Unit)
-            }
-        }
+        coEvery { passwordSignIn.signIn(any(), any()) } returns SignedInUser("alice-id", "token")
         val appPreferences = mockk<AppPreferences>(relaxed = true)
         every { appPreferences.currentServerId } returns 1L
 
         startKoin {
             modules(
                 module {
-                    single { apiClient }
-                    single { mockk<ApiClientController>(relaxed = true) }
+                    single { passwordSignIn }
+                    single { mockk<QuickConnect>(relaxed = true) }
+                    single { apiClientController }
                     single { appPreferences }
-                    viewModel { mockk<MainViewModel>(relaxed = true) }
+                    // Not common's default Jellyfin blue, so the screen is seen to take the app's own
+                    single { VaultBrand.BookVault }
+                    viewModel { mainViewModel }
+                    // On the main thread, so the test sees the sign-in finish without waiting on another
+                    viewModel { LoginViewModel(get(), get(), get(), get(), Dispatchers.Main) }
                 },
             )
         }
@@ -81,89 +88,75 @@ class LoginFragmentTest {
     @After
     fun tearDown() {
         stopKoin()
-        unmockkStatic(API_CLIENT_EXTENSIONS)
+    }
+
+    private fun string(resId: Int) = ApplicationProvider.getApplicationContext<Application>().getString(resId)
+
+    @Test
+    fun `signing in saves the user and tells the app it's signed in`() {
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use {
+            composeRule.onNodeWithTag(VaultTestTags.LOGIN_USERNAME).performTextInput("alice")
+            composeRule.onNodeWithTag(VaultTestTags.LOGIN_PASSWORD).performTextInput("secret")
+            composeRule.onNode(hasText(string(R.string.login_button)) and hasClickAction()).performClick()
+            composeRule.waitForIdle()
+        }
+
+        coVerify { apiClientController.setupUser(1L, "alice-id", "token") }
+        coVerify { mainViewModel.refreshState() }
     }
 
     @Test
-    fun `leaving the login screen while a login is in flight does not crash`() {
-        // A crash inside a coroutine goes to the thread's uncaught-exception handler, which on a phone kills
-        // the app but in a JVM test only prints — so capture it to fail the test instead
-        var crash: Throwable? = null
-        val mainThread = Thread.currentThread()
-        val originalHandler = mainThread.uncaughtExceptionHandler
-        mainThread.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, e -> crash = e }
-
-        val scenario = launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme)
-        scenario.onFragment { fragment ->
-            fragment.requireView().findViewById<EditText>(R.id.editUsername).setText("alice")
-            fragment.requireView().findViewById<Button>(R.id.buttonLogin).performClick()
+    fun `change server goes back to choosing one`() {
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use {
+            composeRule.onNodeWithText(string(R.string.login_change_server)).performClick()
         }
-        shadowOf(Looper.getMainLooper()).idle()
-        await(loginStarted)
 
-        // Destroys the fragment's view (e.g. the user navigated away) while the login is still waiting
-        scenario.moveToState(Lifecycle.State.CREATED)
-
-        // The request runs off the main thread; once it is cancelled, the login coroutine finishes on the
-        // main looper — which is where touching the destroyed view would throw
-        await(loginCancelled)
-        repeat(SETTLE_ROUNDS) {
-            Thread.sleep(POLL_INTERVAL_MS)
-            shadowOf(Looper.getMainLooper()).idleFor(POLL_INTERVAL_MS, TimeUnit.MILLISECONDS)
-        }
-        mainThread.uncaughtExceptionHandler = originalHandler
-
-        crash.shouldBeNull()
-    }
-
-    private fun await(signal: CompletableDeferred<Unit>) = runBlocking {
-        withTimeout(SIGNAL_TIMEOUT_MS) { signal.await() }
-    }
-
-    @Test
-    fun `with a TV remote the focused button is outlined, and the others are not`() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        instrumentation.setInTouchMode(false)
-        try {
-            val scenario = launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme)
-            scenario.onFragment { fragment ->
-                val signIn = fragment.requireView().findViewById<Button>(R.id.buttonLogin)
-                val changeServer = fragment.requireView().findViewById<Button>(R.id.buttonChangeServer)
-
-                signIn.requestFocus() shouldBe true
-
-                signIn.foreground?.current.shouldNotBeNull()
-                changeServer.foreground?.current.shouldBeNull()
-            }
-        } finally {
-            instrumentation.setInTouchMode(true)
-        }
+        verify { mainViewModel.resetServer() }
     }
 
     @Test
     fun `the login screen keeps its content clear of the status and navigation bars`() {
-        val scenario = launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme)
-        scenario.onFragment { fragment ->
-            val root = fragment.requireView()
-            val basePadding = root.paddingTop
-            val bars = WindowInsetsCompat.Builder()
-                .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, STATUS_BAR_PX, 0, 0))
-                .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, NAV_BAR_PX))
-                .build()
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use { scenario ->
+            scenario.onFragment { fragment ->
+                val bars = WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, STATUS_BAR_PX, 0, 0))
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, NAV_BAR_PX))
+                    .build()
+                ViewCompat.dispatchApplyWindowInsets(fragment.requireView(), bars)
+            }
+            shadowOf(Looper.getMainLooper()).idle()
 
-            ViewCompat.dispatchApplyWindowInsets(root, bars)
+            val screenHeight = composeRule.onRoot().fetchSemanticsNode().size.height
+            val title = composeRule.onNode(hasText(string(R.string.login_title)) and !hasClickAction())
+                .fetchSemanticsNode()
+            val changeServer = composeRule.onNodeWithText(string(R.string.login_change_server)).fetchSemanticsNode()
+            title.boundsInRoot.top shouldBeGreaterThanOrEqual STATUS_BAR_PX.toFloat()
+            changeServer.boundsInRoot.bottom shouldBeLessThanOrEqual (screenHeight - NAV_BAR_PX).toFloat()
+        }
+    }
 
-            root.paddingTop shouldBe basePadding + STATUS_BAR_PX
-            root.paddingBottom shouldBe basePadding + NAV_BAR_PX
+    @Test
+    @Config(sdk = [SCREENSHOT_SDK])
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `the sign-in button is in the app's own brand`() {
+        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use { scenario ->
+            val button = composeRule.onNode(hasText(string(R.string.login_button)) and hasClickAction())
+                .fetchSemanticsNode().boundsInRoot
+            scenario.onFragment { fragment ->
+                val view = fragment.requireView()
+                val pixels = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(pixels))
+
+                // Just inside the left edge, clear of the rounded corners and the centered label
+                pixels.getPixel(button.left.toInt() + EDGE_INSET_PX, button.center.y.toInt()) shouldBe
+                    VaultBrand.BookVault.accent.toArgb()
+            }
         }
     }
 
     private companion object {
+        const val EDGE_INSET_PX = 8
         const val STATUS_BAR_PX = 63
         const val NAV_BAR_PX = 42
-        const val API_CLIENT_EXTENSIONS = "org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt"
-        const val SIGNAL_TIMEOUT_MS = 5_000L
-        const val POLL_INTERVAL_MS = 10L
-        const val SETTLE_ROUNDS = 20
     }
 }

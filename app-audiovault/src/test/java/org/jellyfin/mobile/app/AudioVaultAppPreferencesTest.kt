@@ -79,39 +79,12 @@ class AudioVaultAppPreferencesTest {
     // --- simple flag defaults (each regression-guards against reading the wrong key) -----------
 
     @Test
-    fun `musicNotificationAlwaysDismissible reads its own key and defaults to false`() {
-        preferences.musicNotificationAlwaysDismissible shouldBe false
-
-        fakeSharedPreferences.edit().putBoolean(Constants.PREF_MUSIC_NOTIFICATION_ALWAYS_DISMISSIBLE, true).apply()
-
-        preferences.musicNotificationAlwaysDismissible shouldBe true
-    }
-
-    @Test
     fun `exoPlayerAllowPressSpeedUp reads its own key and defaults to true`() {
         preferences.exoPlayerAllowPressSpeedUp shouldBe true
 
         fakeSharedPreferences.edit().putBoolean(Constants.PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP, false).apply()
 
         preferences.exoPlayerAllowPressSpeedUp shouldBe false
-    }
-
-    @Test
-    fun `exoPlayerAllowBackgroundAudio reads its own key and defaults to false`() {
-        preferences.exoPlayerAllowBackgroundAudio shouldBe false
-
-        fakeSharedPreferences.edit().putBoolean(Constants.PREF_EXOPLAYER_ALLOW_BACKGROUND_AUDIO, true).apply()
-
-        preferences.exoPlayerAllowBackgroundAudio shouldBe true
-    }
-
-    @Test
-    fun `chromecastEnabled reads its own key and defaults to false`() {
-        preferences.chromecastEnabled shouldBe false
-
-        fakeSharedPreferences.edit().putBoolean(Constants.PREF_CHROMECAST_ENABLED, true).apply()
-
-        preferences.chromecastEnabled shouldBe true
     }
 
     // --- librarySortOption / libraryGlobalFlattened / playbackSpeed ----------------------------

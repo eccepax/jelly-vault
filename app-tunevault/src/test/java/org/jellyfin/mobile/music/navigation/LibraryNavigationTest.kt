@@ -8,6 +8,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import io.kotest.matchers.shouldBe
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +58,29 @@ class LibraryNavigationTest {
     private fun systemBack() {
         composeRule.waitForIdle() // BackHandler enables on the recomposition after a navigation
         composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+    }
+
+    @Test
+    fun `a page asked for from outside, like the player, opens on top, and back returns home`() {
+        var target by mutableStateOf<BrowseTarget?>(null)
+        composeRule.setContent {
+            LibraryNavigation(
+                home = { Text("Home") },
+                albumDetail = { albumId, _ -> Text("Album $albumId") },
+                artistDetail = { artistId, _, _ -> Text("Artist $artistId") },
+                playlistDetail = { _, _ -> },
+                settings = { },
+                open = target,
+                onOpened = { target = null },
+            )
+        }
+
+        target = BrowseTarget.Artist("bonnie")
+
+        composeRule.onNodeWithText("Artist bonnie").assertIsDisplayed()
+        target shouldBe null
+        systemBack()
+        composeRule.onNodeWithText("Home").assertIsDisplayed()
     }
 
     @Test

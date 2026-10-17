@@ -1,9 +1,7 @@
 package org.jellyfin.mobile.livetv.channels
 
 import android.content.res.Configuration
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -22,27 +20,22 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.runtime.Composable
@@ -59,35 +52,50 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
+import org.jellyfin.mobile.common.ui.components.ConfirmDialog
+import org.jellyfin.mobile.common.ui.components.EmptyState
+import org.jellyfin.mobile.common.ui.components.ErrorState
+import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.SearchField
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.components.bugReportUrl
 import org.jellyfin.mobile.common.ui.dpadLeavesTextField
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
+import org.jellyfin.mobile.common.ui.theme.VaultColors
+import org.jellyfin.mobile.common.ui.theme.focusBorder
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.sdk.model.ClientInfo
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import java.time.Instant
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
  * on tablets and TVs; cards and chips are focusable, so a TV remote's D-pad moves through them.
  * [onTv], the remote starts on the channel to continue (else the first one) rather than on search.
+ * The menu names [app] and its version, for a bug report.
  */
 @Composable
 fun ChannelsScreen(
     state: ChannelsUiState,
     now: Instant,
     onTv: Boolean = false,
+    app: ClientInfo,
     actions: ChannelsActions,
 ) {
     val startFocus = remember { FocusRequester() }
@@ -101,17 +109,11 @@ fun ChannelsScreen(
                 query = (state as? ChannelsUiState.Loaded)?.filter?.query.orEmpty(),
                 onQueryChange = actions.onQueryChange,
                 onSignOut = actions.onSignOut,
+                app = app,
             )
             when (state) {
-                ChannelsUiState.Loading -> Centered {
-                    CircularProgressIndicator(Modifier.testTag(ChannelsScreenTags.LOADING))
-                }
-                ChannelsUiState.Error -> Centered {
-                    Text(stringResource(R.string.channels_error))
-                    Button(onClick = actions.onRetry, modifier = Modifier.padding(top = 16.dp)) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+                ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
+                ChannelsUiState.Error -> ErrorState(stringResource(R.string.channels_error), onRetry = actions.onRetry)
                 is ChannelsUiState.Loaded -> {
                     state.lastChannel?.let { channel ->
                         ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
@@ -123,7 +125,7 @@ fun ChannelsScreen(
                         onFavoritesSelect = actions.onFavoritesSelect,
                     )
                     if (state.channels.isEmpty()) {
-                        Centered { Text(emptyMessage(state.filter), textAlign = TextAlign.Center) }
+                        EmptyState(emptyMessage(state.filter))
                     } else {
                         ChannelGrid(
                             channels = state.channels,
@@ -131,6 +133,8 @@ fun ChannelsScreen(
                             onFavoriteToggle = actions.onFavoriteToggle,
                             onChannelClick = actions.onChannelClick,
                             firstFocus = startFocus.takeIf { state.lastChannel == null },
+                            // Another tag, or favorites, is another list: start it at its top
+                            scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
                         )
                     }
                 }
@@ -140,25 +144,15 @@ fun ChannelsScreen(
 }
 
 @Composable
-private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.live_tv_title),
-                style = MaterialTheme.typography.h5,
-                modifier = Modifier.weight(1f),
-            )
-            MoreMenu(onSignOut)
-        }
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            placeholder = { Text(stringResource(R.string.channels_search)) },
+private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit, app: ClientInfo) {
+    Column {
+        // The same bar as the other apps' main screens
+        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut, app) })
+        SearchField(
+            query = query,
+            onQueryChange = onQueryChange,
+            placeholder = stringResource(R.string.channels_search),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
                 .testTag(ChannelsScreenTags.SEARCH)
                 .dpadLeavesTextField(),
         )
@@ -166,24 +160,17 @@ private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: ()
 }
 
 @Composable
-private fun MoreMenu(onSignOut: () -> Unit) {
+private fun MoreMenu(onSignOut: () -> Unit, app: ClientInfo) {
     var expanded by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
+    // Read here: the menu is its own window, whose composition has its own handler
+    val uriHandler = LocalUriHandler.current
     if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            text = { Text(stringResource(R.string.sign_out_question)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirming = false
-                        onSignOut()
-                    },
-                ) { Text(stringResource(R.string.sign_out_confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) }
-            },
+        ConfirmDialog(
+            message = stringResource(R.string.sign_out_question),
+            confirmLabel = stringResource(R.string.sign_out_confirm),
+            onConfirm = onSignOut,
+            onDismiss = { confirming = false },
         )
     }
     Box {
@@ -191,6 +178,18 @@ private fun MoreMenu(onSignOut: () -> Unit) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.channels_more_options))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // Which version this is, for a bug report; there's no settings screen to show it on
+            DropdownMenuItem(onClick = {}, enabled = false) {
+                Text(stringResource(CommonR.string.about_app_version, app.name, app.version))
+            }
+            DropdownMenuItem(
+                onClick = {
+                    expanded = false
+                    uriHandler.openUri(bugReportUrl(app.name, app.version))
+                },
+            ) {
+                Text(stringResource(CommonR.string.report_bug))
+            }
             DropdownMenuItem(
                 onClick = {
                     expanded = false
@@ -267,8 +266,13 @@ private fun ChannelGrid(
     onChannelClick: (LiveChannel) -> Unit,
     /** Given to the first card, when it's where the remote starts. */
     firstFocus: FocusRequester?,
+    scrollKey: String,
 ) {
+    val grid = rememberLazyGridState()
+    ScrollToTopOnChange(scrollKey) { grid.scrollToItem(0) }
     LazyVerticalGrid(
+        state = grid,
+        modifier = Modifier.testTag(ChannelsScreenTags.GRID),
         columns = GridCells.Adaptive(minSize = CARD_MIN_WIDTH),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -363,7 +367,7 @@ private fun ChannelCard(
 @Composable
 private fun NowPlaying(channel: LiveChannel, now: Instant) {
     val program = channel.nowPlaying
-    val dim = MaterialTheme.colors.onSurface.copy(alpha = DIM_ALPHA)
+    val dim = MaterialTheme.colors.onSurface.copy(alpha = VaultAlpha.SECONDARY)
     if (program == null) {
         Text(stringResource(R.string.channels_no_guide), style = MaterialTheme.typography.body2, color = dim)
         return
@@ -396,7 +400,7 @@ private fun ChannelLogo(logoUrl: String?) {
         Icon(
             Icons.Filled.LiveTv,
             contentDescription = null,
-            tint = MaterialTheme.colors.onSurface.copy(alpha = DIM_ALPHA),
+            tint = MaterialTheme.colors.onSurface.copy(alpha = VaultAlpha.SECONDARY),
         )
         if (logoUrl != null) {
             AsyncImage(
@@ -421,7 +425,11 @@ private fun FavoriteButton(channel: LiveChannel, onToggle: () -> Unit) {
         Icon(
             imageVector = if (channel.isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
             contentDescription = description,
-            tint = if (channel.isFavorite) FavoriteColor else MaterialTheme.colors.onSurface.copy(alpha = DIM_ALPHA),
+            tint = if (channel.isFavorite) {
+                VaultColors.Favorite
+            } else {
+                MaterialTheme.colors.onSurface.copy(alpha = VaultAlpha.SECONDARY)
+            },
         )
     }
 }
@@ -433,32 +441,10 @@ private fun emptyMessage(filter: ChannelFilter): String = when {
     else -> stringResource(R.string.channels_empty)
 }
 
-/** Where the D-pad focus is: TVs have no touch, so focus must be plain to see. */
-@Composable
-private fun Modifier.focusBorder(focused: Boolean, shape: Shape): Modifier =
-    if (focused) border(BorderStroke(2.dp, MaterialTheme.colors.onSurface), shape) else this
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        content()
-    }
-}
-
 private val CARD_MIN_WIDTH = 340.dp
 private val LOGO_SIZE = 56.dp
 private val ChipShape = CircleShape
 private val CardShape = RoundedCornerShape(8.dp)
-
-@Suppress("MagicNumber")
-private val FavoriteColor = Color(0xFFFFC107)
-private const val DIM_ALPHA = 0.7f
 
 /** The channel browser, refreshing what's on now when the app returns and when a program ends. */
 @Composable
@@ -466,6 +452,8 @@ fun ChannelsRoute(
     onChannelClick: (channel: LiveChannel, lineup: List<LiveChannel>) -> Unit,
     onSignOut: () -> Unit,
     viewModel: ChannelsViewModel = koinViewModel(),
+    // The app's name as the server knows it and the bug form lists it
+    app: ClientInfo = koinInject(),
 ) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
@@ -485,6 +473,7 @@ fun ChannelsRoute(
         state = state,
         now = now,
         onTv = onTv,
+        app = app,
         actions = ChannelsActions(
             onQueryChange = viewModel::onQueryChange,
             onTagSelect = viewModel::selectTag,

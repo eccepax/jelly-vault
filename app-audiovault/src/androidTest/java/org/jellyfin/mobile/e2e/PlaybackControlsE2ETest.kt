@@ -1,15 +1,11 @@
 package org.jellyfin.mobile.e2e
 
-import android.view.View
-import android.widget.TextView
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.UiController
-import androidx.test.espresso.ViewAction
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import org.hamcrest.Matcher
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.player.ui.PlayerTags
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
@@ -18,15 +14,18 @@ import org.junit.Test
  */
 class PlaybackControlsE2ETest : LoggedInE2ETest() {
 
+    private fun tap(description: Int) =
+        composeRule.onNodeWithContentDescription(context.getString(description)).performClick()
+
     @Test
     fun pauseThenResumeKeepsPlaybackOnScreen() {
         loginAndWaitForLibrary()
         startPlaybackFromFirstLibraryItem()
 
-        onView(playerControl(R.id.exo_play_pause)).perform(click()) // pause
-        onView(playerControl(R.id.exo_play_pause)).perform(click()) // resume
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).performClick() // pause
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).performClick() // resume
 
-        onView(playerControl(R.id.exo_play_pause)).check(matches(isDisplayed()))
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
     }
 
     @Test
@@ -34,15 +33,12 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         startPlaybackFromFirstLibraryItem()
 
-        val positionBefore = textOf(waitForPlayerControl(R.id.exo_position))
-        onView(waitForPlayerControl(R.id.next_button)).perform(click()) // +30s (audiobook skip-forward interval)
-        val positionAfter = textOf(waitForPlayerControl(R.id.exo_position))
+        val positionBefore = seconds(playerPosition())
+        tap(R.string.player_fast_forward) // +30s (audiobook skip-forward interval)
 
         // Merely "changed" passed by luck when the server transcoded: the clock restarted at 0:00
         // and only differed if it had already ticked past 0:00 before the tap.
-        assert(seconds(positionAfter) >= seconds(positionBefore) + MIN_SKIP_SECONDS) {
-            "Expected fast-forward to move from \"$positionBefore\" by about 30s, but it shows \"$positionAfter\""
-        }
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { seconds(playerPosition()) >= positionBefore + MIN_SKIP_SECONDS }
     }
 
     private fun seconds(position: String): Int =
@@ -56,25 +52,12 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
         // Real Vault content may or may not have chapter markers — with none, these fall back to
         // skipping to the next/previous queue track instead (AudiobookPlayerViewModel.nextChapter/
         // previousChapter). Either way playback should still be running afterward, not crashed.
-        onView(waitForPlayerControl(R.id.next_chapter_button)).perform(click())
-        onView(waitForPlayerControl(R.id.exo_play_pause)).check(matches(isDisplayed()))
+        waitForPlaying()
+        tap(R.string.player_next_chapter)
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
 
-        onView(waitForPlayerControl(R.id.previous_chapter_button)).perform(click())
-        onView(waitForPlayerControl(R.id.exo_play_pause)).check(matches(isDisplayed()))
-    }
-
-    private fun textOf(matcher: Matcher<View>): String {
-        var text = ""
-        onView(matcher).perform(
-            object : ViewAction {
-                override fun getConstraints() = isDisplayed()
-                override fun getDescription() = "capture text"
-                override fun perform(uiController: UiController, view: View) {
-                    text = (view as TextView).text.toString()
-                }
-            },
-        )
-        return text
+        tap(R.string.player_previous_chapter)
+        composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
     }
 
     private companion object {

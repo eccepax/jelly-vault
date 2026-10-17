@@ -2,7 +2,6 @@ package org.jellyfin.mobile.common.ui.screens.connect
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Column
@@ -21,12 +20,10 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.SemanticsPropertyKey
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.ui.theme.focusBorder
 import org.jellyfin.mobile.common.ui.utils.CenterRow
 
 @Composable
@@ -70,11 +67,6 @@ fun LogoHeader(@DrawableRes logoRes: Int) {
     }
 }
 
-/** Whether a button is showing its focus outline; for tests. */
-internal val FocusOutlined = SemanticsPropertyKey<Boolean>("FocusOutlined")
-
-private val FOCUS_OUTLINE_WIDTH = 3.dp
-
 @Stable
 @Composable
 fun StyledTextButton(
@@ -86,14 +78,12 @@ fun StyledTextButton(
     // buttons, so phones never show it.
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val outlineColor = if (focused) Color.White else Color.Transparent
     TextButton(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .semantics { this[FocusOutlined] = focused }
-            .border(FOCUS_OUTLINE_WIDTH, outlineColor, MaterialTheme.shapes.small),
+            .focusBorder(focused),
         enabled = enabled,
         interactionSource = interactionSource,
         colors = ButtonDefaults.buttonColors(),

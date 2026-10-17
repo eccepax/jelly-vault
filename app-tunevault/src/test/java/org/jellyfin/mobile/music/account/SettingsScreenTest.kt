@@ -29,6 +29,8 @@ class SettingsScreenTest {
     private val signedIn = SettingsUiState(
         account = Account(userName = "alice", serverName = "The Vault", serverUrl = "http://vault:8096"),
         streamingQuality = StreamingQuality.ORIGINAL,
+        // Not the app's real name, so the screen is seen to show the one it's given
+        appName = "TuneVault Test",
         appVersion = "1.2.3",
     )
     private val events = mutableListOf<String>()
@@ -62,7 +64,14 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("alice").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("The Vault · http://vault:8096").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("TuneVault 1.2.3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("TuneVault Test 1.2.3").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `there's a way to report a bug`() {
+        show()
+
+        composeRule.onNodeWithText("Report a bug").performScrollTo().assertIsDisplayed()
     }
 
     @Test

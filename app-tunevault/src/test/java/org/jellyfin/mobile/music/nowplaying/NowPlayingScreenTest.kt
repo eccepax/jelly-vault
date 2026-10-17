@@ -2,9 +2,11 @@ package org.jellyfin.mobile.music.nowplaying
 
 import android.app.Application
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -28,7 +30,9 @@ class NowPlayingScreenTest {
     private val londonMay = track("2").copy(
         title = "London May",
         artist = "Bonnie \"Prince\" Billy",
+        albumId = "pb",
         albumTitle = "The Purple Bird",
+        artistId = "bonnie",
         durationMs = 180_000L,
     )
     private val playing = NowPlayingUiState(
@@ -53,6 +57,8 @@ class NowPlayingScreenTest {
                     onToggleShuffle = { events += "shuffle" },
                     onOpenQueue = { events += "queue" },
                     onToggleFavorite = { events += "favorite" },
+                    onOpenAlbum = { events += "album $it" },
+                    onOpenArtist = { events += "artist $it" },
                 ),
             )
         }
@@ -65,6 +71,41 @@ class NowPlayingScreenTest {
         composeRule.onNodeWithText("London May").assertIsDisplayed()
         composeRule.onNodeWithText("Bonnie \"Prince\" Billy").assertIsDisplayed()
         composeRule.onNodeWithText("The Purple Bird").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the song or its album opens the album`() {
+        show(playing)
+
+        composeRule.onNodeWithText("London May").performClick()
+        composeRule.onNodeWithText("The Purple Bird").performClick()
+        composeRule.onNodeWithTag(NowPlayingTags.COVER).performClick()
+
+        events shouldBe listOf("album pb", "album pb", "album pb")
+    }
+
+    @Test
+    fun `tapping the artist opens the artist`() {
+        show(playing)
+
+        composeRule.onNodeWithText("Bonnie \"Prince\" Billy").performClick()
+
+        events shouldBe listOf("artist bonnie")
+    }
+
+    @Test
+    fun `an artist the server didn't name can't be opened`() {
+        show(playing.copy(track = londonMay.copy(artistId = null)))
+
+        composeRule.onNodeWithText("Bonnie \"Prince\" Billy").assertHasNoClickAction()
+    }
+
+    @Test
+    fun `a song on no album has no album to open`() {
+        show(playing.copy(track = londonMay.copy(albumId = "", albumTitle = "")))
+
+        composeRule.onNodeWithText("London May").assertHasNoClickAction()
+        composeRule.onNodeWithTag(NowPlayingTags.COVER).assertHasNoClickAction()
     }
 
     @Test

@@ -2,17 +2,12 @@ package org.jellyfin.mobile.music.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.material.BottomNavigation
-import androidx.compose.material.BottomNavigationItem
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import org.jellyfin.mobile.common.ui.components.VaultBottomBar
+import org.jellyfin.mobile.common.ui.components.VaultBottomBarItem
 
 /**
  * The selected tab's content. Each tab keeps its saved state (scroll positions, its own back stack)
@@ -43,13 +38,13 @@ fun MainTabs(
 
 @Composable
 fun MainBottomBar(selected: MainTab, onSelect: (MainTab) -> Unit) {
-    BottomNavigation(backgroundColor = MaterialTheme.colors.surface, windowInsets = WindowInsets.navigationBars) {
+    VaultBottomBar {
         MainTab.entries.forEach { tab ->
-            BottomNavigationItem(
+            VaultBottomBarItem(
                 selected = tab == selected,
                 onClick = { onSelect(tab) },
-                icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(stringResource(tab.label)) },
+                icon = tab.icon,
+                label = stringResource(tab.label),
             )
         }
     }

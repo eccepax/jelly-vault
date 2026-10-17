@@ -1,6 +1,11 @@
 package org.jellyfin.mobile.downloads
 
 import android.app.Application
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.fragment.app.testing.launchFragmentInContainer
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -10,7 +15,6 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.jellyfin.mobile.R
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
@@ -21,6 +25,7 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.startKoin
@@ -30,11 +35,15 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /** Tests playing and removing an already-downloaded item. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class DownloadsFragmentTest {
+
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
 
     private val downloadsViewModel = mockk<DownloadsViewModel>(relaxed = true)
     private val activityEventHandler = mockk<ActivityEventHandler>(relaxed = true)
@@ -69,22 +78,24 @@ class DownloadsFragmentTest {
         itemId: UUID = UUID.randomUUID(),
         mediaSourceId: String = "source-1",
         item: BaseItemDto? = null,
+        name: String = "Dune",
     ): DownloadEntity {
         val mediaSource = mockk<LocalJellyfinMediaSource>(relaxed = true)
         every { mediaSource.itemId } returns (item?.id ?: itemId)
         every { mediaSource.id } returns mediaSourceId
         every { mediaSource.item } returns item
+        every { mediaSource.getName(any()) } returns name
         return DownloadEntity(itemId = itemId.toString(), mediaSource = mediaSource)
     }
 
     @Test
     fun `clicking a downloaded track plays its downloaded book from that track`() {
-        val chapter1 = downloadEntity(item = chapter(1))
-        val chapter2 = downloadEntity(item = chapter(2))
+        val chapter1 = downloadEntity(item = chapter(1), name = "Chapter 1")
+        val chapter2 = downloadEntity(item = chapter(2), name = "Chapter 2")
         downloadsFlow.value = listOf(chapter2, chapter1)
 
-        launchFragmentInContainer<DownloadsFragment>(themeResId = R.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onDownloadItemClick(chapter2) }
+        launchFragmentInContainer<DownloadsFragment>(themeResId = CommonR.style.AppTheme).use {
+            composeRule.onNodeWithText("Chapter 2").performClick()
         }
 
         val eventSlot = slot<ActivityEvent>()
@@ -106,10 +117,11 @@ class DownloadsFragmentTest {
 
     @Test
     fun `holding a downloaded item requests its removal`() {
-        val download = downloadEntity()
+        val download = downloadEntity(name = "Dune")
+        downloadsFlow.value = listOf(download)
 
-        launchFragmentInContainer<DownloadsFragment>(themeResId = R.style.AppTheme).use { scenario ->
-            scenario.onFragment { fragment -> fragment.onDownloadItemHold(download) }
+        launchFragmentInContainer<DownloadsFragment>(themeResId = CommonR.style.AppTheme).use {
+            composeRule.onNodeWithText("Dune").performTouchInput { longClick() }
         }
 
         val eventSlot = slot<ActivityEvent>()

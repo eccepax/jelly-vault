@@ -24,19 +24,6 @@ android {
         }
     }
 
-    flavorDimensions += "variant"
-    productFlavors {
-        register("libre") {
-            dimension = "variant"
-            buildConfigField("boolean", "IS_PROPRIETARY", "false")
-        }
-        register("proprietary") {
-            dimension = "variant"
-            buildConfigField("boolean", "IS_PROPRIETARY", "true")
-            isDefault = true
-        }
-    }
-
     bundle {
         language {
             enableSplit = false
@@ -60,7 +47,6 @@ android {
 base.archivesName.set("audiovault-v${project.getVersionName()}")
 
 dependencies {
-    val proprietaryImplementation by configurations
 
     // Kotlin
     implementation(libs.bundles.coroutines)
@@ -78,10 +64,6 @@ dependencies {
     implementation(libs.bundles.androidx.lifecycle)
 
     // UI
-    implementation(libs.google.material)
-    implementation(libs.androidx.constraintlayout)
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation(libs.modernandroidpreferences)
 
     // Jetpack Compose
     implementation(libs.bundles.compose)
@@ -102,8 +84,6 @@ dependencies {
     implementation(libs.androidx.media)
     implementation(libs.androidx.mediarouter)
     implementation(libs.bundles.androidx.media3)
-    proprietaryImplementation(libs.androidx.media3.cast)
-    proprietaryImplementation(libs.bundles.playservices)
 
     // Common module
     implementation(project(":common"))

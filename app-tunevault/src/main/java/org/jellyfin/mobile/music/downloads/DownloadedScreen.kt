@@ -26,6 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.common.downloads.GroupStatus
+import org.jellyfin.mobile.common.ui.components.DownloadedMark
+import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.library.AlbumCover
 import org.koin.compose.viewmodel.koinViewModel
@@ -83,7 +85,7 @@ private fun DownloadedRow(item: DownloadedItem, onClick: () -> Unit) {
             Text(
                 listOfNotNull(kind, collection.artist?.takeIf { it.isNotBlank() }, songs).joinToString(" · "),
                 style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onBackground.copy(alpha = 0.7f),
+                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
