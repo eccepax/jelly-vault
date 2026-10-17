@@ -69,6 +69,7 @@ import org.jellyfin.mobile.common.ui.components.EmptyState
 import org.jellyfin.mobile.common.ui.components.ErrorState
 import org.jellyfin.mobile.common.ui.components.LoadingState
 import org.jellyfin.mobile.common.ui.components.SearchField
+import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.components.bugReportUrl
 import org.jellyfin.mobile.common.ui.dpadLeavesTextField
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
@@ -140,15 +141,9 @@ fun ChannelsScreen(
 
 @Composable
 private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit) {
-    Column(Modifier.padding(top = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(
-                stringResource(R.string.live_tv_title),
-                style = MaterialTheme.typography.h5,
-                modifier = Modifier.weight(1f),
-            )
-            MoreMenu(onSignOut)
-        }
+    Column {
+        // The same bar as the other apps' main screens
+        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut) })
         SearchField(
             query = query,
             onQueryChange = onQueryChange,
