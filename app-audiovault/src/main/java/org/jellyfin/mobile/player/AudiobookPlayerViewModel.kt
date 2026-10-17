@@ -157,6 +157,9 @@ class AudiobookPlayerViewModel(application: Application) :
     private var fallbackPreferExtensionRenderers = false
     private var playSpeed = 1f
 
+    /** The speed chosen, which holding fast-forward doesn't change though the player plays faster. */
+    val playbackSpeed: Float get() = playSpeed
+
     private var progressUpdateJob: Job? = null
     private var skipMediaSegmentUpdateJob: Job? = null
 

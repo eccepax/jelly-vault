@@ -237,7 +237,8 @@ class PlayerFragment : Fragment() {
                     isPlaying = player.playWhenReady,
                     positionMs = viewModel.adjustedCurrentPosition.coerceAtLeast(0L),
                     durationMs = duration,
-                    speed = player.playbackParameters.speed.takeIf { it > 0f } ?: state.speed,
+                    // The speed chosen, not the player's, which is faster while fast-forward is held
+                    speed = viewModel.playbackSpeed.takeIf { it > 0f } ?: state.speed,
                     sleepTimerActive = viewModel.isSleepTimerActive,
                 )
             }

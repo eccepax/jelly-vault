@@ -16,6 +16,7 @@ import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.MutableLiveData
+import androidx.media3.common.PlaybackParameters
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
@@ -281,6 +282,21 @@ class PlayerFragmentTest {
         }
 
         verify { viewModel.setPlaybackSpeed(1.5f) }
+    }
+
+    @Test
+    fun `while fast-forward is held, the speed button still shows the speed chosen`() {
+        val viewModel = mockedPlayerViewModelForPlayerFragment()
+        val player = requireNotNull(viewModel.playerOrNull)
+        every { viewModel.playbackSpeed } returns 1.5f
+        // Holding fast-forward plays faster for now, without changing the speed chosen
+        every { player.playbackParameters } returns PlaybackParameters(Constants.HOLD_SPEEDUP_MULTIPLIER)
+
+        launch(viewModel).use {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+
+            composeRule.onNodeWithText("1.5x").assertExists()
+        }
     }
 
     private companion object {
