@@ -24,6 +24,7 @@ import org.jellyfin.mobile.common.data.entity.ServerUser
 import org.jellyfin.mobile.common.data.entity.UserEntity
 import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.userApi
@@ -36,7 +37,7 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The library (flat mode, the default) built from the real Vault: books grouped from tracks, and
+ * The library (flat mode, the default) built from the test server: books grouped from tracks, and
  * the queue a book plays. Read-only: nothing it caches is kept.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -90,19 +91,19 @@ class LibraryContractTest {
 
     @Test
     fun `a book in several files is one entry, its tracks in reading order`() = runBlocking<Unit> {
-        val caste = book("Caste: The Origins of Our Discontents")
+        val bundle = book(Audiobooks.MULTI_PART)
 
-        caste.trackIds.size shouldBeGreaterThan 1
-        caste.trackIds shouldBe tracksInOrder(caste.trackIds)
+        bundle.trackIds.size shouldBeGreaterThan 1
+        bundle.trackIds shouldBe tracksInOrder(bundle.trackIds)
     }
 
     @Test
     fun `a book plays the same tracks, in the same order, that the library shows`() = runBlocking<Unit> {
-        val caste = book("Caste: The Origins of Our Discontents")
+        val bundle = book(Audiobooks.MULTI_PART)
 
-        val queue = viewModel.fetchBundleQueue(caste)
+        val queue = viewModel.fetchBundleQueue(bundle)
 
-        queue?.ids shouldBe caste.trackIds
+        queue?.ids shouldBe bundle.trackIds
     }
 
     @Test

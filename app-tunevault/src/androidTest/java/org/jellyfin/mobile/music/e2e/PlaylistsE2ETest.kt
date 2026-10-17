@@ -11,13 +11,14 @@ import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.catalog.PlaylistStore
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.UUID
 
-/** Playlists against the real Vault. Every playlist made here is named "TuneVault e2e …" and deleted. */
+/** Playlists against the test server. Every playlist made here is named "TuneVault e2e …" and deleted. */
 @CollectionsArea
 class PlaylistsE2ETest : LoggedInE2ETest() {
 
@@ -29,9 +30,9 @@ class PlaylistsE2ETest : LoggedInE2ETest() {
         runCatching { store.playlists().filter { it.name.startsWith("TuneVault e2e") }.forEach { store.deletePlaylist(it.id) } }
     }
 
-    private fun purpleBirdTracks(): List<Track> = runBlocking {
+    private fun patternSuiteTracks(): List<Track> = runBlocking {
         val catalog: MusicCatalog = koinGet()
-        catalog.albumTracks(catalog.albums().first { it.title == "The Purple Bird" }.id)
+        catalog.albumTracks(catalog.albums().first { it.title == PatternSuite.TITLE }.id)
     }
 
     private fun entries(playlistId: String) = runBlocking { store.playlistEntries(playlistId).map { it.track.title } }
@@ -58,14 +59,14 @@ class PlaylistsE2ETest : LoggedInE2ETest() {
     fun aSongAddedFromItsMenuIsInThePlaylistAndPlaysFromIt() {
         connectAndLoginToLibrary()
         val playlistId = runBlocking { store.createPlaylist(name, emptyList()) }
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
 
-        composeRule.onNodeWithText("London May").performTouchInput { longClick() }
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performTouchInput { longClick() }
         composeRule.onNodeWithText("Add to playlist…").performClick()
         waitForComposeText(name)
         composeRule.onNodeWithText(name).performClick()
 
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) { entries(playlistId) == listOf("London May") }
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { entries(playlistId) == listOf(PatternSuite.KNOWN_SONG) }
 
         // Open it from the Playlists tab and play it.
         androidx.test.espresso.Espresso.pressBack()
@@ -76,19 +77,19 @@ class PlaylistsE2ETest : LoggedInE2ETest() {
         composeRule.onNodeWithText("Play").performClick()
         val playback: PlaybackController = koinGet()
         composeRule.waitUntil(30_000L) { onMain { playback.state.value.isPlaying } }
-        onMain { assertEquals("London May", playback.state.value.currentTrack?.title) }
+        onMain { assertEquals(PatternSuite.KNOWN_SONG, playback.state.value.currentTrack?.title) }
     }
 
     @Test
     fun aSongCanBeRemovedFromAPlaylist() {
         connectAndLoginToLibrary()
-        val tracks = purpleBirdTracks()
+        val tracks = patternSuiteTracks()
         val playlistId = runBlocking { store.createPlaylist(name, listOf(tracks[0].id, tracks[1].id)) }
         openPlaylistsTab()
         scrollToAndClick(name)
-        waitForComposeText("London May")
+        waitForComposeText(PatternSuite.KNOWN_SONG)
 
-        composeRule.onNodeWithText("London May").performTouchInput { longClick() }
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performTouchInput { longClick() }
         composeRule.onNodeWithText("Remove from playlist").performClick()
 
         composeRule.waitUntil(WAIT_TIMEOUT_MS) { entries(playlistId) == listOf(tracks[0].title) }
@@ -102,16 +103,16 @@ class PlaylistsE2ETest : LoggedInE2ETest() {
     @Test
     fun addingASongThePlaylistAlreadyHasDoesNotDuplicateIt() {
         connectAndLoginToLibrary()
-        val londonMay = purpleBirdTracks().first { it.title == "London May" }
-        val playlistId = runBlocking { store.createPlaylist(name, listOf(londonMay.id)) }
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        val knownSong = patternSuiteTracks().first { it.title == PatternSuite.KNOWN_SONG }
+        val playlistId = runBlocking { store.createPlaylist(name, listOf(knownSong.id)) }
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
 
-        composeRule.onNodeWithText("London May").performTouchInput { longClick() }
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performTouchInput { longClick() }
         composeRule.onNodeWithText("Add to playlist…").performClick()
         waitForComposeText(name)
         composeRule.onNodeWithText(name).performClick()
         Thread.sleep(2_000) // give a wrong add the chance to land before checking it didn't
 
-        assertEquals(listOf("London May"), entries(playlistId))
+        assertEquals(listOf(PatternSuite.KNOWN_SONG), entries(playlistId))
     }
 }

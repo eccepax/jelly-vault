@@ -10,6 +10,7 @@ import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.Assert.assertEquals
@@ -52,20 +53,20 @@ class SettingsE2ETest : LoggedInE2ETest() {
         composeRule.onAllNodes(hasText("Data saver") and isSelectable())[0].performClick()
         assertEquals(StreamingQuality.LOW, koinGet<PlaybackPreferences>().streamingQuality)
 
-        // The Purple Bird is FLAC, so at 128 kbps the server transcodes it: this proves the player
+        // The album is FLAC, so at 128 kbps the server transcodes it: this proves the player
         // copes with what the server sends back.
         pressBack()
         composeRule.onNodeWithText("Library").performClick()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("Turned To Dust (Rolling On)").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.FIRST_TRACK).performClick()
         waitUntilPlaying()
     }
 
     @Test
     fun signingOutStopsPlaybackAndReturnsToSignInAndYouCanSignBackIn() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("Turned To Dust (Rolling On)").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.FIRST_TRACK).performClick()
         waitUntilPlaying()
         composeRule.onNodeWithText("Home").performClick()
         openSettings()

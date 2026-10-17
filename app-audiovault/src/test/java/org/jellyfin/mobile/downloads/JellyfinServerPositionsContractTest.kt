@@ -4,6 +4,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -20,7 +21,7 @@ import kotlin.time.Duration.Companion.minutes
 import java.time.Duration as JavaDuration
 
 /**
- * Listening sent to the real Vault later, as of when it happened. Writes a track's play data, so
+ * Listening sent to the test server later, as of when it happened. Writes a track's play data, so
  * all of it is put back exactly after each test.
  */
 class JellyfinServerPositionsContractTest {
@@ -34,10 +35,10 @@ class JellyfinServerPositionsContractTest {
     fun setUp() = runBlocking {
         VaultTestServer.assumeAvailable()
         track = apiClient.itemsApi.getItems(
-            includeItemTypes = listOf(BaseItemKind.AUDIO_BOOK, BaseItemKind.AUDIO),
+            includeItemTypes = listOf(BaseItemKind.AUDIO_BOOK),
             recursive = true,
-            limit = 1,
-        ).content.items.orEmpty().first().id!!
+            searchTerm = Audiobooks.MP3_SEARCH_TERM,
+        ).content.items.orEmpty().single().id!!
         original = userData()
     }
 

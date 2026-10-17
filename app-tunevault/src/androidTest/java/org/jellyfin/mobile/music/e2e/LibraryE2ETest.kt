@@ -8,12 +8,15 @@ import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.app.LibraryPreferences
 import org.jellyfin.mobile.music.domain.AlbumSort
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
+import org.jellyfin.mobile.testing.VaultFixtures.SignalPath
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Library tabs, artist pages and songs against the real Vault. */
+/** Library tabs, artist pages and songs against the test server. */
 @BrowseArea
 class LibraryE2ETest : LoggedInE2ETest() {
 
@@ -29,18 +32,18 @@ class LibraryE2ETest : LoggedInE2ETest() {
         waitForComposeText("Artists")
         composeRule.onNodeWithText("Artists").performClick()
 
-        scrollToAndClick("Kendrick Lamar")
-        waitForComposeText("Damn")
-        composeRule.onNodeWithText("Damn").performClick()
+        scrollToAndClick(SignalPath.ARTIST)
+        waitForComposeText(SignalPath.TITLE)
+        composeRule.onNodeWithText(SignalPath.TITLE).performClick()
         waitForTextContaining(" tracks")
 
         pressBack()
-        waitForComposeText("Kendrick Lamar")
-        composeRule.onNodeWithText("Damn").assertIsDisplayed()
+        waitForComposeText(SignalPath.ARTIST)
+        composeRule.onNodeWithText(SignalPath.TITLE).assertIsDisplayed()
 
         pressBack()
-        waitForComposeText("Bonnie \"Prince\" Billy") // back on the Artists list
-        composeRule.onNodeWithText("Kendrick Lamar").assertIsDisplayed()
+        waitForComposeText(PatternSuite.ARTIST) // back on the Artists list
+        composeRule.onNodeWithText(SignalPath.ARTIST).assertIsDisplayed()
     }
 
     @Test
@@ -56,7 +59,7 @@ class LibraryE2ETest : LoggedInE2ETest() {
         composeRule.waitUntil(30_000L) { onMain { playback.state.value.isPlaying && playback.positionMs > 500L } }
         onMain {
             assertTrue(playback.state.value.queue.isShuffled)
-            assertTrue("whole library queued", playback.state.value.queue.tracks.size > 100)
+            assertTrue("whole library queued", playback.state.value.queue.tracks.size > VaultFixtures.MIN_MUSIC_TRACKS)
         }
     }
 

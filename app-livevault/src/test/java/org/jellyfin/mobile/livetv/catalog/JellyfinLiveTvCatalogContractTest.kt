@@ -12,9 +12,11 @@ import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.VaultTestServer
-import org.jellyfin.sdk.api.client.extensions.filterApi
+import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemFields
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,7 +26,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Runs [JellyfinLiveTvCatalog] against the real Vault's Live TV (Dispatcharr as an HDHomeRun tuner).
+ * Runs [JellyfinLiveTvCatalog] against the test server's Live TV (an M3U tuner with an XMLTV guide).
  * Read-only apart from one channel's favorite flag, which is restored afterwards. Never plays a
  * stream: any other channel would take the household's single provider login.
  */
@@ -49,7 +51,7 @@ class JellyfinLiveTvCatalogContractTest {
     fun `channels come from the tuner`() = runBlocking<Unit> {
         val channels = catalog.channels()
 
-        channels.map { it.name } shouldContain "ESPN"
+        channels.map { it.name } shouldContain LiveTv.NON_FREE_CHANNEL
         channels.forEach {
             it.id.shouldNotBeBlank()
             it.name.shouldNotBeBlank()
@@ -69,8 +71,13 @@ class JellyfinLiveTvCatalogContractTest {
 
     @Test
     fun `channels carry the server's channel tags`() = runBlocking<Unit> {
-        val serverTags = api.filterApi.getQueryFiltersLegacy(includeItemTypes = listOf(BaseItemKind.TV_CHANNEL))
-            .content.tags.orEmpty()
+        // Read from the plain items listing: the server's tag filters can't be relied on, as the
+        // legacy one lists no tags on Jellyfin 12, and the newer one none on 10.11.
+        val serverTags = api.itemsApi.getItems(
+            includeItemTypes = listOf(BaseItemKind.TV_CHANNEL),
+            recursive = true,
+            fields = listOf(ItemFields.TAGS),
+        ).content.items.flatMap { it.tags.orEmpty() }.distinct()
 
         serverTags.shouldNotBeEmpty()
         catalog.channels().tags() shouldContainAll serverTags
@@ -78,15 +85,15 @@ class JellyfinLiveTvCatalogContractTest {
 
     @Test
     fun `free channels are tagged Free`() = runBlocking<Unit> {
-        // The free (Tubi) channels are the only ones tests and fallbacks may play.
-        catalog.channels().filter { it.name.startsWith("FREE|") }.shouldNotBeEmpty().forEach {
-            it.tags shouldContain "Free"
+        // The free channels are the only ones tests and fallbacks may play.
+        catalog.channels().filter { it.name.startsWith(LiveTv.FREE_PREFIX) }.shouldNotBeEmpty().forEach {
+            it.tags shouldContain LiveTv.FREE_TAG
         }
     }
 
     @Test
     fun `channel logo urls serve images`() = runBlocking<Unit> {
-        // A sample: fetching all ~400 logos every run is slow and proves nothing more.
+        // A sample: on a real server with hundreds of channels, fetching every logo is slow and proves nothing more.
         val logos = catalog.channels().mapNotNull { it.logoUrl }
 
         logos.shouldNotBeEmpty()
@@ -124,7 +131,7 @@ class JellyfinLiveTvCatalogContractTest {
     }
 
     private suspend fun someChannel(): LiveChannel =
-        catalog.channels().first { it.name == "ESPN" }.also { originalFavorites[it.id] = it.isFavorite }
+        catalog.channels().first { it.name == LiveTv.NON_FREE_CHANNEL }.also { originalFavorites[it.id] = it.isFavorite }
 }
 
 private const val LOGO_SAMPLE = 5

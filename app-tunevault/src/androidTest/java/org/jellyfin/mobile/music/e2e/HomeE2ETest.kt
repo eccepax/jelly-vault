@@ -13,6 +13,8 @@ import org.jellyfin.mobile.common.server.toServerDateTime
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.home.HomeScreenTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -25,7 +27,7 @@ import org.junit.Test
 import java.time.Instant
 import java.util.UUID
 
-/** Home against the real Vault. One test writes a track's play state and restores it. */
+/** Home against the test server. One test writes a track's play state and restores it. */
 @BrowseArea
 class HomeE2ETest : LoggedInE2ETest() {
 
@@ -56,11 +58,11 @@ class HomeE2ETest : LoggedInE2ETest() {
         connectAndLogin()
         waitForComposeText("Recently played")
         val catalog: MusicCatalog = koinGet()
-        val londonMay = runBlocking {
-            val album = catalog.albums().first { it.title == "The Purple Bird" }
-            catalog.albumTracks(album.id).first { it.title == "London May" }
+        val knownSong = runBlocking {
+            val album = catalog.albums().first { it.title == PatternSuite.TITLE }
+            catalog.albumTracks(album.id).first { it.title == PatternSuite.KNOWN_SONG }
         }
-        val id = londonMay.id.toUUID()
+        val id = knownSong.id.toUUID()
         markedTrack = id
         original = runBlocking { apiClient.itemsApi.getItems(ids = listOf(id)).content.items.single().userData }
         runBlocking { apiClient.playStateApi.markPlayedItem(id, datePlayed = Instant.now().toServerDateTime()) }
@@ -69,7 +71,7 @@ class HomeE2ETest : LoggedInE2ETest() {
         composeRule.onNodeWithText("Library").performClick()
         pressBack()
 
-        val onShelf = hasText("The Purple Bird") and hasAnyAncestor(hasTestTag(HomeScreenTags.RECENTLY_PLAYED))
+        val onShelf = hasText(PatternSuite.TITLE) and hasAnyAncestor(hasTestTag(HomeScreenTags.RECENTLY_PLAYED))
         composeRule.waitUntil(WAIT_TIMEOUT_MS) { composeRule.onAllNodes(onShelf).fetchSemanticsNodes().isNotEmpty() }
     }
 
@@ -84,7 +86,7 @@ class HomeE2ETest : LoggedInE2ETest() {
         composeRule.waitUntil(30_000L) { onMain { playback.state.value.isPlaying && playback.positionMs > 500L } }
         onMain {
             assertTrue(playback.state.value.queue.isShuffled)
-            assertTrue("whole library queued", playback.state.value.queue.tracks.size > 100)
+            assertTrue("whole library queued", playback.state.value.queue.tracks.size > VaultFixtures.MIN_MUSIC_TRACKS)
         }
     }
 

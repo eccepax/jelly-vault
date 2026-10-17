@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.nowplaying.MiniPlayerTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,10 +27,10 @@ class QueueE2ETest : LoggedInE2ETest() {
 
     private val playback: PlaybackController get() = koinGet()
 
-    private fun playLondonMay() {
+    private fun playKnownSong() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("London May").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) {
             onMain { playback.state.value.isPlaying && playback.positionMs > 500L }
         }
@@ -51,45 +52,45 @@ class QueueE2ETest : LoggedInE2ETest() {
 
     @Test
     fun theSongPlayingIsMarkedInTheAlbum() {
-        playLondonMay()
+        playKnownSong()
 
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
-            composeRule.onAllNodes(hasText("London May") and hasContentDescription("Now playing"))
+            composeRule.onAllNodes(hasText(PatternSuite.KNOWN_SONG) and hasContentDescription("Now playing"))
                 .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     @Test
     fun playNextFromALongPressIsUpNext() {
-        playLondonMay()
+        playKnownSong()
 
-        composeRule.onNodeWithText("Boise, Idaho").performTouchInput { longClick() }
+        composeRule.onNodeWithText(PatternSuite.SECOND_AFTER_KNOWN_SONG).performTouchInput { longClick() }
         composeRule.onNodeWithText("Play next").performClick()
 
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) { upNextTitle() == "Boise, Idaho" }
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { upNextTitle() == PatternSuite.SECOND_AFTER_KNOWN_SONG }
         onMain {
-            assertEquals("London May", playback.state.value.currentTrack?.title)
+            assertEquals(PatternSuite.KNOWN_SONG, playback.state.value.currentTrack?.title)
             assertEquals(13, playback.state.value.queue.tracks.size)
         }
     }
 
     @Test
     fun theQueueScreenRemovesAnUpcomingSongWithoutInterruptingPlayback() {
-        playLondonMay()
+        playKnownSong()
         openQueue()
 
-        composeRule.onNodeWithContentDescription("Remove Tonight With The Dogs I'm Sleeping").performClick()
+        composeRule.onNodeWithContentDescription("Remove ${PatternSuite.AFTER_KNOWN_SONG}").performClick()
 
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) { onMain { playback.state.value.queue.tracks.size == 11 } }
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { onMain { playback.state.value.queue.tracks.size == PatternSuite.TRACK_COUNT - 1 } }
         onMain {
-            assertFalse(playback.state.value.queue.tracks.any { it.title == "Tonight With The Dogs I'm Sleeping" })
-            assertEquals("London May", playback.state.value.currentTrack?.title)
+            assertFalse(playback.state.value.queue.tracks.any { it.title == PatternSuite.AFTER_KNOWN_SONG })
+            assertEquals(PatternSuite.KNOWN_SONG, playback.state.value.currentTrack?.title)
         }
     }
 
     @Test
     fun draggingAnUpcomingSongReordersTheQueue() {
-        playLondonMay()
+        playKnownSong()
         openQueue()
         // The row merges its children into one node; the handle icon itself is in the unmerged tree.
         val handles = composeRule.onAllNodesWithContentDescription("Drag to reorder", useUnmergedTree = true)
@@ -101,20 +102,20 @@ class QueueE2ETest : LoggedInE2ETest() {
             up()
         }
 
-        // "Tonight With The Dogs…" (first up next) dragged below "Boise, Idaho" and "The Water's Fine".
+        // The first song up next, dragged below the two after it.
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
             onMain {
                 val queue = playback.state.value.queue
                 queue.tracks.drop(queue.currentIndex + 1).take(3).map { it.title } ==
-                    listOf("Boise, Idaho", "The Water's Fine", "Tonight With The Dogs I'm Sleeping")
+                    listOf(PatternSuite.SECOND_AFTER_KNOWN_SONG, PatternSuite.THIRD_AFTER_KNOWN_SONG, PatternSuite.AFTER_KNOWN_SONG)
             }
         }
-        onMain { assertEquals("London May", playback.state.value.currentTrack?.title) }
+        onMain { assertEquals(PatternSuite.KNOWN_SONG, playback.state.value.currentTrack?.title) }
     }
 
     @Test
     fun backFromTheQueueReturnsToNowPlaying() {
-        playLondonMay()
+        playKnownSong()
         openQueue()
 
         pressBack()

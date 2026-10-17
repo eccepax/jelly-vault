@@ -20,7 +20,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 /**
- * A logged-in [ApiClient] for the real local Vault, built straight from the SDK's JVM
+ * A logged-in [ApiClient] for the test server, built straight from the SDK's JVM
  * [OkHttpFactory] (the `Jellyfin` entry point needs an Android Context; this doesn't).
  *
  * Configured through the `contract.*` system properties; a module's Gradle build sets them with
@@ -75,12 +75,15 @@ object VaultTestServer {
     }
 
     /**
-     * Skips when no credentials are configured (CI has no server). With credentials, an unreachable
-     * Vault fails instead: a skip there would let a dead server pass as green.
+     * Skips when no credentials are configured (a plain build has no server). With credentials, an
+     * unreachable server fails instead: a skip there would let a dead server pass as green.
      */
     fun assumeAvailable() {
-        assumeTrue(username.isNotBlank() && password.isNotBlank(), "e2e credentials not in local.properties")
-        reachabilityError()?.let { fail<Unit>("Vault not reachable at $hostname: $it") }
+        assumeTrue(
+            username.isNotBlank() && password.isNotBlank(),
+            "no test server credentials (VAULT_TEST_* env or local.properties)",
+        )
+        reachabilityError()?.let { fail<Unit>("Test server not reachable at $hostname (test-server/up.sh?): $it") }
     }
 
     private fun reachabilityError(): String? = runCatching {

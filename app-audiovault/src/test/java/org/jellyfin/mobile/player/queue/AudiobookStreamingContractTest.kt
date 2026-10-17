@@ -8,6 +8,7 @@ import org.jellyfin.mobile.player.deviceprofile.DeviceDecoders
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
@@ -20,7 +21,7 @@ import java.net.URI
 import java.util.UUID
 
 /**
- * The player's streams from the real Vault: what the server decides for a phone, and that the URL
+ * The player's streams from the test server: what the server decides for a phone, and that the URL
  * the player builds ([streamOf]) really serves the book. Read-only.
  */
 class AudiobookStreamingContractTest {
@@ -39,17 +40,17 @@ class AudiobookStreamingContractTest {
 
     @Test
     fun `an m4b audiobook plays directly on a phone, untouched`() = runBlocking<Unit> {
-        resolve(audiobook("Philosopher")).playMethod shouldBe PlayMethod.DIRECT_PLAY
+        resolve(audiobook(Audiobooks.M4B_SEARCH_TERM)).playMethod shouldBe PlayMethod.DIRECT_PLAY
     }
 
     @Test
     fun `an mp3 audiobook plays directly on a phone, untouched`() = runBlocking<Unit> {
-        resolve(audiobook("The Man in the Crowd")).playMethod shouldBe PlayMethod.DIRECT_PLAY
+        resolve(audiobook(Audiobooks.MP3_SEARCH_TERM)).playMethod shouldBe PlayMethod.DIRECT_PLAY
     }
 
     @Test
     fun `the URL the player streams from serves the book's audio`() = runBlocking<Unit> {
-        val stream = api.streamOf(resolve(audiobook("Philosopher")))
+        val stream = api.streamOf(resolve(audiobook(Audiobooks.M4B_SEARCH_TERM)))
 
         val response = get(stream.url)
 
@@ -59,7 +60,7 @@ class AudiobookStreamingContractTest {
 
     @Test
     fun `seeking fetches a byte range of the stream, which the server serves`() = runBlocking<Unit> {
-        val stream = api.streamOf(resolve(audiobook("Philosopher")))
+        val stream = api.streamOf(resolve(audiobook(Audiobooks.M4B_SEARCH_TERM)))
 
         val response = get(stream.url, range = "bytes=1000-1999")
 
@@ -69,7 +70,7 @@ class AudiobookStreamingContractTest {
 
     @Test
     fun `a download is the very file the player streams, so positions match`() = runBlocking<Unit> {
-        val id = audiobook("The Man in the Crowd")
+        val id = audiobook(Audiobooks.MP3_SEARCH_TERM)
         val streamed = get(api.streamOf(resolve(id)).url)
         val downloaded = get(itemDownloadUrl(requireNotNull(api.baseUrl), id, token = null))
 

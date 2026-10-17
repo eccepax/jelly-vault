@@ -10,10 +10,10 @@ plugins {
 
 configureVaultKotlinDetektAndTests()
 
-// e2e.* properties are read from the gitignored local.properties (never committed) and passed to
-// the androidTest APK only as instrumentation runner arguments — they never touch BuildConfig or
-// the real app build. See common-testing's VaultE2ETest.
-val localProperties = vaultLocalProperties()
+// The test server's address and credentials (VAULT_TEST_* env, else the gitignored local.properties)
+// are passed to the androidTest APK only as instrumentation runner arguments — they never touch
+// BuildConfig or the real app build. See VaultTestSettings and common-testing's VaultE2ETest.
+val testServer = vaultTestSettings().emulator
 
 android {
     compileSdk = 36
@@ -26,10 +26,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
-        testInstrumentationRunnerArguments["e2eHostname"] =
-            localProperties.getProperty("e2e.hostname", "http://10.0.2.2:8096")
-        testInstrumentationRunnerArguments["e2eUsername"] = localProperties.getProperty("e2e.username", "")
-        testInstrumentationRunnerArguments["e2ePassword"] = localProperties.getProperty("e2e.password", "")
+        testInstrumentationRunnerArguments["e2eHostname"] = testServer.hostname
+        testInstrumentationRunnerArguments["e2eUsername"] = testServer.username
+        testInstrumentationRunnerArguments["e2ePassword"] = testServer.password
     }
 
     val releaseSigningConfig = SigningHelper.loadSigningConfig(project)?.let { config ->

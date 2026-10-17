@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * Connect (Compose `ConnectScreen`) -> Login (common's Compose `LoginScreen`, shared with
  * `app-audiovault` via the `common` module) -> lands on `BookLibraryFragment`. Runs against the
- * real local Vault server (see [BaseE2ETest]).
+ * test server (see [BaseE2ETest]).
  */
 class LoginFlowE2ETest : LoggedInE2ETest() {
 

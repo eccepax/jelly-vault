@@ -5,10 +5,12 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToNode
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
-/** The Albums screen lists the real Vault's music albums (and not its audiobooks). */
+/** The Albums screen lists the test server's music albums (and not its audiobooks). */
 @BrowseArea
 class AlbumsE2ETest : LoggedInE2ETest() {
 
@@ -19,8 +21,8 @@ class AlbumsE2ETest : LoggedInE2ETest() {
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
             composeRule.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("The Purple Bird"))
-        composeRule.onNodeWithText("The Purple Bird").assertIsDisplayed()
-        composeRule.onNodeWithText("A People's History of the United States", substring = true).assertDoesNotExist()
+        composeRule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(PatternSuite.TITLE))
+        composeRule.onNodeWithText(PatternSuite.TITLE).assertIsDisplayed()
+        composeRule.onNodeWithText(Audiobooks.TITLE_MATCHING_SEARCH_TERM, substring = true).assertDoesNotExist()
     }
 }

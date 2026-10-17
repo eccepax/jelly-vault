@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Runs an instrumented e2e suite end-to-end: boots the emulator if needed, waits for it, disables
-# animations (required by Espresso, and reset on every emulator boot), checks the Vault server is
+# animations (required by Espresso, and reset on every emulator boot), checks the test server is
 # reachable, then runs the whole e2e package for the chosen module.
 #
 # Prerequisites (see common-testing's org/jellyfin/mobile/testing/endtoend/VaultE2ETest.kt):
-#   - local.properties must have e2e.username / e2e.password (never commit these) — the tests
-#     run against a real local Jellyfin server (the Vault), not a mock.
-#   - The Vault server itself must be running and reachable.
+#   - The test server running: test-server/up.sh (or E2E_START_SERVER=1 here). The tests run against
+#     a real Jellyfin seeded with the fixtures in test-server/fixtures.json, not a mock.
+#   - Its credentials: VAULT_TEST_USERNAME / VAULT_TEST_PASSWORD, or e2e.username / e2e.password in
+#     local.properties (never commit these). The test server's are vault-test / vault-test.
 #   - An Android emulator AVD must exist (default name below, override with E2E_AVD_NAME).
 #
 # Usage:
@@ -23,7 +24,8 @@
 #                           full (default), smoke (~2 min), or one area: browse, playback,
 #                           collections (favorites/playlists), account, downloads (the slowest)
 #   E2E_AVD_NAME         AVD to boot if none is already running (default: A52ish)
-#   E2E_VAULT_CHECK_URL   URL polled to confirm the Vault is up (default: http://localhost:8096/System/Info/Public)
+#   E2E_START_SERVER      1 to bring up (and seed) the test server first, with test-server/up.sh
+#   E2E_VAULT_CHECK_URL   URL polled to confirm the server is up (default: http://localhost:8097/System/Info/Public)
 #   ANDROID_HOME          Android SDK root (falls back to the common Windows default if unset)
 #   ANDROID_SERIAL        Device to test on; required when more than one is connected
 
@@ -35,7 +37,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODULE="${E2E_MODULE:-app-audiovault}"
 SUITE="${E2E_SUITE:-full}"
 AVD_NAME="${E2E_AVD_NAME:-A52ish}"
-VAULT_CHECK_URL="${E2E_VAULT_CHECK_URL:-http://localhost:8096/System/Info/Public}"
+VAULT_CHECK_URL="${E2E_VAULT_CHECK_URL:-http://localhost:8097/System/Info/Public}"
 : "${ANDROID_HOME:=$HOME/AppData/Local/Android/Sdk}"
 ADB="$ANDROID_HOME/platform-tools/adb.exe"
 EMULATOR="$ANDROID_HOME/emulator/emulator.exe"
@@ -69,15 +71,26 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 
 [ -x "$ADB" ] || die "adb not found at $ADB — set ANDROID_HOME"
 
-log "Checking for e2e credentials in local.properties"
-if ! grep -q '^e2e\.username=' "$REPO_ROOT/local.properties" 2>/dev/null \
-    || ! grep -q '^e2e\.password=' "$REPO_ROOT/local.properties" 2>/dev/null; then
-    die "local.properties is missing e2e.username / e2e.password — add them (never commit) before running e2e tests."
+log "Checking for test server credentials"
+# The same rule as buildSrc's VaultTestSettings: any VAULT_TEST_* variable means every setting comes
+# from the environment and local.properties is ignored, so both credentials must be there.
+has_property() { grep -Eq "^$1[[:space:]]*=[[:space:]]*[^[:space:]]" "$REPO_ROOT/local.properties" 2>/dev/null; }
+if [ -n "${VAULT_TEST_HOSTNAME:-}${VAULT_TEST_E2E_HOSTNAME:-}${VAULT_TEST_USERNAME:-}${VAULT_TEST_PASSWORD:-}" ]; then
+    if [ -z "${VAULT_TEST_USERNAME:-}" ] || [ -z "${VAULT_TEST_PASSWORD:-}" ]; then
+        die "A VAULT_TEST_* variable is set, so local.properties is ignored — set both VAULT_TEST_USERNAME and VAULT_TEST_PASSWORD (vault-test / vault-test for test-server/)."
+    fi
+elif ! has_property 'e2e\.username' || ! has_property 'e2e\.password'; then
+    die "No test server credentials — set VAULT_TEST_USERNAME / VAULT_TEST_PASSWORD (vault-test / vault-test for test-server/), or e2e.username / e2e.password in local.properties (never commit)."
 fi
 
-log "Checking the Vault server is reachable ($VAULT_CHECK_URL)"
+if [ "${E2E_START_SERVER:-0}" = "1" ]; then
+    log "Bringing up the test server"
+    "$REPO_ROOT/test-server/up.sh"
+fi
+
+log "Checking the test server is reachable ($VAULT_CHECK_URL)"
 if ! curl -s -m 5 -o /dev/null -w '' "$VAULT_CHECK_URL"; then
-    warn "Could not reach $VAULT_CHECK_URL — the e2e suite runs against a real server and will fail without it."
+    warn "Could not reach $VAULT_CHECK_URL — run test-server/up.sh (or E2E_START_SERVER=1); the e2e suite fails without a server."
 fi
 
 log "Checking for a connected device/emulator"

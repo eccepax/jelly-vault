@@ -11,6 +11,8 @@ import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.discovery.LocalServerDiscovery
 import org.jellyfin.sdk.discovery.RecommendedServerInfo
 import org.jellyfin.sdk.discovery.RecommendedServerInfoScore
+import org.jellyfin.sdk.discovery.RecommendedServerIssue
+import org.jellyfin.sdk.model.ServerVersion
 import org.jellyfin.sdk.model.api.ServerDiscoveryInfo
 import timber.log.Timber
 
@@ -45,7 +47,13 @@ class ConnectionHelper(
         val loggedServers = badServers.joinToString { "${it.address}/${it.systemInfo}" }
         Timber.i("No valid servers found, invalid candidates were: $loggedServers")
 
+        val tooOld = tooOldServerVersion(recommendedServers)
         val error = when {
+            tooOld != null -> context.getString(
+                R.string.connection_error_server_too_old,
+                tooOld.display(),
+                Jellyfin.minimumVersion.let { "${it.major}.${it.minor}" },
+            )
             badServers.isNotEmpty() -> {
                 val count = badServers.size
                 val (unreachableServers, incompatibleServers) = badServers.partition { result -> result.systemInfo.getOrNull() == null }
@@ -85,6 +93,17 @@ class ConnectionHelper(
             .discoverLocalServers(maxServers = LocalServerDiscovery.DISCOVERY_MAX_SERVERS)
             .flowOn(Dispatchers.IO)
 }
+
+/**
+ * The version of a candidate that answered but runs a Jellyfin older than the SDK supports, else
+ * `null`. Such a server would sign in, then fail every request it can't decode.
+ */
+internal fun tooOldServerVersion(candidates: Collection<RecommendedServerInfo>): ServerVersion? =
+    candidates.firstNotNullOfOrNull { candidate ->
+        candidate.issues.filterIsInstance<RecommendedServerIssue.UnsupportedServerVersion>().firstOrNull()?.version
+    }
+
+private fun ServerVersion.display() = "$major.$minor.$patch"
 
 /** Picks the best-rated server: the first GREAT candidate, else the first GOOD one, else `null`. */
 internal fun pickBestServer(candidates: Collection<RecommendedServerInfo>): RecommendedServerInfo? =

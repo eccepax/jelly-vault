@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Runs [BookLibraryViewModel] against the real Vault. Its sorting and tag filter work on the books
+ * Runs [BookLibraryViewModel] against the test server. Its sorting and tag filter work on the books
  * it loaded, so they only work if it asked the server for the fields they read.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

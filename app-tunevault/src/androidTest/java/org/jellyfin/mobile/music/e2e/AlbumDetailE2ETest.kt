@@ -4,45 +4,46 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.junit.Test
 
-/** Albums grid -> one album's tracks, against the real Vault. */
+/** Albums grid -> one album's tracks, against the test server. */
 @BrowseArea
 class AlbumDetailE2ETest : LoggedInE2ETest() {
 
-    private fun openPurpleBird() {
+    private fun openPatternSuite() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
     }
 
     @Smoke
     @Test
     fun openingAnAlbumListsItsTracksInOrder() {
-        openPurpleBird()
+        openPatternSuite()
 
-        composeRule.onNodeWithText("Turned To Dust (Rolling On)").assertIsDisplayed()
-        composeRule.onNodeWithText("London May").assertIsDisplayed()
-        composeRule.onNodeWithText("12 tracks", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(PatternSuite.FIRST_TRACK).assertIsDisplayed()
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).assertIsDisplayed()
+        composeRule.onNodeWithText("${PatternSuite.TRACK_COUNT} tracks", substring = true).assertIsDisplayed()
     }
 
     @Test
     fun backReturnsToTheGridWhereItWas() {
-        openPurpleBird()
+        openPatternSuite()
 
         composeRule.onNodeWithContentDescription("Back").performClick()
 
         // The grid kept its scroll position, so the album just opened is still on screen.
-        waitForComposeText("The Purple Bird")
-        composeRule.onNodeWithText("The Purple Bird").assertIsDisplayed()
+        waitForComposeText(PatternSuite.TITLE)
+        composeRule.onNodeWithText(PatternSuite.TITLE).assertIsDisplayed()
     }
 
     @Test
     fun rotationKeepsTheAlbumOpen() {
-        openPurpleBird()
+        openPatternSuite()
 
         composeRule.activityRule.scenario.recreate()
 
-        waitForComposeText("Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("Turned To Dust (Rolling On)").assertIsDisplayed()
+        waitForComposeText(PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.FIRST_TRACK).assertIsDisplayed()
     }
 }

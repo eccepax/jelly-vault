@@ -1,0 +1,134 @@
+{
+  "_comment": "Single source of truth for the test server's media. generate_media.py builds the files from it, seed.py checks the server against it, and common-testing's VaultFixtures.kt mirrors the names tests use. Change all three together.",
+  "user": { "name": "vault-test", "password": "vault-test" },
+  "music": {
+    "albums": [
+      {
+        "artist": "Avery \"Tone\" Adams",
+        "title": "Test Pattern Suite",
+        "year": 2021,
+        "format": "flac",
+        "m3u": true,
+        "tracks": [
+          { "title": "First Light (Rolling In)", "seconds": 210 },
+          { "title": "Harbor Bell", "seconds": 240 },
+          { "title": "The Night Dog's Lullaby", "seconds": 210 },
+          { "title": "Salem, Oregon", "seconds": 210 },
+          { "title": "The River's Edge", "seconds": 210 },
+          { "title": "Breathing Room", "seconds": 60 },
+          { "title": "New Tide", "seconds": 60 },
+          { "title": "Quiet Signals", "seconds": 60 },
+          { "title": "Downriver", "seconds": 60 },
+          { "title": "One of These Nights (I'll Stay Up Late)", "seconds": 60 },
+          { "title": "Is It All Static?", "seconds": 60 },
+          { "title": "Homeward (Loud)", "seconds": 60, "loud": true }
+        ]
+      },
+      {
+        "artist": "Avery \"Tone\" Adams",
+        "title": "Offline Tones",
+        "year": 2019,
+        "format": "mp3",
+        "tracks": [
+          { "title": "Offline One", "seconds": 10 },
+          { "title": "Offline Two", "seconds": 10 },
+          { "title": "Offline Three", "seconds": 10 }
+        ]
+      },
+      {
+        "artist": "Kestrel Lane",
+        "title": "Signal Path",
+        "year": 2017,
+        "format": "flac",
+        "tracks": [
+          { "title": "Carrier", "seconds": 30 },
+          { "title": "Sideband", "seconds": 30 },
+          { "title": "Phase Lock", "seconds": 30 },
+          { "title": "Overtone", "seconds": 30 },
+          { "title": "Noise Floor", "seconds": 30 }
+        ]
+      },
+      {
+        "artist": "Duo Oscillator",
+        "title": "Square Waves",
+        "year": 2001,
+        "format": "mp3",
+        "tracks": [
+          { "title": "Square One", "seconds": 20 },
+          { "title": "Square Two", "seconds": 20 },
+          { "title": "Square Three", "seconds": 20 },
+          { "title": "Square Four", "seconds": 20 },
+          { "title": "Square Five", "seconds": 20 }
+        ]
+      },
+      {
+        "artist": "Duo Oscillator",
+        "title": "Favourite Frequencies",
+        "year": 1997,
+        "format": "mp3",
+        "tracks": [
+          { "title": "Concert A", "seconds": 20 },
+          { "title": "Middle C", "seconds": 20 },
+          { "title": "Low E", "seconds": 20 }
+        ]
+      },
+      {
+        "artist": "Drone Collective",
+        "title": "Long Form",
+        "year": 2024,
+        "format": "flac",
+        "tracks": [
+          { "title": "The Longest Drone", "seconds": 360, "noise": true }
+        ]
+      }
+    ],
+    "filler": { "artist": "Filler Ensemble", "albums": 8, "tracks_per_album": 10, "seconds": 8, "format": "mp3" }
+  },
+  "audiobooks": [
+    {
+      "author": "Rowan Example",
+      "title": "A Book in Parts: Lighthouse Keepers",
+      "format": "mp3-parts",
+      "parts": 6,
+      "seconds": 60
+    },
+    {
+      "author": "Mira Placeholder",
+      "title": "The Chaptered Audiobook",
+      "format": "m4b",
+      "seconds": 180,
+      "chapters": ["Opening", "The Middle Part", "Closing"]
+    },
+    {
+      "author": "Jules Sample",
+      "title": "The Single File Story",
+      "format": "mp3",
+      "seconds": 150
+    },
+    {
+      "author": "Ada Example",
+      "title": "A Short History of Test Tones",
+      "format": "mp3",
+      "seconds": 120
+    }
+  ],
+  "books": {
+    "generated_pdfs": [
+      { "title": "Aardvark Atlas (Test PDF)", "pages": 3 },
+      { "title": "Zebra Notes (Test PDF)", "pages": 1 }
+    ],
+    "public_domain_epubs": [
+      { "title": "Pride and Prejudice", "url": "https://www.gutenberg.org/ebooks/1342.epub.noimages", "file": "Pride and Prejudice.epub" },
+      { "title": "The Time Machine", "url": "https://www.gutenberg.org/ebooks/35.epub3.images", "file": "The Time Machine.epub" }
+    ]
+  },
+  "livetv": {
+    "stream_seconds": 120,
+    "channels": [
+      { "id": "test.free.one", "number": "1", "name": "FREE|Test Channel One", "tags": ["Free"] },
+      { "id": "test.free.two", "number": "2", "name": "FREE|Test Channel Two", "tags": ["Free"] },
+      { "id": "test.sports", "number": "3", "name": "Sports Test Channel", "tags": ["Sports"] },
+      { "id": "test.news", "number": "4.1", "name": "News Test Channel", "tags": [] }
+    ]
+  }
+}

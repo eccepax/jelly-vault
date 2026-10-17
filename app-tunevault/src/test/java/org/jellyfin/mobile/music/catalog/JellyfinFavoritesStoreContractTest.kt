@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultFixtures
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -13,7 +14,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-/** Writes favorite flags on one track and one album of the real Vault, restoring them afterwards. */
+/** Writes favorite flags on one track and one album of the test server, restoring them afterwards. */
 class JellyfinFavoritesStoreContractTest {
 
     private val api get() = VaultTestServer.apiClient
@@ -28,7 +29,7 @@ class JellyfinFavoritesStoreContractTest {
         VaultTestServer.assumeAvailable()
         store = JellyfinFavoritesStore(api)
         catalog = JellyfinMusicCatalog(api)
-        album = catalog.albums().first { it.title == "Homework" }
+        album = catalog.albums().first { it.title == VaultFixtures.FAVORITES_ALBUM }
         track = catalog.albumTracks(album.id).first()
         listOf(album.id, track.id).forEach { originals[it] = isFavoriteOnServer(it) }
         store.setFavorite(album.id, false)

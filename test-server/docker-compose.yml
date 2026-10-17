@@ -1,0 +1,40 @@
+# A disposable Jellyfin for the vault apps' contract and e2e tests. See README.md.
+# JELLYFIN_VERSION picks the server version; each version keeps its own config volume. The default
+# is the version PRs test against; Renovate bumps it (both places below), see renovate.json.
+name: vault-test-server
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-12.2}
+    ports:
+      - "${VAULT_TEST_PORT:-8097}:8096"
+    environment:
+      - TZ=UTC
+    volumes:
+      - config:/config
+      # Read-write on purpose: the media is generated and disposable, and Jellyfin misbehaves on a
+      # read-only library. seed.py turns off writing metadata beside it anyway.
+      - ./.data/media:/media
+    depends_on:
+      - media-host
+
+  # Serves the Live TV playlist, guide, logos and streams to Jellyfin, in place of a real tuner.
+  media-host:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./.data/media/livetv:/usr/share/nginx/html:ro
+
+  # Python + ffmpeg, so Docker is the only thing the host needs. Run with `docker compose run`.
+  tools:
+    build: ./tools
+    profiles: ["tools"]
+    working_dir: /work
+    volumes:
+      - .:/work
+    environment:
+      - SEED_SERVER=http://jellyfin:8096
+      - SEED_TASK_TIMEOUT
+
+volumes:
+  config:
+    name: vault-test-config-${JELLYFIN_VERSION:-12.2}

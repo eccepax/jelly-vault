@@ -94,11 +94,20 @@ class JellyfinMusicCatalog(
 
     // An id filter, like album(): GET /Items/{unknownId} answers 500 rather than 404.
     override suspend fun artist(artistId: String): Artist? = withContext(ioDispatcher) {
-        apiClient.itemsApi.getItems(
-            ids = listOf(artistId.toUUID()),
+        val id = artistId.toUUID()
+        val item = apiClient.itemsApi.getItems(
+            ids = listOf(id),
             includeItemTypes = listOf(BaseItemKind.MUSIC_ARTIST),
             recursive = true,
-        ).content.items.firstOrNull()?.let { Artist(id = it.id.toString(), name = it.name.orEmpty()) }
+        ).content.items.firstOrNull() ?: return@withContext null
+        // Named as its albums credit it, matching albumArtists(): Jellyfin 12 strips characters such
+        // as quotes from the artist item's own name (Avery "Tone" Adams becomes Avery Tone Adams).
+        val credited = items.musicLibraryIds().firstNotNullOfOrNull { libraryId ->
+            albumItems(parentId = libraryId, albumArtistId = id).firstNotNullOfOrNull { album ->
+                album.albumArtists?.firstOrNull { it.id == id }?.name
+            }
+        }
+        Artist(id = item.id.toString(), name = credited ?: item.name.orEmpty())
     }
 
     override suspend fun artistAlbums(artistId: String): List<Album> = withContext(ioDispatcher) {

@@ -9,13 +9,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.testing.VaultFixtures.Books
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
  * `BookLibraryViewModel`'s search filters the already-loaded list client-side by name/author/
  * series (see `filterAndSortBooks`/`BookLibraryFilter` in the unit suite) — no extra network round
- * trip. Searches for a title known to exist on the real Vault library ("Palestine") rather than a
+ * trip. Searches for a word from one fixture book's title rather than a
  * generic term, and checks the library showed other books first, so the list narrowing isn't luck.
  */
 class LibrarySearchE2ETest : LoggedInE2ETest() {
@@ -41,6 +42,6 @@ class LibrarySearchE2ETest : LoggedInE2ETest() {
     }
 
     private companion object {
-        const val QUERY = "Palestine"
+        const val QUERY = Books.SEARCH_TERM
     }
 }

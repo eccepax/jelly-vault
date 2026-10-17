@@ -44,6 +44,7 @@ class JellyfinDownloadUriContractTest {
     fun `a download uri holds no token, and the server refuses it alone`() = runBlocking<Unit> {
         val uri = catalog.downloadUri(aTrackId(), StreamingQuality.ORIGINAL)
 
+        uri shouldNotContain "ApiKey"
         uri shouldNotContain "api_key"
         statusAndType(uri).first shouldBe 401
     }

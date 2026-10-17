@@ -6,6 +6,7 @@ import io.kotest.matchers.collections.shouldNotContain
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.livetv.catalog.JellyfinLiveTvCatalog
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -32,7 +33,7 @@ class JellyfinLiveTvSessionsContractTest {
     fun setUp() = runBlocking<Unit> {
         VaultTestServer.assumeAvailable()
         channel = JellyfinLiveTvCatalog(VaultTestServer.apiClient).channels()
-            .filter { "Free" in it.tags && it.name.startsWith("FREE|") }
+            .filter { LiveTv.FREE_TAG in it.tags && it.name.startsWith(LiveTv.FREE_PREFIX) }
             .shouldNotBeEmpty()
             .first()
         viewer = VaultTestServer.newSignedInClient(deviceId = VIEWER_DEVICE)

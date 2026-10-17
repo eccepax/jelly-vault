@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import org.jellyfin.mobile.music.nowplaying.MiniPlayerTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,10 +22,10 @@ class NowPlayingE2ETest : LoggedInE2ETest() {
 
     private val playback: PlaybackController get() = koinGet()
 
-    private fun playLondonMay() {
+    private fun playKnownSong() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("London May").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) {
             runCatching { composeRule.onNodeWithContentDescription("Pause").assertExists() }.isSuccess
         }
@@ -39,7 +40,7 @@ class NowPlayingE2ETest : LoggedInE2ETest() {
 
     @Test
     fun miniPlayerAppearsAndPauses() {
-        playLondonMay()
+        playKnownSong()
 
         composeRule.onNodeWithTag(MiniPlayerTags.ROOT).assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Pause").performClick()
@@ -52,18 +53,18 @@ class NowPlayingE2ETest : LoggedInE2ETest() {
 
     @Test
     fun nowPlayingSkipsToTheNextTrack() {
-        playLondonMay()
+        playKnownSong()
         expand()
 
         composeRule.onNodeWithContentDescription("Next").performClick()
 
-        waitForComposeText("Tonight With The Dogs I'm Sleeping")
-        onMain { assertEquals("Tonight With The Dogs I'm Sleeping", playback.state.value.currentTrack?.title) }
+        waitForComposeText(PatternSuite.AFTER_KNOWN_SONG)
+        onMain { assertEquals(PatternSuite.AFTER_KNOWN_SONG, playback.state.value.currentTrack?.title) }
     }
 
     @Test
     fun backCollapsesNowPlayingAndLeavesTheAlbumOpen() {
-        playLondonMay()
+        playKnownSong()
         expand()
 
         pressBack()
@@ -71,7 +72,7 @@ class NowPlayingE2ETest : LoggedInE2ETest() {
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
             runCatching { composeRule.onNodeWithContentDescription("Collapse").assertDoesNotExist() }.isSuccess
         }
-        composeRule.onNodeWithText("Turned To Dust (Rolling On)").assertIsDisplayed()
+        composeRule.onNodeWithText(PatternSuite.FIRST_TRACK).assertIsDisplayed()
         composeRule.onNodeWithTag(MiniPlayerTags.ROOT).assertIsDisplayed()
     }
 }

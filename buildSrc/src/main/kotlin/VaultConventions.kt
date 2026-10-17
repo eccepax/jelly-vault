@@ -49,10 +49,10 @@ internal fun Project.configureVaultKotlinDetektAndTests() {
         exclude(mapOf("group" to "de.mannodermaus.junit5", "module" to "android-test-compose-junit6"))
     }
 
-    val localProperties = vaultLocalProperties()
+    val testServer = vaultTestSettings()
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
-        useVaultContractServer(localProperties)
+        useVaultContractServer(testServer)
         testLogging {
             outputs.upToDateWhen { false }
             showStandardStreams = true

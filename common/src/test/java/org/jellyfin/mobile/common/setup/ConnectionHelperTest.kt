@@ -1,8 +1,11 @@
 package org.jellyfin.mobile.common.setup
 
 import io.kotest.matchers.shouldBe
+import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.discovery.RecommendedServerInfo
 import org.jellyfin.sdk.discovery.RecommendedServerInfoScore
+import org.jellyfin.sdk.discovery.RecommendedServerIssue
+import org.jellyfin.sdk.model.ServerVersion
 import org.junit.jupiter.api.Test
 
 /**
@@ -11,12 +14,16 @@ import org.junit.jupiter.api.Test
  */
 class ConnectionHelperTest {
 
-    private fun server(score: RecommendedServerInfoScore, address: String = "http://server"): RecommendedServerInfo =
+    private fun server(
+        score: RecommendedServerInfoScore,
+        address: String = "http://server",
+        issues: List<RecommendedServerIssue> = emptyList(),
+    ): RecommendedServerInfo =
         RecommendedServerInfo(
             address = address,
             responseTime = 0L,
             score = score,
-            issues = emptyList(),
+            issues = issues,
             systemInfo = Result.failure(RuntimeException("stub, unused by pickBestServer")),
         )
 
@@ -63,5 +70,35 @@ class ConnectionHelperTest {
         val bad = server(RecommendedServerInfoScore.BAD)
 
         pickBestServer(listOf(good, bad, great)) shouldBe great
+    }
+
+    // --- tooOldServerVersion ---------------------------------------------------------------------
+
+    @Test
+    fun `a server too old for the apps is named by its version`() {
+        val old = ServerVersion(10, 9, 11)
+        val tooOld = server(
+            RecommendedServerInfoScore.OK,
+            issues = listOf(RecommendedServerIssue.UnsupportedServerVersion(old)),
+        )
+
+        tooOldServerVersion(listOf(server(RecommendedServerInfoScore.BAD), tooOld)) shouldBe old
+    }
+
+    @Test
+    fun `servers failing for other reasons are not called too old`() {
+        val unreachable = server(
+            RecommendedServerInfoScore.BAD,
+            issues = listOf(RecommendedServerIssue.MissingSystemInfo(RuntimeException("down"))),
+        )
+
+        tooOldServerVersion(listOf(unreachable)) shouldBe null
+    }
+
+    @Test
+    fun `the oldest server the apps accept is Jellyfin 10_10`() {
+        // The server tests pass on 10.10 and fail throughout on 10.9 (the SDK can't read its
+        // responses). An SDK update that moves this needs the README's server support updating.
+        Jellyfin.minimumVersion shouldBe ServerVersion(10, 10, 0, 0)
     }
 }

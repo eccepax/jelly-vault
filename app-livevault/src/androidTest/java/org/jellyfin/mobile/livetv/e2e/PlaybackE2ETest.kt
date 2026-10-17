@@ -19,6 +19,7 @@ import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
 import org.jellyfin.mobile.livetv.playback.PlayerScreenTags
 import org.jellyfin.mobile.livetv.playback.StreamLedger
 import org.jellyfin.mobile.livetv.playback.StreamTicket
+import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
@@ -27,8 +28,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * Plays real live TV from the Vault. ONLY free (Tubi) channels: anything else takes the household's
- * single provider login. The ledger of open streams only drops a stream once the server has
+ * Plays real live TV from the server. ONLY free channels: pointed at a real server, anything else
+ * could take a provider's limited logins. The ledger of open streams only drops a stream once the server has
  * confirmed it closed, so "the ledger is empty" means nothing is left holding a tuner.
  */
 class PlaybackE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class.java) {
@@ -55,13 +56,13 @@ class PlaybackE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
         }
     }
 
-    /** Opens the first channel that is both tagged Free and named "FREE|". */
+    /** Opens the first channel that is both tagged and named free ([LiveTv.FREE_TAG], [LiveTv.FREE_PREFIX]). */
     private fun watchAFreeChannel() {
         connectAndSignIn()
         waitUntil("channels") { composeRule.onAllNodes(anyChannel).fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithTag(ChannelsScreenTags.CHIPS).performScrollToNode(hasText("Free"))
-        composeRule.onNodeWithText("Free").performClick()
-        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput("FREE|")
+        composeRule.onNodeWithTag(ChannelsScreenTags.CHIPS).performScrollToNode(hasText(LiveTv.FREE_TAG))
+        composeRule.onNodeWithText(LiveTv.FREE_TAG).performClick()
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput(LiveTv.FREE_PREFIX)
         waitUntil("free channels") { composeRule.onAllNodes(anyChannel).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodes(anyChannel).onFirst().performClick()
     }

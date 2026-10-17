@@ -12,14 +12,15 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
+import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
- * The channel browser against the real Vault. Never opens a channel (that would play a stream).
+ * The channel browser against the test server. Never opens a channel (that would play a stream).
  * The list and chip row are lazy, so only what's on screen exists: tests search or scroll rather
- * than expect a channel like ESPN (number 43) to be there.
+ * than expect a channel further down the list to be there.
  */
 class ChannelsE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class.java) {
 
@@ -47,11 +48,11 @@ class ChannelsE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
         connectAndSignIn()
         waitForChannels()
 
-        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput("ESPN")
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput(LiveTv.NON_FREE_SEARCH_TERM)
 
         // A card (clickable, so it merges its texts), not just the search box holding the same text.
-        val espnCard = anyChannel and hasText("ESPN")
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) { composeRule.onAllNodes(espnCard).fetchSemanticsNodes().isNotEmpty() }
+        val card = anyChannel and hasText(LiveTv.NON_FREE_CHANNEL)
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { composeRule.onAllNodes(card).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test
@@ -59,12 +60,12 @@ class ChannelsE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
         connectAndSignIn()
         waitForChannels()
 
-        composeRule.onNodeWithTag(ChannelsScreenTags.CHIPS).performScrollToNode(hasText("Free"))
-        composeRule.onNodeWithText("Free").performClick()
-        composeRule.onNodeWithText("Free").assertIsSelected()
-        // ESPN isn't a free channel, so searching for it within Free finds nothing.
-        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput("ESPN")
+        composeRule.onNodeWithTag(ChannelsScreenTags.CHIPS).performScrollToNode(hasText(LiveTv.FREE_TAG))
+        composeRule.onNodeWithText(LiveTv.FREE_TAG).performClick()
+        composeRule.onNodeWithText(LiveTv.FREE_TAG).assertIsSelected()
+        // That channel isn't free, so searching for it within Free finds nothing.
+        composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).performTextInput(LiveTv.NON_FREE_SEARCH_TERM)
 
-        waitForComposeText("No channels match \"ESPN\"")
+        waitForComposeText("No channels match \"${LiveTv.NON_FREE_SEARCH_TERM}\"")
     }
 }

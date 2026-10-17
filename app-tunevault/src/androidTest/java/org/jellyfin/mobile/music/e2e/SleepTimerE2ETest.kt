@@ -12,6 +12,7 @@ import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.music.playback.SleepTimer
 import org.jellyfin.mobile.music.playback.SleepTimerState
 import org.jellyfin.mobile.music.playback.SleepTimerVisibility
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -35,8 +36,8 @@ class SleepTimerE2ETest : LoggedInE2ETest() {
 
     private fun playingOnNowPlaying() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("London May").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) { onMain { playback.state.value.isPlaying && playback.positionMs > 1_000L } }
         composeRule.onNodeWithTag(MiniPlayerTags.ROOT).performClick()
         composeRule.waitUntil(WAIT_TIMEOUT_MS) {
@@ -86,8 +87,8 @@ class SleepTimerE2ETest : LoggedInE2ETest() {
         pressBack()
         composeRule.onNodeWithText("Library").performClick()
         waitForComposeText("Albums")
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("London May").performClick()
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) { onMain { playback.state.value.isPlaying } }
 
         composeRule.onNodeWithTag(MiniPlayerTags.ROOT).performClick()

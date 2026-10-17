@@ -49,9 +49,10 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         startPlaybackFromFirstLibraryItem()
 
-        // Real Vault content may or may not have chapter markers — with none, these fall back to
-        // skipping to the next/previous queue track instead (AudiobookPlayerViewModel.nextChapter/
-        // previousChapter). Either way playback should still be running afterward, not crashed.
+        // Without chapter markers these fall back to the next/previous queue track
+        // (AudiobookPlayerViewModel.nextChapter/previousChapter), and with neither they're hidden: the
+        // first book is in several tracks (see VaultFixtures.Audiobooks). Playback should still be
+        // running afterward, not crashed.
         waitForPlaying()
         tap(R.string.player_next_chapter)
         composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
