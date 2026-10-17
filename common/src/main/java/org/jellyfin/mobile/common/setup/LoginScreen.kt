@@ -52,7 +52,8 @@ import org.koin.androidx.compose.koinViewModel
 fun LoginRoute(mainViewModel: MainViewModel, loginViewModel: LoginViewModel = koinViewModel()) {
     val loginState by loginViewModel.state.collectAsState()
     val server by mainViewModel.serverState.collectAsState()
-    val insecure = server.server?.hostname?.let(::signsInUnencryptedOverInternet) == true
+    val hostname = server.server?.hostname
+    val insecure = remember(hostname) { hostname?.let(::signsInUnencryptedOverInternet) == true }
     val state = loginState.copy(insecureServer = insecure)
     val activity = LocalActivity.current
     DisposableEffect(loginViewModel) {

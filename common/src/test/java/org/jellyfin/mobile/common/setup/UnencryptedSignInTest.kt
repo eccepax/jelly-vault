@@ -26,6 +26,14 @@ class UnencryptedSignInTest {
     )
 
     @Test
+    fun `so does one whose name java's URI can't read as a host`() = warns(
+        "http://my_server.duckdns.org:8494",
+        "http://jellyfín.example.com",
+        "http://user@my_server.duckdns.org:8494/web",
+        expected = true,
+    )
+
+    @Test
     fun `HTTPS never warns`() = warns(
         "https://vault8494.duckdns.org:8920",
         "https://8.8.8.8",
@@ -48,6 +56,8 @@ class UnencryptedSignInTest {
         "http://[::1]:8096",
         "http://[fd12:3456::1]:8096",
         "http://[fe80::1]:8096",
+        "http://[fe80::1%25wlan0]:8096",
+        "http://my_nas:8096",
         expected = false,
     )
 

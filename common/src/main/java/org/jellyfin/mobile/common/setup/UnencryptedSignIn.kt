@@ -1,8 +1,6 @@
 package org.jellyfin.mobile.common.setup
 
 import java.net.InetAddress
-import java.net.URI
-import java.net.URISyntaxException
 import java.net.UnknownHostException
 
 /**
@@ -11,13 +9,25 @@ import java.net.UnknownHostException
  * Tailscale network, which encrypts on its own). An address that can't be read doesn't count.
  */
 fun signsInUnencryptedOverInternet(serverUrl: String): Boolean {
-    val uri = try {
-        URI(serverUrl.trim())
-    } catch (_: URISyntaxException) {
-        return false
+    val url = serverUrl.trim()
+    if (!url.startsWith(HTTP, ignoreCase = true)) return false
+    val host = hostOf(url.substring(HTTP.length))
+    return host.isNotEmpty() && !isLocalHost(host)
+}
+
+/**
+ * The host in what follows "http://", lower-case. Read by hand: java.net.URI has no host for a name
+ * it can't parse (my_server.duckdns.org, say), and that would wave the server through.
+ */
+private fun hostOf(rest: String): String {
+    val authority = rest.substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
+    val host = if (authority.startsWith('[')) {
+        authority.substringBefore(']').removePrefix("[")
+    } else {
+        authority.substringBefore(':')
     }
-    val host = uri.host?.lowercase()?.removeSurrounding("[", "]")
-    return uri.scheme.equals("http", ignoreCase = true) && !host.isNullOrEmpty() && !isLocalHost(host)
+    // An IPv6 address's zone ("%25wlan0") only names the network interface it's reached through
+    return host.substringBefore('%').lowercase()
 }
 
 private fun isLocalHost(host: String): Boolean = when {
@@ -44,6 +54,7 @@ private fun isLocalAddress(address: String): Boolean {
         (bytes.size == IPV4_BYTES && first == CGNAT_FIRST && (bytes[1].toInt() and CGNAT_MASK) == CGNAT_SECOND)
 }
 
+private const val HTTP = "http://"
 private val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 private val LOCAL_SUFFIXES = listOf(".local", ".lan", ".home.arpa", ".internal", ".ts.net")
 private const val BYTE = 0xFF
