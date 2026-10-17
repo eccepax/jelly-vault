@@ -53,8 +53,8 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
 
     @Before
     fun requireCredentials() {
-        assumeFalse("e2e.username not configured in local.properties — skipping", e2eUsername().isBlank())
-        assumeFalse("e2e.password not configured in local.properties — skipping", e2ePassword().isBlank())
+        assumeFalse("no test server username (VAULT_TEST_USERNAME or e2e.username) — skipping", e2eUsername().isBlank())
+        assumeFalse("no test server password (VAULT_TEST_PASSWORD or e2e.password) — skipping", e2ePassword().isBlank())
     }
 
     /** Connects to the Vault and submits the sign-in form. Returns once it has been submitted. */

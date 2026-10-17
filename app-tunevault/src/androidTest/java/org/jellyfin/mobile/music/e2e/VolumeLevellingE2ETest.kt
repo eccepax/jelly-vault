@@ -1,15 +1,16 @@
 package org.jellyfin.mobile.music.e2e
 
-import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.music.playback.VolumeLevellingSetting
 import org.jellyfin.mobile.music.playback.levelFor
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 private const val PLAYBACK_TIMEOUT_MS = 30_000L
 
@@ -30,12 +31,12 @@ class VolumeLevellingE2ETest : LoggedInE2ETest() {
         connectAndLoginToLibrary()
         val tracks = runBlocking {
             val catalog: MusicCatalog = koinGet()
-            catalog.albumTracks(catalog.albums().first { it.title == "The Purple Bird" }.id)
+            catalog.albumTracks(catalog.albums().first { it.title == PatternSuite.TITLE }.id)
         }
         val loudest = tracks.minBy { it.normalizationGainDb ?: 0f }
         val expected = levelFor(loudest.normalizationGainDb)
         assertTrue("needs a song the server measured as loud: $loudest", expected < 0.95f)
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
 
         scrollToAndClick(loudest.title)
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) { onMain { playback.state.value.isPlaying } }

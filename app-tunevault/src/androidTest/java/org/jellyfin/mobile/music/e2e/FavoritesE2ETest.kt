@@ -14,6 +14,7 @@ import org.jellyfin.mobile.music.catalog.FavoritesStore
 import org.jellyfin.mobile.music.catalog.MusicCatalog
 import org.jellyfin.mobile.music.nowplaying.MiniPlayerTags
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -23,7 +24,7 @@ import org.junit.Test
 
 private const val PLAYBACK_TIMEOUT_MS = 30_000L
 
-/** Hearts against the real Vault. Writes favorite flags and restores them afterwards. */
+/** Hearts against the test server. Writes favorite flags and restores them afterwards. */
 @CollectionsArea
 class FavoritesE2ETest : LoggedInE2ETest() {
 
@@ -46,19 +47,19 @@ class FavoritesE2ETest : LoggedInE2ETest() {
         runBlocking { koinGet<FavoritesStore>().setFavorite(id, false) }
     }
 
-    private fun purpleBird() = runBlocking {
+    private fun patternSuite() = runBlocking {
         val catalog: MusicCatalog = koinGet()
-        val album = catalog.albums().first { it.title == "The Purple Bird" }
-        album to catalog.albumTracks(album.id).first { it.title == "London May" }
+        val album = catalog.albums().first { it.title == PatternSuite.TITLE }
+        album to catalog.albumTracks(album.id).first { it.title == PatternSuite.KNOWN_SONG }
     }
 
     @Test
     fun theNowPlayingHeartSavesTheSongAsAFavorite() {
         connectAndLoginToLibrary()
-        val (_, londonMay) = purpleBird()
-        startUnfavorited(londonMay.id)
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        composeRule.onNodeWithText("London May").performClick()
+        val (_, knownSong) = patternSuite()
+        startUnfavorited(knownSong.id)
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
         val playback: PlaybackController = koinGet()
         composeRule.waitUntil(PLAYBACK_TIMEOUT_MS) { onMain { playback.state.value.isPlaying } }
         composeRule.onNodeWithTag(MiniPlayerTags.ROOT).performClick()
@@ -68,16 +69,16 @@ class FavoritesE2ETest : LoggedInE2ETest() {
 
         composeRule.onNodeWithContentDescription("Add to favorites").performClick()
 
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) { isFavoriteOnServer(londonMay.id) }
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) { isFavoriteOnServer(knownSong.id) }
         composeRule.onNodeWithContentDescription("Remove from favorites").assertExists()
     }
 
     @Test
     fun aFavoritedAlbumShowsOnHome() {
         connectAndLoginToLibrary()
-        val (album, _) = purpleBird()
+        val (album, _) = patternSuite()
         startUnfavorited(album.id)
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
 
         composeRule.onNodeWithContentDescription("Add to favorites").performClick()
         composeRule.waitUntil(WAIT_TIMEOUT_MS) { isFavoriteOnServer(album.id) }

@@ -14,6 +14,7 @@ import org.jellyfin.mobile.livetv.catalog.JellyfinLiveTvCatalog
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.player.deviceprofile.DeviceDecoders
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
+import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -22,8 +23,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 /**
- * Opens real live streams on the Vault, ONLY on free (Tubi) channels: any other channel would take
- * the household's single provider login. Every stream opened here is closed again.
+ * Opens real live streams on the server, ONLY on free channels: pointed at a real server, any other
+ * channel could take a provider's limited logins. Every stream opened here is closed again.
  */
 class JellyfinLiveStreamsContractTest {
 
@@ -48,7 +49,7 @@ class JellyfinLiveStreamsContractTest {
         opened.forEach { streams.close(it.ticket) }
     }
 
-    private fun isFree(channel: LiveChannel) = "Free" in channel.tags && channel.name.startsWith("FREE|")
+    private fun isFree(channel: LiveChannel) = LiveTv.FREE_TAG in channel.tags && channel.name.startsWith(LiveTv.FREE_PREFIX)
 
     private suspend fun openFree(): OpenedStream {
         check(isFree(channel)) { "tests may only open free channels" }

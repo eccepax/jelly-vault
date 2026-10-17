@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
 import java.net.HttpURLConnection
 import java.net.URI
 
-/** The streaming-quality setting against the real Vault: a lower quality makes the server transcode. */
+/** The streaming-quality setting against the test server: a lower quality makes the server transcode. */
 class JellyfinStreamingQualityContractTest {
 
     private var quality = StreamingQuality.ORIGINAL

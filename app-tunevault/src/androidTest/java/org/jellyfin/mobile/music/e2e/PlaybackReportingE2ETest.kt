@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.e2e
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.music.playback.PlaybackReportingTracker
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -41,8 +42,8 @@ class PlaybackReportingE2ETest : LoggedInE2ETest() {
     @Test
     fun aTrackListenedPastHalfwayIsReportedAndCountedAsPlayed() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
-        scrollToAndClick("London May")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
+        scrollToAndClick(PatternSuite.KNOWN_SONG)
 
         val track = waitForCurrentTrack()
         val id = track.id.toUUID()

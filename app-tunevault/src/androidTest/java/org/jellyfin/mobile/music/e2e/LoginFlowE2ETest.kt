@@ -4,7 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import org.junit.Test
 
-/** Connect -> Login -> lands on Home. Runs against the real local Vault server. */
+/** Connect -> Login -> lands on Home. Runs against the test server. */
 @AccountArea
 class LoginFlowE2ETest : LoggedInE2ETest() {
 

@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.common.server.toServerDateTime
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultFixtures.SignalPath
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -30,7 +31,7 @@ class JellyfinHomeFeedContractTest {
         VaultTestServer.assumeAvailable()
         feed = JellyfinHomeFeed(api)
         val catalog = JellyfinMusicCatalog(api)
-        track = catalog.albumTracks(catalog.albums().first { it.title == "Damn" }.id).first()
+        track = catalog.albumTracks(catalog.albums().first { it.title == SignalPath.TITLE }.id).first()
         original = api.itemsApi.getItems(ids = listOf(track.id.toUUID())).content.items.single().userData!!
         Unit
     }

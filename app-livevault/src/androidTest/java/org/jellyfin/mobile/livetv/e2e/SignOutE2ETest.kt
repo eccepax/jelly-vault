@@ -14,7 +14,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Signing out of LiveVault on the real Vault. Never opens a channel. */
+/** Signing out of LiveVault on the test server. Never opens a channel. */
 class SignOutE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::class.java) {
 
     private val anyChannel = SemanticsMatcher("is a channel card") {

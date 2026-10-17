@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultFixtures
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -15,7 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Reports playback of a real track to the real Vault and checks the server recorded it. Writes the
+ * Reports playback of a real track to the test server and checks the server recorded it. Writes the
  * track's play state, so the original state is put back after each test.
  */
 class JellyfinPlaybackReporterContractTest {
@@ -30,7 +31,7 @@ class JellyfinPlaybackReporterContractTest {
         VaultTestServer.assumeAvailable()
         reporter = JellyfinPlaybackReporter(apiClient)
         val catalog = JellyfinMusicCatalog(apiClient)
-        val album = catalog.albums().first { it.title == "Wolf of the Cosmos" }
+        val album = catalog.albums().first { it.title == VaultFixtures.PLAY_STATE_ALBUM }
         track = catalog.albumTracks(album.id).first()
         original = userData()
         apiClient.playStateApi.markUnplayedItem(track.id.toUUID())

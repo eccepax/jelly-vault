@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.e2e
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,7 +11,7 @@ import org.junit.Test
 private const val PLAYBACK_TIMEOUT_MS = 30_000L
 
 /**
- * Real playback: the app streams from the real Vault through the PlaybackService's ExoPlayer.
+ * Real playback: the app streams from the test server through the PlaybackService's ExoPlayer.
  * "Playing" means the position actually advances, not just that play was requested.
  */
 @PlaybackArea
@@ -18,9 +19,9 @@ class PlaybackE2ETest : LoggedInE2ETest() {
 
     private val playback: PlaybackController get() = koinGet()
 
-    private fun openPurpleBird() {
+    private fun openPatternSuite() {
         connectAndLoginToLibrary()
-        openAlbum("The Purple Bird", firstTrack = "Turned To Dust (Rolling On)")
+        openAlbum(PatternSuite.TITLE, firstTrack = PatternSuite.FIRST_TRACK)
     }
 
     private fun waitUntilPlayingPast(positionMs: Long) {
@@ -32,20 +33,20 @@ class PlaybackE2ETest : LoggedInE2ETest() {
     @Smoke
     @Test
     fun tappingATrackStreamsIt() {
-        openPurpleBird()
+        openPatternSuite()
 
-        composeRule.onNodeWithText("London May").performClick()
+        composeRule.onNodeWithText(PatternSuite.KNOWN_SONG).performClick()
 
         waitUntilPlayingPast(1_000L)
         onMain {
-            assertEquals("London May", playback.state.value.currentTrack?.title)
+            assertEquals(PatternSuite.KNOWN_SONG, playback.state.value.currentTrack?.title)
             assertEquals(12, playback.state.value.queue.tracks.size)
         }
     }
 
     @Test
     fun shufflePlaysTheWholeAlbumShuffled() {
-        openPurpleBird()
+        openPatternSuite()
 
         composeRule.onNodeWithText("Shuffle").performClick()
 

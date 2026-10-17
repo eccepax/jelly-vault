@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
 import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultFixtures
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
@@ -33,7 +34,7 @@ class JellyfinOfflinePlayContractTest {
     fun setUp() = runBlocking {
         VaultTestServer.assumeAvailable()
         val catalog = JellyfinMusicCatalog(apiClient)
-        track = catalog.albumTracks(catalog.albums().first { it.title == "Wolf of the Cosmos" }.id).first()
+        track = catalog.albumTracks(catalog.albums().first { it.title == VaultFixtures.PLAY_STATE_ALBUM }.id).first()
         original = userData()
     }
 

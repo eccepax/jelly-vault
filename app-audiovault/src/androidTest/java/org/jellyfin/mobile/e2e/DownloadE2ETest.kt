@@ -18,6 +18,7 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.audioItemIdOf
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.junit.Before
 import org.junit.Test
 
@@ -25,8 +26,8 @@ import org.junit.Test
 // is a real network transfer, so this needs a generous timeout.
 private const val DOWNLOAD_TIMEOUT_MS = 180_000L
 
-/** Isabel Wilkerson's "Caste" on the Vault: split into many short tracks, the first well under 1 MB. */
-private const val SMALL_TRACKS_BOOK = "Caste"
+/** A book split into many short tracks, the first well under 1 MB. */
+private const val SMALL_TRACKS_BOOK = Audiobooks.MULTI_PART_SEARCH_TERM
 
 /**
  * Long-press -> Download really downloads through the shared download engine. Finished means a

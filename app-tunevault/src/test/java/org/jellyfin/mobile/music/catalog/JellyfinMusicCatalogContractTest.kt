@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
@@ -27,7 +28,7 @@ import java.net.URI
 import java.time.Instant
 
 /**
- * Runs [JellyfinMusicCatalog] against the real Vault, so these assert properties that hold for any
+ * Runs [JellyfinMusicCatalog] against the test server, so these assert properties that hold for any
  * music library, plus one known album as a sanity anchor.
  */
 class JellyfinMusicCatalogContractTest {
@@ -45,7 +46,7 @@ class JellyfinMusicCatalogContractTest {
         val albums = catalog.albums()
 
         albums.shouldNotBeEmpty()
-        albums.map { it.title } shouldContain "The Purple Bird"
+        albums.map { it.title } shouldContain PatternSuite.TITLE
         albums.forEach { it.title.shouldNotBeBlank() }
     }
 
@@ -90,7 +91,7 @@ class JellyfinMusicCatalogContractTest {
     @Test
     fun `every album's stream urls serve audio`() = runBlocking<Unit> {
         // One track per album: albums share a format, so this covers every format in the Vault
-        // (FLAC incl. 24-bit/96kHz, MP3, ...) without opening hundreds of streams each run.
+        // (FLAC, MP3, ...) without opening hundreds of streams each run.
         catalog.albums().forEach { album ->
             catalog.albumTracks(album.id).take(1).forEach { track ->
                 val connection = URI(catalog.streamUrl(track.id)).toURL().openConnection() as HttpURLConnection
@@ -128,7 +129,7 @@ class JellyfinMusicCatalogContractTest {
     @Test
     fun `when an album was added is the time the server stores`() = runBlocking<Unit> {
         // Compared with the raw JSON: the SDK's own decoding of the date is what's under test.
-        val album = catalog.albums().first { it.title == "The Purple Bird" }
+        val album = catalog.albums().first { it.title == PatternSuite.TITLE }
         val raw = VaultTestServer.rawJson("/Items?ids=${album.id}&fields=DateCreated")["Items"]!!
             .jsonArray.single().jsonObject["DateCreated"]!!.jsonPrimitive.content
 
@@ -179,7 +180,7 @@ class JellyfinMusicCatalogContractTest {
         tracks.map { it.id }.shouldBeUnique()
         tracks.filter { it.id in audiobookTrackIds }.shouldBeEmpty()
         // A known song, as a sanity anchor.
-        tracks.map { it.title } shouldContain "London May"
+        tracks.map { it.title } shouldContain PatternSuite.KNOWN_SONG
     }
 
     @Test
@@ -190,7 +191,7 @@ class JellyfinMusicCatalogContractTest {
     @Test
     fun `album artists are only musicians, not audiobook authors`() = runBlocking<Unit> {
         // Audiobooks are Audio items too, so an unscoped album-artist query also returns authors
-        // (Howard Zinn, Stephen Fry, ...) who have no music albums at all.
+        // (audiobook authors) who have no music albums at all.
         val artists = catalog.albumArtists()
 
         artists.shouldNotBeEmpty()

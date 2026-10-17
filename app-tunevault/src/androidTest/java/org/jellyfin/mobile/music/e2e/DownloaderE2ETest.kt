@@ -3,14 +3,15 @@ package org.jellyfin.mobile.music.e2e
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.DownloadManager
 import kotlinx.coroutines.runBlocking
-import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
-import org.jellyfin.mobile.music.domain.StreamingQuality
-import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.ItemDownload
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.server.withAccessToken
+import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
+import org.jellyfin.mobile.music.domain.StreamingQuality
+import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -21,7 +22,7 @@ import org.junit.Test
 import java.net.HttpURLConnection
 import java.net.URI
 
-/** The real downloader, download files and player against the real Vault: no UI involved. */
+/** The real downloader, download files and player against the test server: no UI involved. */
 @UnstableApi
 @DownloadsArea
 class DownloaderE2ETest : LoggedInE2ETest() {
@@ -45,8 +46,8 @@ class DownloaderE2ETest : LoggedInE2ETest() {
         waitForComposeText("Recently added")
     }
 
-    private fun purpleBird(): List<Track> = runBlocking {
-        catalog.albumTracks(catalog.albums().first { it.title == "The Purple Bird" }.id)
+    private fun patternSuite(): List<Track> = runBlocking {
+        catalog.albumTracks(catalog.albums().first { it.title == PatternSuite.TITLE }.id)
     }
 
     private fun stateOf(trackId: String) = onMain { downloader.downloads.value[trackId] }
@@ -78,7 +79,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
     @Test
     fun aSongDownloadsWholeAndReadsBackFromTheDeviceAlone() {
         signedIn()
-        val track = purpleBird().first()
+        val track = patternSuite().first()
 
         downloadAndWait(track)
 
@@ -109,7 +110,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
     @Test
     fun aDownloadedSongPlaysWithTheServerUnreachable() {
         signedIn()
-        val track = purpleBird().first()
+        val track = patternSuite().first()
         downloadAndWait(track)
         val playback: PlaybackController = koinGet()
 
@@ -124,7 +125,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
     @Test
     fun removingADownloadFreesItsSpace() {
         signedIn()
-        val track = purpleBird().first()
+        val track = patternSuite().first()
         downloadAndWait(track)
         assertTrue(isOnDevice(track))
 
@@ -137,7 +138,7 @@ class DownloaderE2ETest : LoggedInE2ETest() {
     @Test
     fun aStreamedSongIsNotKeptOnTheDevice() {
         signedIn()
-        val track = purpleBird()[1]
+        val track = patternSuite()[1]
         val playback: PlaybackController = koinGet()
 
         onMain { playback.play(listOf(track)) }

@@ -8,10 +8,11 @@ import org.junit.Before
 import org.koin.core.context.GlobalContext
 
 /**
- * Shared harness for the apps' instrumented e2e tests. They run against the real local Vault (the
- * `e2e.*` local.properties entries, passed as instrumentation runner arguments) rather than a mocked
- * one. There is no isolated test server, so every test clears the app's persisted state before *and*
- * after running, and always starts (and leaves the emulator) signed out.
+ * Shared harness for the apps' instrumented e2e tests. They run against the test server
+ * (test-server/up.sh; VAULT_TEST_* env or `e2e.*` local.properties entries, passed as
+ * instrumentation runner arguments) rather than a mocked one. The server outlives a single test, so
+ * every test clears the app's persisted state before *and* after running, and always starts (and
+ * leaves the emulator) signed out.
  *
  * **Device prerequisite**: animations disabled (`scripts/run-e2e-tests.sh` does this), or Espresso
  * throws `Animations or transitions are enabled on the target device`.

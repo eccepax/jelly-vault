@@ -7,14 +7,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Test
 
 /**
  * `LibraryViewModel.setFilterQuery` filters the already-loaded list client-side (see
  * `LibraryItemFilterTest` in the unit suite) — no extra network round trip once the library has
- * loaded. Searches for a title known to exist on the real Vault library ("Caste", Isabel
- * Wilkerson's "Caste: The Origins of Our Discontents") rather than a generic term, so the
+ * loaded. Searches for a word from one fixture book's title rather than a generic term, so the
  * assertion that the list actually narrowed isn't just luck.
  */
 class LibrarySearchE2ETest : LoggedInE2ETest() {
@@ -24,7 +24,7 @@ class LibrarySearchE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         val firstTitle = libraryTitles().first()
 
-        searchLibrary("Caste")
+        searchLibrary(Audiobooks.M4B_SEARCH_TERM)
 
         assert(firstTitle !in libraryTitles()) { "Expected the search to narrow the list" }
     }

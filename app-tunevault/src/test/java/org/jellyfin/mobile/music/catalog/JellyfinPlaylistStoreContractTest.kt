@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.music.domain.Track
+import org.jellyfin.mobile.testing.VaultFixtures
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -18,7 +19,7 @@ import org.junit.jupiter.api.Test
 import java.util.UUID
 
 /**
- * Creates clearly named playlists on the real Vault and deletes every one of them afterwards, even
+ * Creates clearly named playlists on the test server and deletes every one of them afterwards, even
  * when a test fails.
  */
 class JellyfinPlaylistStoreContractTest {
@@ -32,7 +33,7 @@ class JellyfinPlaylistStoreContractTest {
         VaultTestServer.assumeAvailable()
         store = JellyfinPlaylistStore(VaultTestServer.apiClient)
         val catalog = JellyfinMusicCatalog(VaultTestServer.apiClient)
-        tracks = catalog.albumTracks(catalog.albums().first { it.title == "Discovery" }.id).take(4)
+        tracks = catalog.albumTracks(catalog.albums().first { it.title == VaultFixtures.PLAYLIST_ALBUM }.id).take(4)
     }
 
     // Not runCatching: a delete the server refuses must fail the run, or every run leaves

@@ -6,6 +6,9 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
+import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
+import org.jellyfin.mobile.testing.VaultFixtures.SignalPath
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
@@ -25,17 +28,17 @@ class JellyfinMusicSearchContractTest {
 
     @Test
     fun `finds an album by part of its title, ignoring case`() = runBlocking<Unit> {
-        search.search("purple").albums.map { it.title } shouldContain "The Purple Bird"
+        search.search(PatternSuite.SEARCH_TERM).albums.map { it.title } shouldContain PatternSuite.TITLE
     }
 
     @Test
     fun `finds an artist by part of their name`() = runBlocking<Unit> {
-        search.search("kendrick").artists.map { it.name } shouldContain "Kendrick Lamar"
+        search.search(SignalPath.ARTIST_SEARCH_TERM).artists.map { it.name } shouldContain SignalPath.ARTIST
     }
 
     @Test
     fun `finds a song by its title`() = runBlocking<Unit> {
-        search.search("London May").tracks.map { it.title } shouldContain "London May"
+        search.search(PatternSuite.KNOWN_SONG).tracks.map { it.title } shouldContain PatternSuite.KNOWN_SONG
     }
 
     @Test
@@ -54,7 +57,7 @@ class JellyfinMusicSearchContractTest {
 
     @Test
     fun `never returns audiobooks`() = runBlocking<Unit> {
-        val term = "History"
+        val term = Audiobooks.SEARCH_TERM_MATCHING_AN_AUDIOBOOK
         val api = VaultTestServer.apiClient
         // Prove the term really matches audiobooks on this server, so this guard isn't vacuous.
         val audiobookMatches = api.userViewsApi.getUserViews().content.items
