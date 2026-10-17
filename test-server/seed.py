@@ -146,27 +146,40 @@ def live_tv():
         log("live tv: added the XMLTV guide")
 
 
-def run_task(key):
-    task = next((t for t in call("/ScheduledTasks") if t["Key"] == key), None)
-    if task is None:
-        sys.exit(f"seed: this server has no {key!r} task")
-    call(f"/ScheduledTasks/Running/{task['Id']}", method="POST")
+def wait_for_task(task, key, done):
+    """Polls [task] until done(state); returns that state."""
     deadline, last = time.time() + TASK_TIMEOUT_S, None
-    time.sleep(1)
     while time.time() < deadline:
         state = call(f"/ScheduledTasks/{task['Id']}")
-        if state["State"] == "Idle":
-            result = (state.get("LastExecutionResult") or {}).get("Status")
-            log(f"task {key}: {result}")
-            if result not in ("Completed", None):
-                sys.exit(f"seed: task {key} ended {result}: {(state.get('LastExecutionResult') or {}).get('ErrorMessage')}")
-            return
+        if done(state):
+            return state
         progress = f"{state['State']} {state.get('CurrentProgressPercentage') or 0:.0f}%"
         if progress != last:
             log(f"task {key}: {progress}")
             last = progress
         time.sleep(2)
     sys.exit(f"seed: task {key} still running after {TASK_TIMEOUT_S}s (raise SEED_TASK_TIMEOUT?)")
+
+
+def last_run(state):
+    return state.get("LastExecutionResult") or {}
+
+
+def run_task(key):
+    """Runs a scheduled task and waits for that run to end. The task can still read Idle just after
+    the trigger, so a run counts as ended only once its result is newer than the one from before."""
+    task = next((t for t in call("/ScheduledTasks") if t["Key"] == key), None)
+    if task is None:
+        sys.exit(f"seed: this server has no {key!r} task")
+    # A run already going (a startup scan, say) may have begun before the settings above; a trigger
+    # now would be ignored, so let it finish and run the task again.
+    before = last_run(wait_for_task(task, key, lambda s: s["State"] == "Idle")).get("EndTimeUtc")
+    call(f"/ScheduledTasks/Running/{task['Id']}", method="POST")
+    state = wait_for_task(task, key, lambda s: s["State"] == "Idle" and last_run(s).get("EndTimeUtc") != before)
+    result = last_run(state)
+    log(f"task {key}: {result.get('Status')}")
+    if result.get("Status") != "Completed":
+        sys.exit(f"seed: task {key} ended {result.get('Status')}: {result.get('ErrorMessage')}")
 
 
 def channels(user_id):

@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.music.playback
 
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.runBlocking
@@ -69,8 +70,12 @@ class JellyfinPlaybackReporterContractTest {
      */
     @Test
     fun `music stopped part way still counts as played and keeps no resume position`() = runBlocking<Unit> {
+        val partWay = track.durationMs / 2
+        partWay shouldBeGreaterThan 0L
+
         reporter.started(track.id, positionMs = 0L, isPaused = false)
-        reporter.stopped(track.id, positionMs = 30_000L)
+        reporter.progress(track.id, positionMs = partWay, isPaused = false)
+        reporter.stopped(track.id, positionMs = partWay)
 
         val data = userData()
         data.played shouldBe true

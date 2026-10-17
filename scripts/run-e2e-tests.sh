@@ -72,9 +72,14 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 [ -x "$ADB" ] || die "adb not found at $ADB — set ANDROID_HOME"
 
 log "Checking for test server credentials"
-has_property() { grep -q "^$1=" "$REPO_ROOT/local.properties" 2>/dev/null; }
-if { [ -z "${VAULT_TEST_USERNAME:-}" ] && ! has_property 'e2e\.username'; } \
-    || { [ -z "${VAULT_TEST_PASSWORD:-}" ] && ! has_property 'e2e\.password'; }; then
+# The same rule as buildSrc's VaultTestSettings: any VAULT_TEST_* variable means every setting comes
+# from the environment and local.properties is ignored, so both credentials must be there.
+has_property() { grep -Eq "^$1[[:space:]]*=[[:space:]]*[^[:space:]]" "$REPO_ROOT/local.properties" 2>/dev/null; }
+if [ -n "${VAULT_TEST_HOSTNAME:-}${VAULT_TEST_E2E_HOSTNAME:-}${VAULT_TEST_USERNAME:-}${VAULT_TEST_PASSWORD:-}" ]; then
+    if [ -z "${VAULT_TEST_USERNAME:-}" ] || [ -z "${VAULT_TEST_PASSWORD:-}" ]; then
+        die "A VAULT_TEST_* variable is set, so local.properties is ignored — set both VAULT_TEST_USERNAME and VAULT_TEST_PASSWORD (vault-test / vault-test for test-server/)."
+    fi
+elif ! has_property 'e2e\.username' || ! has_property 'e2e\.password'; then
     die "No test server credentials — set VAULT_TEST_USERNAME / VAULT_TEST_PASSWORD (vault-test / vault-test for test-server/), or e2e.username / e2e.password in local.properties (never commit)."
 fi
 

@@ -43,6 +43,18 @@ object VaultFixtures {
     /** An album whose play state tests change and then restore. */
     const val PLAY_STATE_ALBUM = "Offline Tones"
 
+    /**
+     * One big track: six minutes of white noise, which FLAC can't shrink, so its download lasts
+     * long enough to pause part way.
+     */
+    object LongForm {
+        const val TITLE = "Long Form"
+        const val TRACK = "The Longest Drone"
+
+        /** Its file is about 45 MB; well under that and the pause test can't catch it mid-download. */
+        const val MIN_FILE_BYTES = 30_000_000L
+    }
+
     /** More music tracks than this exist, so "shuffle all" queues more than one album. */
     const val MIN_MUSIC_TRACKS = 100
 

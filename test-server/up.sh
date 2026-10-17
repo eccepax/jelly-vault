@@ -11,6 +11,7 @@ user_flag=()
 if [ "$(uname -s)" = "Linux" ]; then user_flag=(--user "$(id -u):$(id -g)"); fi
 
 docker compose --profile tools build --quiet tools
-docker compose run --rm "${user_flag[@]}" tools python generate_media.py
+# ${a[@]+...}: bash before 4.4 (macOS's) calls an empty array unbound under set -u.
+docker compose run --rm ${user_flag[@]+"${user_flag[@]}"} tools python generate_media.py
 docker compose up -d jellyfin media-host
 docker compose run --rm tools python seed.py

@@ -18,8 +18,9 @@ jobs:
     # The pinned leg keeps the plain "Test" name that checks refer to.
     name: ${{ matrix.jellyfin == 'latest' && 'Test (Jellyfin latest)' || 'Test' }}
     runs-on: ubuntu-24.04
-    # A new Jellyfin release can't block PRs, but its leg still shows red as a warning.
-    continue-on-error: ${{ matrix.jellyfin == 'latest' }}
+    # A new Jellyfin release can't block PRs, but its leg still shows red as a warning. The weekly run
+    # doesn't excuse it, so a break there fails the workflow and sends GitHub's failure email.
+    continue-on-error: ${{ matrix.jellyfin == 'latest' && github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
@@ -43,10 +44,16 @@ jobs:
       - name: Restore generated test media
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            test-server/.data/media
-            test-server/.data/downloads
+          path: test-server/.data/media
           key: test-server-media-${{ hashFiles('test-server/fixtures.json', 'test-server/generate_media.py') }}
+      # The downloaded EPUBs, cached apart from the media and restored from any older entry, so a
+      # fixtures change doesn't make every run fetch them from gutenberg.org again.
+      - name: Restore downloaded test books
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: test-server/.data/downloads
+          key: test-server-downloads-${{ hashFiles('test-server/fixtures.json') }}
+          restore-keys: test-server-downloads-
       - name: Start the test server (Jellyfin ${{ matrix.jellyfin }})
         run: test-server/up.sh
       - name: Run test task, with coverage

@@ -49,7 +49,7 @@ internal fun Project.configureVaultKotlinDetektAndTests() {
         exclude(mapOf("group" to "de.mannodermaus.junit5", "module" to "android-test-compose-junit6"))
     }
 
-    val testServer = VaultTestSettings(vaultLocalProperties())
+    val testServer = vaultTestSettings()
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         useVaultContractServer(testServer)

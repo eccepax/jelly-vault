@@ -7,6 +7,7 @@ import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
@@ -17,6 +18,7 @@ import org.jellyfin.mobile.testing.VaultFixtures
 import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultFixtures.Books
 import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
+import org.jellyfin.mobile.testing.VaultFixtures.LongForm
 import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.VaultFixtures.SignalPath
 import org.jellyfin.mobile.testing.VaultTestServer
@@ -91,6 +93,18 @@ class VaultFixturesContractTest {
                 )
             }
             albums[SignalPath.TITLE]?.albumArtist shouldBe SignalPath.ARTIST
+            withClue("${LongForm.TITLE}: one track, big enough to pause part way through downloading") {
+                val tracks = albums[LongForm.TITLE]?.let { album ->
+                    api.itemsApi.getItems(
+                        parentId = album.id,
+                        includeItemTypes = listOf(BaseItemKind.AUDIO),
+                        fields = listOf(ItemFields.MEDIA_SOURCES),
+                    ).content.items
+                }.orEmpty()
+                tracks.map { it.name } shouldBe listOf(LongForm.TRACK)
+                (tracks.singleOrNull()?.mediaSources?.firstOrNull()?.size ?: 0L) shouldBeGreaterThan
+                    LongForm.MIN_FILE_BYTES
+            }
             items(BaseItemKind.AUDIO).size shouldBeGreaterThan VaultFixtures.MIN_MUSIC_TRACKS
             items(BaseItemKind.PLAYLIST).map { it.path.orEmpty().lowercase() }.filter { it.endsWith(".m3u") }
                 .shouldNotBeEmpty()

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 MEDIA_HOST = "http://media-host"  # how Jellyfin reaches the nginx service on the compose network
 GUIDE_SLOT = timedelta(minutes=30)
 GUIDE_PAST, GUIDE_FUTURE = timedelta(days=1), timedelta(days=14)
+DOWNLOAD_RETRY_WAITS_S = [5, 20, 60]
 
 
 def log(msg):
@@ -178,15 +180,27 @@ def pdf(path, title, pages):
     path.write_bytes(bytes(out))
 
 
+def download(url):
+    """[url]'s body, retried with backoff: Gutenberg is a volunteer site and sometimes slow or busy."""
+    request = urllib.request.Request(url, headers={"User-Agent": "vault-test-server (test fixtures)"})
+    for attempt, wait in enumerate(DOWNLOAD_RETRY_WAITS_S + [None], start=1):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return response.read()
+        except (urllib.error.URLError, OSError) as e:
+            if wait is None:
+                sys.exit(f"could not download {url} after {attempt} tries: {e}")
+            log(f"download failed ({e}); retrying in {wait}s")
+            time.sleep(wait)
+
+
 def epub(url, path, downloads):
     """Fetches a public-domain EPUB once into the download cache, and checks it really is an EPUB."""
     cached = downloads / path.name
     if not cached.exists():
         log(f"downloading {url}")
         downloads.mkdir(parents=True, exist_ok=True)
-        request = urllib.request.Request(url, headers={"User-Agent": "vault-test-server (test fixtures)"})
-        with urllib.request.urlopen(request, timeout=120) as response:
-            data = response.read()
+        data = download(url)
         tmp = cached.with_name(f".part-{cached.name}")
         tmp.write_bytes(data)
         with zipfile.ZipFile(tmp) as z:
@@ -249,6 +263,19 @@ def guide(fixtures, root):
     log(f"guide: {now - GUIDE_PAST:%Y-%m-%d} to {now + GUIDE_FUTURE:%Y-%m-%d}")
 
 
+def empty(folder, keep=()):
+    """Deletes what's in [folder] but not the folder itself, and only empties the folders in [keep]:
+    the compose services bind-mount them, and a running container's mount keeps pointing at the
+    deleted folder, not at one made again in its place."""
+    for child in folder.iterdir():
+        if child.name in keep:
+            empty(child)
+        elif child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=HERE / ".data")
@@ -261,7 +288,7 @@ def main():
     stamp_file = media / ".stamp"
     if media.exists() and (not stamp_file.exists() or stamp_file.read_text() != stamp):
         log("fixtures changed; rebuilding media")
-        shutil.rmtree(media)
+        empty(media, keep={"livetv"})  # docker-compose.yml mounts media/ and media/livetv/
     music(fixtures["music"], media / "music")
     audiobooks(fixtures["audiobooks"], media / "audiobooks")
     books(fixtures["books"], media / "books", data / "downloads")

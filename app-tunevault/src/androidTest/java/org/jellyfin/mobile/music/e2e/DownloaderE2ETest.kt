@@ -11,6 +11,7 @@ import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.playback.PlaybackController
+import org.jellyfin.mobile.testing.VaultFixtures.LongForm
 import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.sdk.api.client.ApiClient
 import org.junit.After
@@ -92,7 +93,10 @@ class DownloaderE2ETest : LoggedInE2ETest() {
     @Test
     fun aDownloadPausedPartWayResumesAndFinishesTheWholeFile() {
         signedIn()
-        val track = runBlocking { catalog.tracks() }.maxBy { it.durationMs }
+        val track = runBlocking {
+            catalog.albumTracks(catalog.albums().first { it.title == LongForm.TITLE }.id)
+                .single { it.title == LongForm.TRACK }
+        }
         val manager: DownloadManager = koinGet()
 
         onMain { downloader.download(track.id, catalog.downloadUri(track.id, StreamingQuality.ORIGINAL)) }

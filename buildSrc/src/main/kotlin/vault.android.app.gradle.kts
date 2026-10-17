@@ -13,7 +13,7 @@ configureVaultKotlinDetektAndTests()
 // The test server's address and credentials (VAULT_TEST_* env, else the gitignored local.properties)
 // are passed to the androidTest APK only as instrumentation runner arguments — they never touch
 // BuildConfig or the real app build. See VaultTestSettings and common-testing's VaultE2ETest.
-val testServer = VaultTestSettings(vaultLocalProperties())
+val testServer = vaultTestSettings().emulator
 
 android {
     compileSdk = 36
@@ -26,7 +26,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
-        testInstrumentationRunnerArguments["e2eHostname"] = testServer.emulatorHostname
+        testInstrumentationRunnerArguments["e2eHostname"] = testServer.hostname
         testInstrumentationRunnerArguments["e2eUsername"] = testServer.username
         testInstrumentationRunnerArguments["e2ePassword"] = testServer.password
     }

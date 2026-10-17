@@ -38,7 +38,6 @@ class JellyfinServerPositionsContractTest {
             includeItemTypes = listOf(BaseItemKind.AUDIO_BOOK),
             recursive = true,
             searchTerm = Audiobooks.MP3_SEARCH_TERM,
-            limit = 1,
         ).content.items.orEmpty().single().id!!
         original = userData()
     }
