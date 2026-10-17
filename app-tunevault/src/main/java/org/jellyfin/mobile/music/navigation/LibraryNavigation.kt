@@ -21,11 +21,6 @@ private val backStackSaver = listSaver<SnapshotStateList<String>, String>(
     restore = { it.toMutableStateList() },
 )
 
-/**
- * The library's back stack: [home] (the tabs) with artists and albums opened on top of it, e.g.
- * home → artist → album. Back pops one level. Only ids are saved, so the stack survives rotation and
- * process death, and each level keeps its own saved state (scroll position) while covered.
- */
 /** A page that something outside the library, such as the player, asks it to open. */
 sealed interface BrowseTarget {
     data class Album(val albumId: String) : BrowseTarget
@@ -40,6 +35,11 @@ class Browse(
     val openSettings: () -> Unit,
 )
 
+/**
+ * The library's back stack: [home] (the tabs) with artists and albums opened on top of it, e.g.
+ * home → artist → album. Back pops one level. Only ids are saved, so the stack survives rotation and
+ * process death, and each level keeps its own saved state (scroll position) while covered.
+ */
 @Composable
 fun LibraryNavigation(
     home: @Composable (browse: Browse) -> Unit,
