@@ -115,6 +115,21 @@ class LoginScreenTest {
         tapped shouldBe listOf("quick connect", "change server")
     }
 
+    @Test
+    fun `signing in to a server on the internet without HTTPS warns first`() {
+        show(LoginUiState(insecureServer = true))
+
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_INSECURE_SERVER).assertExists()
+        composeRule.onNodeWithText(string(R.string.login_insecure_server)).assertExists()
+    }
+
+    @Test
+    fun `otherwise there's no warning`() {
+        show(LoginUiState(insecureServer = false))
+
+        composeRule.onNodeWithTag(VaultTestTags.LOGIN_INSECURE_SERVER).assertDoesNotExist()
+    }
+
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `a TV remote's down moves from field to field and on to the buttons, not stuck in a field`() {

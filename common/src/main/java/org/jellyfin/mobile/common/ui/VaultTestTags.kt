@@ -32,6 +32,9 @@ object VaultTestTags {
     /** The sign-in screen's password field. */
     const val LOGIN_PASSWORD = "login_password"
 
+    /** The warning that signing in would cross the internet unencrypted. */
+    const val LOGIN_INSECURE_SERVER = "login_insecure_server"
+
     /** The Quick Connect code waiting to be approved. */
     const val QUICK_CONNECT_CODE = "quick_connect_code"
 

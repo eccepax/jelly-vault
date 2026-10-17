@@ -31,6 +31,11 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     val chapterCount: Int get() = spineFiles.size
 
+    /** Where the open book is extracted; the reader loads nothing from outside it. */
+    @Volatile // Read on the WebView's own thread, for every file a page asks for
+    var bookDir: File? = null
+        private set
+
     suspend fun openFile(epubFile: File, bookItemId: String) = withContext(Dispatchers.IO) {
         close()
         val dir = File(context.cacheDir, "epub_$bookItemId")
@@ -39,6 +44,7 @@ class EpubRenderer(private val context: Context) : Closeable {
             dir.mkdirs()
             extractEpub(epubFile, dir)
         }
+        bookDir = dir
         spineFiles = parseSpine(dir)
         bookToc = buildTableOfContents(dir)
         tocEntries = bookToc.takeIf { it.isNotEmpty() } ?: fallbackToc()
@@ -65,7 +71,7 @@ class EpubRenderer(private val context: Context) : Closeable {
     private fun extractEntry(zip: ZipFile, entry: ZipEntry, destDir: File) {
         val outFile = File(destDir, entry.name)
         // Zip Slip: a malicious EPUB's "../" entries would otherwise overwrite the app's own files
-        if (!outFile.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) {
+        if (!outFile.isInside(destDir)) {
             Timber.w("Skipping EPUB entry outside the book's folder: %s", entry.name)
             return
         }
@@ -83,7 +89,7 @@ class EpubRenderer(private val context: Context) : Closeable {
         val opfPath = parseContainerXml(File(dir, "META-INF/container.xml")) ?: return emptyList()
         val opfFile = File(dir, opfPath)
         val opfDir = opfFile.parentFile ?: dir
-        return parseOpf(opfFile, opfDir)
+        return parseOpf(opfFile, opfDir, dir)
     }
 
     /**
@@ -105,7 +111,7 @@ class EpubRenderer(private val context: Context) : Closeable {
 
     /** See [parseContainerXml] — same rationale for the broad catch. */
     @Suppress("TooGenericExceptionCaught")
-    private fun parseOpf(opfFile: File, opfDir: File): List<File> {
+    private fun parseOpf(opfFile: File, opfDir: File, bookDir: File): List<File> {
         if (!opfFile.exists()) return emptyList()
         return try {
             val root = parseXml(opfFile)
@@ -122,8 +128,11 @@ class EpubRenderer(private val context: Context) : Closeable {
                 ?.children("itemref")
                 ?.mapNotNull { it.getAttribute("idref").takeIf { idref -> idref.isNotEmpty() } }
                 .orEmpty()
+            // The spine could name any file as a chapter; only the book's own are
             spineRefs.mapNotNull { idref ->
-                manifest[idref]?.let { href -> resolveEpubHref(opfDir, href).takeIf { it.exists() } }
+                manifest[idref]
+                    ?.let { href -> resolveEpubHref(opfDir, href) }
+                    ?.takeIf { it.exists() && it.isInside(bookDir) }
             }
         } catch (e: Exception) {
             Timber.e(e, "OPF parse failed")
@@ -141,6 +150,7 @@ class EpubRenderer(private val context: Context) : Closeable {
     }
 
     override fun close() {
+        bookDir = null
         spineFiles = emptyList()
         bookToc = emptyList()
     }

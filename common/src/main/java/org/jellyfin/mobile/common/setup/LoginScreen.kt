@@ -2,6 +2,7 @@ package org.jellyfin.mobile.common.setup
 
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +14,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.Icon
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -26,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -45,7 +50,11 @@ import org.koin.androidx.compose.koinViewModel
 /** The sign-in screen, signing in to the server [mainViewModel] has chosen and telling it once that's done. */
 @Composable
 fun LoginRoute(mainViewModel: MainViewModel, loginViewModel: LoginViewModel = koinViewModel()) {
-    val state by loginViewModel.state.collectAsState()
+    val loginState by loginViewModel.state.collectAsState()
+    val server by mainViewModel.serverState.collectAsState()
+    val hostname = server.server?.hostname
+    val insecure = remember(hostname) { hostname?.let(::signsInUnencryptedOverInternet) == true }
+    val state = loginState.copy(insecureServer = insecure)
     val activity = LocalActivity.current
     DisposableEffect(loginViewModel) {
         // A rotation comes straight back to this screen, so a code being shown carries on
@@ -78,6 +87,7 @@ fun LoginScreen(state: LoginUiState, actions: LoginActions) {
                 .padding(VaultSpacing.XLarge),
         ) {
             Text(stringResource(R.string.login_title), style = MaterialTheme.typography.h5)
+            if (state.insecureServer) InsecureServerWarning()
             CredentialFields(
                 username = username,
                 onUsername = { username = it },
@@ -115,6 +125,24 @@ fun LoginScreen(state: LoginUiState, actions: LoginActions) {
                 onClick = actions.onChangeServer,
             )
         }
+    }
+}
+
+/** That the password, and everything after it, would cross the internet unencrypted. */
+@Composable
+private fun InsecureServerWarning() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(top = VaultSpacing.Medium)
+            .testTag(VaultTestTags.LOGIN_INSECURE_SERVER),
+    ) {
+        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colors.error)
+        Text(
+            text = stringResource(R.string.login_insecure_server),
+            style = MaterialTheme.typography.body2,
+            modifier = Modifier.padding(start = VaultSpacing.Medium),
+        )
     }
 }
 

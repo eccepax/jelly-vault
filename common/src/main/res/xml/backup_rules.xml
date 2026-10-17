@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. The databases hold the server sign-in (and what's downloaded), so they
+     never leave the device; downloads would be far too big to back up anyway. Settings come along.
+     Android 12 and newer use data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="downloaded" />
+    <!-- LiveVault: the streams it left open on its server, which elsewhere would be closed again on
+         a server that long since has. The other apps have no such file. -->
+    <exclude domain="sharedpref" path="live_streams.xml" />
+</full-backup-content>

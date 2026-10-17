@@ -125,6 +125,8 @@ class BookReaderViewModel(
 
     fun getChapterFile(index: Int): File? = epubRenderer.getChapterFile(index)
 
+    fun getBookDir(): File? = epubRenderer.bookDir
+
     /** Real chapter titles for the currently-loaded EPUB, or empty for PDF/before loading. */
     fun getTableOfContents(): List<EpubTocEntry> = epubRenderer.getTableOfContents()
 

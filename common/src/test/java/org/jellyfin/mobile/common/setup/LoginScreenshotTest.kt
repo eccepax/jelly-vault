@@ -2,9 +2,12 @@ package org.jellyfin.mobile.common.setup
 
 import android.app.Application
 import androidx.fragment.app.testing.launchFragmentInContainer
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.R
+import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
@@ -42,7 +45,11 @@ class LoginScreenshotTest {
                     single { mockk<QuickConnect>(relaxed = true) }
                     single { mockk<ApiClientController>(relaxed = true) }
                     single { mockk<AppPreferences>(relaxed = true) }
-                    viewModel { mockk<MainViewModel>(relaxed = true) }
+                    viewModel {
+                        mockk<MainViewModel>(relaxed = true) {
+                            every { serverState } returns MutableStateFlow(ServerState.Pending)
+                        }
+                    }
                     viewModel { LoginViewModel(get(), get(), get(), get()) }
                     // common's own accent, as before the brand came from the app
                     single { VaultBrand.Jellyfin }

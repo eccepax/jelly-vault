@@ -308,6 +308,42 @@ class EpubRendererTest {
     }
 
     @Test
+    fun `a chapter that's a file outside the book's folder isn't one of its pages or in its contents`() = runTest {
+        File(cacheDir, "secret.xhtml").writeText("<html><body>Not the book's</body></html>")
+        val nav = """
+            <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
+                <nav epub:type="toc"><ol>
+                    <li><a href="chapter1.xhtml">One</a></li>
+                    <li><a href="../../secret.xhtml">Secret</a></li>
+                </ol></nav>
+            </body></html>
+        """.trimIndent()
+        val opf = """
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+                <manifest>
+                    <item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+                    <item id="ch0" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+                    <item id="ch1" href="../../secret.xhtml" media-type="application/xhtml+xml"/>
+                </manifest>
+                <spine><itemref idref="ch0"/><itemref idref="ch1"/></spine>
+            </package>
+        """.trimIndent()
+        val epub = buildEpub(
+            "META-INF/container.xml" to containerXml,
+            "OEBPS/content.opf" to opf,
+            "OEBPS/nav.xhtml" to nav,
+            "OEBPS/chapter1.xhtml" to "<html><body>One</body></html>",
+        )
+
+        val renderer = EpubRenderer(app)
+        renderer.openFile(epub, "book-outside-spine")
+
+        renderer.chapterCount shouldBe 1
+        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("One", 0))
+    }
+
+    @Test
     fun `manifest hrefs are URL-decoded, so a chapter named with a space is found`() = runTest {
         val epub = buildEpub(
             "META-INF/container.xml" to containerXml,

@@ -19,6 +19,7 @@
     <string name="login_password">Password</string>
     <string name="login_button">Sign in</string>
     <string name="login_change_server">Change server</string>
+    <string name="login_insecure_server">This server doesn\'t use HTTPS, so your password and everything you do will cross the internet unencrypted.</string>
     <string name="login_quick_connect">Use Quick Connect</string>
     <string name="login_quick_connect_hint">On a phone or computer that\'s signed in to Jellyfin, open your profile, choose Quick Connect and enter this code.</string>
     <string name="login_quick_connect_unavailable">Quick Connect is turned off on this server</string>
