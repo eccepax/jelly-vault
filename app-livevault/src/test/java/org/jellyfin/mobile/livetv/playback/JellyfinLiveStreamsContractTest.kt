@@ -68,7 +68,7 @@ class JellyfinLiveStreamsContractTest {
 
     /** The server's raw stream for [stream]'s live stream: serves bytes only while it's open. */
     private fun rawStreamUrl(stream: OpenedStream) = "${VaultTestServer.hostname}/Videos/${stream.channelId}/stream" +
-        "?static=true&mediaSourceId=${stream.mediaSourceId}&liveStreamId=${stream.liveStreamId}&api_key=${api.accessToken}"
+        "?static=true&mediaSourceId=${stream.mediaSourceId}&liveStreamId=${stream.liveStreamId}&ApiKey=${api.accessToken}"
 
     @Test
     fun `a free channel opens to a stream the player can fetch`() = runBlocking<Unit> {

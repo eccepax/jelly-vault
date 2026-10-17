@@ -13,18 +13,25 @@ class ServerUrlsTest {
 
     @Test
     fun `adds the current token to a url`() {
-        withAccessToken("http://vault/Audio/a/universal?x=1", "t2") shouldBe "http://vault/Audio/a/universal?x=1&api_key=t2"
+        withAccessToken("http://vault/Audio/a/universal?x=1", "t2") shouldBe "http://vault/Audio/a/universal?x=1&ApiKey=t2"
     }
 
     @Test
     fun `adds a query when there is none`() {
-        withAccessToken("http://vault/Audio/a/stream", "t") shouldBe "http://vault/Audio/a/stream?api_key=t"
+        withAccessToken("http://vault/Audio/a/stream", "t") shouldBe "http://vault/Audio/a/stream?ApiKey=t"
     }
 
     @Test
     fun `replaces a stale token rather than sending two`() {
+        withAccessToken("http://vault/Audio/a/universal?ApiKey=old&x=1", "new") shouldBe
+            "http://vault/Audio/a/universal?x=1&ApiKey=new"
+    }
+
+    @Test
+    fun `replaces a token in the old api_key form, which Jellyfin 12 refuses`() {
+        // URIs stored by older versions may still carry one.
         withAccessToken("http://vault/Audio/a/universal?api_key=old&x=1", "new") shouldBe
-            "http://vault/Audio/a/universal?x=1&api_key=new"
+            "http://vault/Audio/a/universal?x=1&ApiKey=new"
     }
 
     @Test
@@ -37,13 +44,13 @@ class ServerUrlsTest {
     @Test
     fun `builds a dashless item download url carrying the token`() {
         itemDownloadUrl("https://server", itemId, "tok") shouldBe
-            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?api_key=tok"
+            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?ApiKey=tok"
     }
 
     @Test
     fun `strips a trailing slash from the base url`() {
         itemDownloadUrl("https://server/", itemId, "tok") shouldBe
-            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?api_key=tok"
+            "https://server/Items/ded9d452b0effd8a13f978d5ba92d1b6/Download?ApiKey=tok"
     }
 
     @Test

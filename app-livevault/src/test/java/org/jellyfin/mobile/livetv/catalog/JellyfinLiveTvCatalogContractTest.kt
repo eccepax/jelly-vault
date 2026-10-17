@@ -14,8 +14,9 @@ import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.VaultTestServer
-import org.jellyfin.sdk.api.client.extensions.filterApi
+import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemFields
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -70,8 +71,13 @@ class JellyfinLiveTvCatalogContractTest {
 
     @Test
     fun `channels carry the server's channel tags`() = runBlocking<Unit> {
-        val serverTags = api.filterApi.getQueryFiltersLegacy(includeItemTypes = listOf(BaseItemKind.TV_CHANNEL))
-            .content.tags.orEmpty()
+        // Read from the plain items listing: the server's tag filters can't be relied on, as the
+        // legacy one lists no tags on Jellyfin 12, and the newer one none on 10.11.
+        val serverTags = api.itemsApi.getItems(
+            includeItemTypes = listOf(BaseItemKind.TV_CHANNEL),
+            recursive = true,
+            fields = listOf(ItemFields.TAGS),
+        ).content.items.flatMap { it.tags.orEmpty() }.distinct()
 
         serverTags.shouldNotBeEmpty()
         catalog.channels().tags() shouldContainAll serverTags
