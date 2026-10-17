@@ -101,6 +101,14 @@ class NowPlayingScreenTest {
     }
 
     @Test
+    fun `a song on no album has no album to open`() {
+        show(playing.copy(track = londonMay.copy(albumId = "", albumTitle = "")))
+
+        composeRule.onNodeWithText("London May").assertHasNoClickAction()
+        composeRule.onNodeWithTag(NowPlayingTags.COVER).assertHasNoClickAction()
+    }
+
+    @Test
     fun `shows elapsed and total time`() {
         show(playing)
 

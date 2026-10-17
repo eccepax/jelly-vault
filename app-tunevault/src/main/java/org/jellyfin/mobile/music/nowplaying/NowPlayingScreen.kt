@@ -74,10 +74,10 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 }
             }
             Spacer(Modifier.height(16.dp))
-            // The cover, title and album lead to the album; the artist to the artist's page
-            val openAlbum = Modifier.clickable(
-                enabled = track != null,
-            ) { track?.let { actions.onOpenAlbum(it.albumId) } }
+            // The cover, title and album lead to the album; the artist to the artist's page.
+            // A song on no album has an empty albumId, with nothing to open.
+            val albumId = track?.albumId?.takeIf { it.isNotEmpty() }
+            val openAlbum = if (albumId != null) Modifier.clickable { actions.onOpenAlbum(albumId) } else Modifier
             AlbumCover(
                 coverUrl = track?.coverUrl,
                 modifier = Modifier.fillMaxWidth().testTag(NowPlayingTags.COVER).then(openAlbum),
