@@ -85,6 +85,7 @@ class AudioVaultScreenshotTest {
             every { showDownloadedOnly } returns MutableStateFlow(false)
             every { showHiddenItems } returns MutableStateFlow(false)
             every { filterQuery } returns MutableStateFlow("")
+            every { folderId } returns MutableStateFlow(null)
         }
         // A relaxed ApiClient's cached-API lookup returns the wrong type; covers come from a real ImageApi
         mockkStatic(API_CLIENT_EXTENSIONS)
