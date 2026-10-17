@@ -24,13 +24,8 @@ class LibrarySearchE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         val firstTitle = libraryTitles().first()
 
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        composeRule.onNodeWithContentDescription(context.getString(R.string.search_hint)).performClick()
-        composeRule.onNodeWithTag(VaultTestTags.SEARCH_FIELD).performTextInput("Caste")
+        searchLibrary("Caste")
 
-        composeRule.waitUntil(WAIT_TIMEOUT_MS) {
-            val titles = libraryTitles()
-            titles.isNotEmpty() && firstTitle !in titles && titles.all { it.contains("Caste", ignoreCase = true) }
-        }
+        assert(firstTitle !in libraryTitles()) { "Expected the search to narrow the list" }
     }
 }

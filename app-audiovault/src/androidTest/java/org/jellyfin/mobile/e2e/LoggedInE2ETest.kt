@@ -1,5 +1,7 @@
 package org.jellyfin.mobile.e2e
 
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteractionCollection
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.MainActivity
+import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.data.JellyfinDatabase
@@ -51,6 +54,20 @@ abstract class LoggedInE2ETest : SignedInE2ETest<MainActivity>(MainActivity::cla
         node.config.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text
     }
 
+    /**
+     * Searches the library for [query] and waits until only matching items show. The search is
+     * client-side over the loaded list, so this is quick.
+     */
+    protected fun searchLibrary(query: String) {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.search_hint)).performClick()
+        composeRule.onNodeWithTag(VaultTestTags.SEARCH_FIELD).performTextInput(query)
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) {
+            val titles = libraryTitles()
+            titles.isNotEmpty() && titles.all { it.contains(query, ignoreCase = true) }
+        }
+    }
+
     /** Opens the library's "More options" menu and chooses [label]. */
     protected fun chooseFromLibraryMenu(label: String) {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -67,6 +84,18 @@ abstract class LoggedInE2ETest : SignedInE2ETest<MainActivity>(MainActivity::cla
         libraryItems()[0].performClick()
 
         waitForComposeTag(PlayerTags.PLAY_PAUSE)
+    }
+
+    /**
+     * Waits until the player is actually playing (the button offers pause), not just shown: in the
+     * moment after the player opens, its controls are still settling and a tap can't be delivered.
+     */
+    protected fun waitForPlaying() {
+        val pause = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getString(CommonR.string.vault_pause)
+        composeRule.waitUntil(WAIT_TIMEOUT_MS) {
+            composeRule.onAllNodesWithContentDescription(pause).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     /** The player's position as it reads on screen, such as "1:05". */

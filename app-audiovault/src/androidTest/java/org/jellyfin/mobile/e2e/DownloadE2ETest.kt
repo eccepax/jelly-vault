@@ -25,6 +25,9 @@ import org.junit.Test
 // is a real network transfer, so this needs a generous timeout.
 private const val DOWNLOAD_TIMEOUT_MS = 180_000L
 
+/** Isabel Wilkerson's "Caste" on the Vault: split into many short tracks, the first well under 1 MB. */
+private const val SMALL_TRACKS_BOOK = "Caste"
+
 /**
  * Long-press -> Download really downloads through the shared download engine. Finished means a
  * track's whole file is on the device and plays from there, not just that the tap registered.
@@ -50,6 +53,9 @@ class DownloadE2ETest : LoggedInE2ETest() {
         loginAndWaitForLibrary()
         assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
 
+        // A book of short tracks: the test waits for one whole track, and the first item in the
+        // library can be a book of 200 MB files that the emulator can't fetch within the timeout
+        searchLibrary(SMALL_TRACKS_BOOK)
         libraryItems()[0].performTouchInput { longClick() }
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
