@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.livetv.e2e
 
 import android.content.pm.ActivityInfo
+import android.os.ParcelFileDescriptor
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.Lifecycle
+import androidx.test.platform.app.InstrumentationRegistry
 import org.jellyfin.mobile.livetv.LiveMainActivity
 import org.jellyfin.mobile.livetv.channels.ChannelsScreenTags
 import org.jellyfin.mobile.livetv.playback.PlayerScreenTags
@@ -122,25 +124,65 @@ class PlaybackE2ETest : SignedInE2ETest<LiveMainActivity>(LiveMainActivity::clas
     }
 
     @Test
-    fun theAppGoingToTheBackgroundClosesTheStreamAndComingBackTunesAgain() {
+    fun leavingTheAppKeepsTheChannelPlayingInPictureInPicture() {
         watchAFreeChannel()
         waitForVideo()
         val before = openStream()
 
-        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        waitUntil("stream closed while in the background") { ledger.all().isEmpty() }
+        shell("input keyevent KEYCODE_HOME")
+        waitUntil("in the floating window") { inPictureInPicture() }
 
-        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        waitForVideo()
-        // A new open of the same channel: the server reuses the LiveStreamId of a channel's shared
-        // tuner stream, but each open gets its own play session.
-        assertNotEquals("a newly opened stream", before.playSessionId, openStream().playSessionId)
+        // Still the same stream a while later: the floating window doesn't close or reopen anything.
+        // (Compose can't be queried in the floating window, so this asks the ledger, not the screen.)
+        Thread.sleep(IN_PICTURE_IN_PICTURE_MS)
+        assertEquals("the stream from before leaving", before, openStream())
         pressBack()
+    }
+
+    @Test
+    fun withPictureInPictureOffTheAppGoingToTheBackgroundClosesTheStreamAndComingBackTunesAgain() {
+        // As if the viewer switched picture-in-picture off for the app (the only way a phone gets here)
+        shell("appops set $packageName PICTURE_IN_PICTURE ignore")
+        try {
+            watchAFreeChannel()
+            waitForVideo()
+            val before = openStream()
+
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+            waitUntil("stream closed while in the background") { ledger.all().isEmpty() }
+
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            waitForVideo()
+            // A new open of the same channel: the server reuses the LiveStreamId of a channel's shared
+            // tuner stream, but each open gets its own play session.
+            assertNotEquals("a newly opened stream", before.playSessionId, openStream().playSessionId)
+            pressBack()
+        } finally {
+            shell("appops set $packageName PICTURE_IN_PICTURE allow")
+        }
+    }
+
+    private val packageName get() = InstrumentationRegistry.getInstrumentation().targetContext.packageName
+
+    private fun inPictureInPicture(): Boolean {
+        var inPictureInPicture = false
+        composeRule.activityRule.scenario.onActivity { inPictureInPicture = it.isInPictureInPictureMode }
+        return inPictureInPicture
+    }
+
+    /** Runs [command] as the shell user, returning once it has finished. */
+    private fun shell(command: String) {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+            .let(ParcelFileDescriptor::AutoCloseInputStream)
+            .use { it.readBytes() }
     }
 }
 
 /** The server takes several seconds to tune, then the player buffers. */
 private const val VIDEO_TIMEOUT_MS = 60_000L
+
+/** Long enough for a stream the app wrongly closed on leaving to have gone. */
+private const val IN_PICTURE_IN_PICTURE_MS = 5_000L
 
 /** Longer than the player's buffer, so a stream the server stopped feeding would have failed. */
 private const val KEEPS_PLAYING_MS = 40_000L
