@@ -162,13 +162,14 @@ private fun ReaderTopBar(state: BookReaderUiState, actions: BookReaderActions, o
                     Icon(Icons.Filled.DarkMode, contentDescription = stringResource(R.string.reader_night_mode_on))
                 }
             }
-            ReaderMenu(contentsEnabled = state.bookType != BookType.UNKNOWN, onDialog = onDialog)
+            ReaderMenu(state.bookType, onDialog = onDialog)
         },
     )
 }
 
+/** Text settings are only for an EPUB: a PDF's pages are pictures (they zoom with a pinch instead). */
 @Composable
-private fun ReaderMenu(contentsEnabled: Boolean, onDialog: (ReaderDialog) -> Unit) {
+private fun ReaderMenu(bookType: BookType, onDialog: (ReaderDialog) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
@@ -184,8 +185,8 @@ private fun ReaderMenu(contentsEnabled: Boolean, onDialog: (ReaderDialog) -> Uni
                     enabled = enabled,
                 ) { Text(stringResource(label)) }
             }
-            item(R.string.text_settings_title, ReaderDialog.TEXT_SETTINGS, true)
-            item(R.string.contents_title, ReaderDialog.CONTENTS, contentsEnabled)
+            if (bookType == BookType.EPUB) item(R.string.text_settings_title, ReaderDialog.TEXT_SETTINGS, true)
+            item(R.string.contents_title, ReaderDialog.CONTENTS, bookType != BookType.UNKNOWN)
             item(R.string.add_bookmark_action, ReaderDialog.ADD_BOOKMARK, true)
             item(R.string.bookmarks_title, ReaderDialog.BOOKMARKS, true)
         }

@@ -226,6 +226,24 @@ class BookReaderScreenTest {
         chosen shouldBe 1.25f
     }
 
+    @Test
+    fun `a PDF offers no text settings, since its pages are pictures`() {
+        show(BookReaderUiState(bookType = BookType.PDF, chapterCount = 3))
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.bookmarks_title)).assertExists()
+        composeRule.onNodeWithText(string(R.string.text_settings_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a book still opening offers no text settings`() {
+        show(BookReaderUiState(bookType = BookType.UNKNOWN))
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.bookmarks_title)).assertExists()
+        composeRule.onNodeWithText(string(R.string.text_settings_title)).assertDoesNotExist()
+    }
+
     // --- bookmarks ----------------------------------------------------------------------------------
 
     @Test

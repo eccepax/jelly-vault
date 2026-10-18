@@ -177,6 +177,36 @@ class BookReaderFragmentTest {
         }
     }
 
+    private fun zoomFrame(fragment: BookReaderFragment): ZoomFrame =
+        fragment.requireView().findViewById<RecyclerView>(R.id.recycler_view).parent as ZoomFrame
+
+    @Test
+    fun `a PDF's pages zoom, and read as a scroll they scroll themselves up and down`() {
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.PDF)
+        every { readerViewModel.totalPages } returns MutableStateFlow(20)
+
+        launch().use { scenario ->
+            shadowOf(Looper.getMainLooper()).idle()
+            scenario.onFragment { fragment ->
+                zoomFrame(fragment).zoomEnabled shouldBe true
+                zoomFrame(fragment).childScrollsVertically shouldBe true
+            }
+
+            composeRule.onNodeWithContentDescription(string(R.string.reader_page_mode)).performClick()
+            scenario.onFragment { fragment -> zoomFrame(fragment).childScrollsVertically shouldBe false }
+        }
+    }
+
+    @Test
+    fun `an EPUB's pages don't zoom, since its text sizes itself`() {
+        epub()
+
+        launch().use { scenario ->
+            shadowOf(Looper.getMainLooper()).idle()
+            scenario.onFragment { fragment -> zoomFrame(fragment).zoomEnabled shouldBe false }
+        }
+    }
+
     @Test
     fun `jumping to a page via setPage moves the displayed EPUB page even without a swipe`() {
         // Regression test: TOC/bookmark jumps and the PDF page-jump dialog all call
@@ -228,6 +258,7 @@ class BookReaderFragmentTest {
 
     @Test
     fun `choosing a font size saves it and does not change the current page`() {
+        epub()
         currentPageFlow.value = 3
 
         launch().use {
