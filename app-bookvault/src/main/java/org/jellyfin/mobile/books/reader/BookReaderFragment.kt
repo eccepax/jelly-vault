@@ -166,6 +166,8 @@ class BookReaderFragment : Fragment() {
 
     private fun toggleReadingMode() {
         isScrollMode = !isScrollMode
+        pages.root.reset()
+        pages.root.childScrollsVertically = isScrollMode
         val loading = viewModel.loading.value
         when (viewModel.bookType.value) {
             BookType.PDF -> {
@@ -238,12 +240,15 @@ class BookReaderFragment : Fragment() {
     private suspend fun observeLoading() {
         viewModel.loading.collect { loading ->
             if (!loading && viewModel.bookType.value != BookType.EPUB) {
+                // A PDF's pages are pictures: they zoom, where an EPUB's text has text settings
+                pages.root.zoomEnabled = viewModel.bookType.value == BookType.PDF
                 applyPageVisibilityAndScroll()
             }
         }
     }
 
     private fun applyPageVisibilityAndScroll() {
+        pages.root.childScrollsVertically = isScrollMode
         if (isScrollMode) {
             pages.recyclerView.visibility = View.VISIBLE
             pages.viewPager.visibility = View.GONE
@@ -270,6 +275,7 @@ class BookReaderFragment : Fragment() {
     }
 
     private fun setupEpubMode() {
+        pages.root.zoomEnabled = false
         pages.recyclerView.visibility = View.GONE
         pages.viewPager.visibility = View.VISIBLE
 
@@ -323,6 +329,8 @@ class BookReaderFragment : Fragment() {
         )
         pages.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
+                // The zoom is the whole pager's: a new page (a swipe once zoomed out, or a jump) starts whole
+                if (!isScrollMode) pages.root.reset()
                 viewModel.setPage(position)
             }
         })
