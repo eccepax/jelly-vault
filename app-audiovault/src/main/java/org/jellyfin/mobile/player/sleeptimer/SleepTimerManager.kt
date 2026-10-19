@@ -89,7 +89,8 @@ class SleepTimerManager(private val viewModel: AudiobookPlayerViewModel) {
             return null
         }
 
-        val currentPosition = player.currentPosition.milliseconds
+        // Chapters are positions in the whole book, which a transcode's own position isn't
+        val currentPosition = viewModel.adjustedCurrentPosition.milliseconds
         val nextChapterStart = ChapterNavigation.nextChapterStartPosition(chapters, currentPosition)
 
         // No next chapter — fall back to end of media

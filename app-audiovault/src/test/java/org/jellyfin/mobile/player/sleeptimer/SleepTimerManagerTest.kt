@@ -252,6 +252,25 @@ class SleepTimerManagerTest {
     }
 
     @Test
+    fun `end-of-chapter timer on a transcoded stream counts to the next chapter of the whole book`() {
+        // Resumed at 100s, the transcode starts there: 20s into it is 120s into the book
+        AudiobookPlayerViewModel::class.java.getDeclaredField("transcodingStartOffset").apply {
+            isAccessible = true
+            setLong(viewModel, 100_000L)
+        }
+        every { mockedPlayer.currentPosition } returns 20_000L
+        val chapters = listOf(chapter(0), chapter(60), chapter(180))
+        every { queueManager.getCurrentMediaSourceOrNull() } returns sourceWithChapters(chapters)
+
+        sleepTimerManager.startTimerEndOfChapter()
+
+        val remaining = requireNotNull(sleepTimerManager.getRemainingTime())
+        // Target is 180s - 120s = 60s away.
+        (remaining <= 60.seconds) shouldBe true
+        (remaining > 59.seconds) shouldBe true
+    }
+
+    @Test
     fun `end-of-chapter timer falls back to the end of the media when already on the last chapter`() {
         every { mockedPlayer.currentPosition } returns 190_000L // past the last chapter (180s)
         val chapters = listOf(chapter(0), chapter(60), chapter(180))
