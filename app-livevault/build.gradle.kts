@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.parcelize")
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.androidx.room)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -70,6 +71,7 @@ dependencies {
 
     // Testing
     testImplementation(project(":common-testing"))
+    testImplementation(project(":test-support"))
     testImplementation(libs.junit.api)
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)
@@ -81,6 +83,8 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.compose.ui.test.junit4)
+    // Screens without system bars (the TV, the full-screen player) are captured as they are
+    testImplementation(libs.roborazzi)
     testRuntimeOnly(libs.junit.vintage.engine)
     debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(project(":common-testing"))
