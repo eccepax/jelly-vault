@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.common.ui.screens.connect
 
-import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExitTransition
@@ -43,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -221,16 +219,8 @@ private fun ServerUrlField(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
-            .dpadLeavesTextField()
-            .onKeyEvent { keyEvent ->
-                when (keyEvent.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_ENTER -> {
-                        onSubmit()
-                        true
-                    }
-                    else -> false
-                }
-            },
+            // Enter on a hardware keyboard or remote is the Go action below: one press, one check
+            .dpadLeavesTextField(),
         label = {
             Text(text = stringResource(R.string.host_input_hint))
         },
@@ -280,7 +270,10 @@ private fun ServerDiscoveryList(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onGoBack) {
-                Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.vault_back),
+                )
             }
             Text(
                 modifier = Modifier
