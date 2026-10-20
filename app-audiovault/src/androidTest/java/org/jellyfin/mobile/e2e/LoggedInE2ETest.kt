@@ -16,6 +16,7 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.data.JellyfinDatabase
+import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.ui.PlayerTags
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
@@ -28,6 +29,9 @@ import org.jellyfin.mobile.common.R as CommonR
 abstract class LoggedInE2ETest : SignedInE2ETest<MainActivity>(MainActivity::class.java) {
 
     override fun clearAppState() {
+        // The playback service outlives each test's activity: a book left playing would carry on
+        // into the next test
+        onMain { koinGet<AudiobookPlaybackController>().stop() }
         koinGet<JellyfinDatabase>().clearAllTables()
         // Downloaded files outlive the database tables; without this a later test would find a
         // track already downloaded by an earlier one.

@@ -1,7 +1,10 @@
 package org.jellyfin.mobile.app
 
+import android.content.ComponentName
 import android.content.Context
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.os.bundleOf
 import androidx.media3.common.util.Util
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -9,19 +12,24 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.TsExtractor
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import coil3.ImageLoader
-import kotlinx.coroutines.channels.Channel
+import com.google.common.util.concurrent.Futures
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.downloads.OfflineListeningSync
@@ -31,8 +39,20 @@ import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
-import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
+import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
+import org.jellyfin.mobile.player.playback.AudiobookPlaybackService
+import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
+import org.jellyfin.mobile.player.playback.AudiobookQueueLoader
+import org.jellyfin.mobile.player.playback.AudiobookSessionCallback
+import org.jellyfin.mobile.player.playback.AudiobookSleepTimerTarget
+import org.jellyfin.mobile.player.playback.AudiobookVoiceSearch
+import org.jellyfin.mobile.player.playback.DeferredAudiobookController
+import org.jellyfin.mobile.player.playback.DeviceAudiobookProgress
+import org.jellyfin.mobile.player.playback.JellyfinAudiobookProgress
+import org.jellyfin.mobile.player.playback.JellyfinAudiobooks
+import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
+import org.jellyfin.mobile.player.playback.PlayerAudiobookController
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.utils.Constants
@@ -43,10 +63,8 @@ import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.koin.android.ext.koin.androidApplication
 import org.koin.androidx.fragment.dsl.fragment
 import org.koin.core.module.dsl.viewModel
-import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
-const val PLAYER_EVENT_CHANNEL = "PlayerEventChannel"
 private const val TS_SEARCH_PACKETS = 1800
 
 val applicationModule = module {
@@ -55,7 +73,6 @@ val applicationModule = module {
     single { OkHttpClient() }
     single { ImageLoader(androidApplication()) }
     single { PermissionRequestHelper() }
-    single(named(PLAYER_EVENT_CHANNEL)) { Channel<PlayerEvent>() }
 
     // Controllers
 
@@ -77,13 +94,49 @@ val applicationModule = module {
             get<OfflineListeningSync>()::sync,
         )
     }
-    viewModel { AudiobookPlayerViewModel(get()) }
+    viewModel { AudiobookPlayerViewModel(get(), get(), get(), get(), get()) }
 
     // Fragments
     fragment { LibraryFragment() }
     fragment { PlayerFragment() }
 
     // Connection helper
+
+    // Playback: a MediaController bound to AudiobookPlaybackService, usable before it finishes connecting.
+    single<AudiobookPlaybackController> {
+        val context = androidApplication()
+        val audiobooks = get<JellyfinAudiobooks>()
+        val mainExecutor = ContextCompat.getMainExecutor(context)
+        val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
+        val connection = Futures.transform(
+            MediaController.Builder(context, token).buildAsync(),
+            { controller ->
+                PlayerAudiobookController(controller, audiobooks::streamUrl) { enabled ->
+                    val args = bundleOf(AudiobookSessionCallback.KEY_ENABLED to enabled)
+                    controller.sendCustomCommand(AudiobookSessionCallback.SET_SKIP_SILENCE, args)
+                }
+            },
+            mainExecutor,
+        )
+        DeferredAudiobookController(connection, mainExecutor, mainScope())
+    }
+    single { JellyfinAudiobooks(get()) }
+    single {
+        val audiobooks = get<JellyfinAudiobooks>()
+        AudiobookQueueLoader(audiobooks::items, get<AudiobookDownloads>()::playable, audiobooks::coverUrl)
+    }
+    single { AudiobookVoiceSearch(get<JellyfinAudiobooks>()::topMatch, get()) }
+    single {
+        val downloadDao = get<DownloadDao>()
+        val onDevice =
+            DeviceAudiobookProgress(get<AudiobookDownloads>()::playable, { downloadDao.insert(DownloadEntity(it)) })
+        AudiobookProgressReporter(get(), JellyfinAudiobookProgress(get()), onDevice, mainScope())
+    }
+    single { SleepTimer(AudiobookSleepTimerTarget(get()), mainScope()) }
+    single {
+        val repository = get<MediaSegmentRepository>()
+        MediaSegmentSkipper(get(), repository::getSegmentsForItem, repository::getMediaSegmentAction, mainScope())
+    }
 
     // Media player helpers
     single { MediaSourceResolver(get()) }
@@ -146,7 +199,7 @@ val applicationModule = module {
         }
         DefaultMediaSourceFactory(get<DownloadAwareDataSource.Factory>(), extractorsFactory)
     }
-    single { ProgressiveMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
-    single { HlsMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
-    single { SingleSampleMediaSource.Factory(get<DownloadAwareDataSource.Factory>()) }
 }
+
+/** A scope for an app-wide piece of playback, on the main thread like the player it follows. */
+private fun mainScope() = CoroutineScope(SupervisorJob() + Dispatchers.Main)

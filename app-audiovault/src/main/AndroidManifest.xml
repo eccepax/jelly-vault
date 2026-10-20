@@ -47,9 +47,13 @@
         </activity>
 
         <service
-            android:name=".player.AudioPlaybackService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:name=".player.playback.AudiobookPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <service android:name="org.jellyfin.mobile.downloads.AudioDownloadService"
             android:exported="false"
@@ -61,12 +65,5 @@
             </intent-filter>
         </service>
 
-
-        <provider
-            android:name="org.jellyfin.mobile.common.ui.content.ImageProvider"
-            android:authorities="${applicationId}.image-provider"
-            android:exported="true"
-            android:grantUriPermissions="true"
-            android:readPermission="android.permission.MEDIA_CONTENT_CONTROL" />
     </application>
 </manifest>

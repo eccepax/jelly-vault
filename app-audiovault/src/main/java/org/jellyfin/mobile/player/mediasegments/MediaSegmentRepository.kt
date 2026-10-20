@@ -7,9 +7,9 @@ import org.jellyfin.mobile.utils.extensions.duration
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.mediaSegmentsApi
 import org.jellyfin.sdk.api.operations.MediaSegmentsApi
-import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.MediaSegmentDto
 import org.jellyfin.sdk.model.api.MediaSegmentType
+import org.jellyfin.sdk.model.serializer.toUUID
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -80,10 +80,10 @@ class MediaSegmentRepository : KoinComponent {
         return action
     }
 
-    suspend fun getSegmentsForItem(item: BaseItemDto): List<MediaSegmentDto> = runCatching {
+    suspend fun getSegmentsForItem(itemId: String): List<MediaSegmentDto> = runCatching {
         withContext(Dispatchers.IO) {
             mediaSegmentsApi.getItemSegments(
-                itemId = item.id,
+                itemId = itemId.toUUID(),
                 includeSegmentTypes = SUPPORTED_TYPES,
             ).content.items
         }

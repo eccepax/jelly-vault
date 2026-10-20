@@ -3,13 +3,12 @@ package org.jellyfin.mobile.library
 import android.app.Application
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.fragment.app.testing.launchFragmentInContainer
-import androidx.lifecycle.MutableLiveData
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -24,8 +23,9 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.events.ActivityEvent
 import org.jellyfin.mobile.events.ActivityEventHandler
-import org.jellyfin.mobile.player.source.JellyfinMediaSource
-import org.jellyfin.mobile.robolectric.mockedPlayerViewModel
+import org.jellyfin.mobile.player.playback.AudiobookTrack
+import org.jellyfin.mobile.player.playback.FakeAudiobookController
+import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -58,7 +58,8 @@ class LibraryFragmentTest {
     private val libraryViewModel = mockk<LibraryViewModel>(relaxed = true)
     private val activityEventHandler = mockk<ActivityEventHandler>(relaxed = true)
     private val apiClient = mockk<ApiClient>(relaxed = true)
-    private val playerViewModel = mockedPlayerViewModel()
+    private val playback = FakeAudiobookController()
+    private val playerViewModel = playerViewModel(playback)
 
     private val itemsFlow = MutableStateFlow<List<LibraryItem>>(emptyList())
     private val downloadedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
@@ -119,10 +120,7 @@ class LibraryFragmentTest {
     }
 
     @Test
-    fun `a player with nothing loaded in it shows no mini player`() {
-        // The player is made as soon as someone signs in, before anything has been played
-        (playerViewModel.player as MutableLiveData).value = mockk<ExoPlayer>(relaxed = true)
-
+    fun `with nothing playing there's no mini player`() {
         launch().use {
             composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertDoesNotExist()
         }
@@ -130,18 +128,27 @@ class LibraryFragmentTest {
 
     @Test
     fun `once a book is loaded, the mini player shows it`() {
-        (playerViewModel.player as MutableLiveData).value = mockk<ExoPlayer>(relaxed = true)
-        val book = mockk<JellyfinMediaSource>(relaxed = true) {
-            every { getName(any()) } returns "Dune"
-            every { itemId } returns UUID.randomUUID()
-        }
-
         launch().use {
-            (playerViewModel.queueManager.currentMediaSource as MutableLiveData).value = book
+            playback.playing(AudiobookTrack(id = UUID.randomUUID().toString(), title = "Dune", durationMs = 0L))
 
             composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertExists()
             composeRule.onNodeWithText("Dune").assertExists()
         }
+    }
+
+    @Test
+    fun `the mini player's stop stops the book, and the list is loaded again for where it got to`() {
+        playback.playing(AudiobookTrack(id = UUID.randomUUID().toString(), title = "Dune", durationMs = 0L))
+
+        launch().use {
+            composeRule.onNodeWithContentDescription(string(R.string.notification_action_stop)).performClick()
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertDoesNotExist()
+        }
+
+        playback.commands shouldBe listOf("stop")
+        verify { libraryViewModel.onPlaybackStopped() }
     }
 
     @Test

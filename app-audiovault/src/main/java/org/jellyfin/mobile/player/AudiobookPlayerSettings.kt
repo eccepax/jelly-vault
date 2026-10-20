@@ -3,8 +3,6 @@ package org.jellyfin.mobile.player
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
-import org.jellyfin.mobile.player.source.JellyfinMediaSource
-import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 
 /** Audiobooks are spoken word, for the player and the media session alike. */
 const val AUDIOBOOK_CONTENT_TYPE = C.AUDIO_CONTENT_TYPE_SPEECH
@@ -27,8 +25,7 @@ fun ExoPlayer.Builder.forAudiobooks(): ExoPlayer.Builder = this
     .setHandleAudioBecomingNoisy(true)
 
 /**
- * What to keep awake while [source] plays with the screen off: a streamed book needs Wi-Fi too, a
- * downloaded one only the CPU (a Wi-Fi lock would just drain the battery).
+ * What to keep awake while a track plays with the screen off: a streamed one needs Wi-Fi too, one
+ * playing from the device only the CPU (a Wi-Fi lock would just drain the battery).
  */
-fun wakeModeFor(source: JellyfinMediaSource): Int =
-    if (source is LocalJellyfinMediaSource) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK
+fun wakeModeFor(onDevice: Boolean): Int = if (onDevice) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK

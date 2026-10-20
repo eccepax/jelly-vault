@@ -70,7 +70,6 @@ import org.jellyfin.mobile.common.ui.components.SecondaryText
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
-import org.jellyfin.mobile.player.sleeptimer.SleepTimerManager.SleepTimerDuration
 import java.util.Locale
 import org.jellyfin.mobile.common.R as CommonR
 
@@ -98,6 +97,14 @@ data class PlayerUiState(
     /** Whether a skippable segment (an intro, an outro) is playing. */
     val skipSegment: Boolean = false,
 )
+
+/** How long the sleep timer can run for. */
+enum class SleepTimerDuration(val minutes: Int) {
+    FIFTEEN_MINUTES(minutes = 15),
+    THIRTY_MINUTES(minutes = 30),
+    FORTY_FIVE_MINUTES(minutes = 45),
+    SIXTY_MINUTES(minutes = 60),
+}
 
 /** A choice from the sleep timer: a length, the end of the chapter, or off. */
 sealed interface SleepTimerChoice {

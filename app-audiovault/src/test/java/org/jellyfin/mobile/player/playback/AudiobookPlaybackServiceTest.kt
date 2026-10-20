@@ -1,0 +1,98 @@
+package org.jellyfin.mobile.player.playback
+
+import android.app.Application
+import androidx.media3.common.ForwardingPlayer
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
+import io.mockk.every
+import io.mockk.mockk
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import org.koin.dsl.module
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ServiceController
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
+class AudiobookPlaybackServiceTest {
+
+    private val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
+        every { playbackSpeed } returns 1.5f
+        every { skipSilenceEnabled } returns true
+    }
+    private lateinit var controller: ServiceController<AudiobookPlaybackService>
+    private val service get() = controller.get()
+
+    @Before
+    fun setUp() {
+        startKoin {
+            modules(
+                module {
+                    single<MediaSource.Factory> { FakeAudioSourceFactory() }
+                    single<ItemDownloads> { mockk { every { fileFor(any()) } returns null } }
+                    single { preferences }
+                    single { mockk<AudiobookVoiceSearch>() }
+                    single { mockk<JellyfinAudiobooks>() }
+                },
+            )
+        }
+        controller = Robolectric.buildService(AudiobookPlaybackService::class.java).create()
+    }
+
+    @After
+    fun tearDown() {
+        controller.destroy()
+        stopKoin()
+    }
+
+    private val player get() = service.onGetSession(mockk())!!.player
+    private val exoPlayer get() = (player as ForwardingPlayer).wrappedPlayer as ExoPlayer
+
+    @Test
+    fun `next and previous move between chapters`() {
+        player.shouldBeInstanceOf<AudiobookPlayer>()
+    }
+
+    @Test
+    fun `the skip buttons go back 10 seconds and forward 30`() {
+        player.seekBackIncrement shouldBe 10_000L
+        player.seekForwardIncrement shouldBe 30_000L
+    }
+
+    @Test
+    fun `it plays at the speed chosen last time, with silence skipped if that was on`() {
+        player.playbackParameters.speed shouldBe 1.5f
+        exoPlayer.skipSilenceEnabled shouldBe true
+    }
+
+    @Test
+    fun `swiping the app away with nothing playing stops the service`() {
+        service.onTaskRemoved(null)
+
+        shadowOf(service).isStoppedBySelf shouldBe true
+    }
+
+    @Test
+    fun `swiping the app away while a book plays leaves it playing`() {
+        player.setMediaItem(
+            AudiobookTrack(id = "a", title = "a", durationMs = 0L).toMediaItem { "https://vault.test/$it" },
+        )
+        player.prepare()
+        player.play()
+
+        service.onTaskRemoved(null)
+
+        shadowOf(service).isStoppedBySelf shouldBe false
+    }
+}

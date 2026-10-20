@@ -1,870 +1,192 @@
 package org.jellyfin.mobile.player
 
-import android.app.Application
-import android.media.AudioManager
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
-import android.os.Looper
-import androidx.core.content.getSystemService
-import androidx.lifecycle.MutableLiveData
-import androidx.media3.common.C
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
-import io.mockk.Runs
-import io.mockk.coEvery
-import io.mockk.coVerify
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.slot
-import io.mockk.unmockkStatic
 import io.mockk.verify
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.app.PLAYER_EVENT_CHANNEL
-import org.jellyfin.mobile.common.data.dao.UserDao
-import org.jellyfin.mobile.common.data.entity.ServerEntity
-import org.jellyfin.mobile.common.data.entity.ServerUser
-import org.jellyfin.mobile.common.data.entity.UserEntity
-import org.jellyfin.mobile.data.dao.DownloadDao
-import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
+import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.player.interaction.PlayOptions
-import org.jellyfin.mobile.player.interaction.PlayerEvent
-import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
-import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
-import org.jellyfin.mobile.player.queue.QueueManager
-import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
-import org.jellyfin.mobile.player.source.MediaSourceResolver
-import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
+import org.jellyfin.mobile.player.playback.AudiobookQueueLoader
+import org.jellyfin.mobile.player.playback.AudiobookSleepTimerTarget
+import org.jellyfin.mobile.player.playback.AudiobookTrack
+import org.jellyfin.mobile.player.playback.FakeAudiobookController
+import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
 import org.jellyfin.mobile.utils.Constants
-import org.jellyfin.mobile.utils.setPlaybackState
-import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.api.client.Response
-import org.jellyfin.sdk.api.client.extensions.hlsSegmentApi
-import org.jellyfin.sdk.api.client.extensions.imageApi
-import org.jellyfin.sdk.api.client.extensions.playStateApi
-import org.jellyfin.sdk.api.client.extensions.searchApi
-import org.jellyfin.sdk.api.client.extensions.videosApi
-import org.jellyfin.sdk.api.operations.SearchApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
-import org.jellyfin.sdk.model.api.ChapterInfo
-import org.jellyfin.sdk.model.api.MediaSegmentDto
-import org.jellyfin.sdk.model.api.PlayMethod
-import org.jellyfin.sdk.model.api.SearchHint
-import org.jellyfin.sdk.model.api.SearchHintResult
-import org.jellyfin.sdk.model.extensions.inWholeTicks
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.koin.core.context.loadKoinModules
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
-import org.koin.core.qualifier.named
-import org.koin.dsl.module
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
-import java.time.LocalDateTime
+import org.junit.jupiter.api.Test
 import java.util.UUID
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
-/**
- * Regression coverage for [AudiobookPlayerViewModel] — the app's central playback state machine
- * and, until now, its largest completely untested surface (previously only ever mocked wholesale
- * for [org.jellyfin.mobile.player.ui.PlayerFragmentTest]). Constructs a real instance backed by a
- * scoped Koin module of relaxed mocks, then uses reflection to inject a mocked [ExoPlayer] and
- * [QueueManager] — there is no production seam for either, since nothing outside this class has
- * ever needed to fake them before.
- *
- * Deliberately scoped to the control-flow methods reachable without touching [ExoPlayer.Builder],
- * [android.media.session.MediaSession], or [org.jellyfin.mobile.player.interaction.PlayerNotificationHelper]
- * construction (all lazy, and untouched by rewind/fastForward/seek/skip/speed logic) to avoid
- * pulling in real ExoPlayer/notification machinery under Robolectric.
- */
-@RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class)
+/** The player screen's view model, over the playback service's controller. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AudiobookPlayerViewModelTest {
 
-    private val apiClient = mockk<ApiClient>(relaxed = true)
-    private val appPreferences = mockk<AudioVaultAppPreferences>(relaxed = true)
-    private val mediaSegmentRepository = mockk<MediaSegmentRepository>(relaxed = true)
-    private val downloadDao = mockk<DownloadDao>(relaxed = true)
-    private val userDao = mockk<UserDao>(relaxed = true)
-    private val mediaSourceResolver = mockk<MediaSourceResolver>(relaxed = true)
-    private val deviceProfileBuilder = mockk<DeviceProfileBuilder>(relaxed = true)
-    private val searchApi = mockk<SearchApi>(relaxed = true)
+    private val controller = FakeAudiobookController()
+    private val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
+        every { playbackSpeed } returns 1.25f
+    }
+    private val book = UUID.fromString("00000000-0000-4000-8000-000000000001")
+    private val onServer = mutableSetOf(book)
 
-    private val mockedPlayer = mockk<ExoPlayer>(relaxed = true)
-    private val queueManager = mockk<QueueManager>(relaxed = true)
-    private val playerEvents = Channel<PlayerEvent>()
-
-    private lateinit var viewModel: AudiobookPlayerViewModel
-
-    @Before
-    fun setUp() {
-        // apiClient.playStateApi/hlsSegmentApi/videosApi are extension properties with real logic
-        // that breaks when called on a plain mock (see ApiClientControllerTest) — stub them directly.
-        mockkStatic("org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt")
-        every { apiClient.playStateApi } returns mockk(relaxed = true)
-        every { apiClient.hlsSegmentApi } returns mockk(relaxed = true)
-        every { apiClient.videosApi } returns mockk(relaxed = true)
-        every { apiClient.searchApi } returns searchApi
-        every { apiClient.imageApi } returns mockk(relaxed = true)
-
-        startKoin {
-            modules(
-                module {
-                    single { apiClient }
-                    single { appPreferences }
-                    single { mediaSegmentRepository }
-                    single { downloadDao }
-                    single { userDao }
-                    single { mediaSourceResolver }
-                    single { deviceProfileBuilder }
-                    single(named(PLAYER_EVENT_CHANNEL)) { playerEvents }
-                },
-            )
-        }
-
-        viewModel = AudiobookPlayerViewModel(ApplicationProvider.getApplicationContext())
-        injectPlayer(viewModel, mockedPlayer)
-        injectQueueManager(viewModel, queueManager)
+    private fun TestScope.viewModel(): AudiobookPlayerViewModel {
+        val loader = AudiobookQueueLoader(
+            items = { ids -> ids.filter(onServer::contains).map(::bookNamed) },
+            playable = { null },
+            coverUrl = { null },
+        )
+        val sleepTimer = SleepTimer(AudiobookSleepTimerTarget(controller), backgroundScope)
+        val segments = MediaSegmentSkipper(controller, { emptyList() }, { mockk() }, backgroundScope)
+        return AudiobookPlayerViewModel(controller, loader, sleepTimer, segments, preferences).also { runCurrent() }
     }
 
-    @After
-    fun tearDown() {
-        stopKoin()
-        unmockkStatic("org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt")
-    }
+    private fun bookNamed(id: UUID) = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = "Book")
 
-    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+    private fun options(vararg ids: UUID, startPositionMs: Long? = null) = PlayOptions(
+        ids = ids.toList(),
+        mediaSourceId = null,
+        startIndex = 0,
+        startPosition = startPositionMs?.milliseconds,
+        audioStreamIndex = null,
+        subtitleStreamIndex = null,
+        playFromDownloads = false,
+    )
 
-    /**
-     * [AudiobookPlayerViewModel.playFromSearch] hops through a real [kotlinx.coroutines.Dispatchers.IO]
-     * thread (twice: resolving the current user, then the search call) before posting back to the
-     * main looper — a genuine background thread, not something a single [idle] call can reliably
-     * catch. Polls instead of idling once.
-     */
-    private fun idleUntilSettled() {
-        repeat(100) {
-            shadowOf(Looper.getMainLooper()).idle()
-            Thread.sleep(5)
-        }
-    }
-
-    private fun injectPlayer(viewModel: AudiobookPlayerViewModel, player: ExoPlayer?) {
-        val field = AudiobookPlayerViewModel::class.java.getDeclaredField("_player")
-        field.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        (field.get(viewModel) as MutableLiveData<ExoPlayer?>).value = player
-    }
-
-    private fun injectQueueManager(viewModel: AudiobookPlayerViewModel, queueManager: QueueManager) {
-        val field = AudiobookPlayerViewModel::class.java.getDeclaredField("queueManager")
-        field.isAccessible = true
-        field.set(viewModel, queueManager)
-    }
-
-    // --- how the player is set up ----------------------------------------------------------------
+    // --- Starting a book ---------------------------------------------------------------------------
 
     @Test
-    fun `the player it builds plays as spoken word`() {
-        loadKoinModules(module { single<MediaSource.Factory> { DefaultMediaSourceFactory(viewModel.app) } })
-        every { appPreferences.playbackSpeed } returns 1f
-        injectPlayer(viewModel, null)
+    fun `starting a book plays it from where asked`() = runTest {
+        val viewModel = viewModel()
 
-        viewModel.setupPlayer()
+        viewModel.start(options(book, startPositionMs = 42_000L)) shouldBe null
 
-        val built = viewModel.playerOrNull!!
-        try {
-            built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
-        } finally {
-            built.release()
-        }
+        controller.commands shouldBe listOf("play $book from 0 at 42000")
     }
 
     @Test
-    fun `a downloaded book plays without keeping Wi-Fi awake`() {
-        viewModel.load(mockk<LocalJellyfinMediaSource>(relaxed = true), mockk(relaxed = true), playWhenReady = false)
+    fun `a book that can't be had says why, and plays nothing`() = runTest {
+        onServer.clear()
+        val viewModel = viewModel()
 
-        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_LOCAL) }
+        viewModel.start(options(book)).shouldBeInstanceOf<PlayerException.NetworkFailure>()
+
+        controller.commands shouldBe emptyList()
+    }
+
+    // --- Transport ----------------------------------------------------------------------------------
+
+    @Test
+    fun `the transport buttons go to the player`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.togglePlayPause()
+        viewModel.rewind()
+        viewModel.fastForward()
+        viewModel.previousChapter()
+        viewModel.nextChapter()
+        viewModel.seekTo(5_000L)
+        viewModel.skipToTrack(2)
+
+        controller.commands shouldBe listOf(
+            "play", "rewind", "fastForward", "previousChapter", "nextChapter", "seekTo 5000", "skipTo 2",
+        )
     }
 
     @Test
-    fun `a streamed book keeps Wi-Fi awake while it plays`() {
-        val streamed = mockk<RemoteJellyfinMediaSource>(relaxed = true) {
-            every { playMethod } returns PlayMethod.DIRECT_PLAY
-            every { startTime } returns Duration.ZERO
-        }
+    fun `position and length are the player's`() = runTest {
+        val viewModel = viewModel()
+        controller.playing(AudiobookTrack(id = "a", title = "a", durationMs = 60_000L), positionMs = 1_234L)
 
-        viewModel.load(streamed, mockk(relaxed = true), playWhenReady = false)
-
-        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_NETWORK) }
+        viewModel.positionMs shouldBe 1_234L
+        viewModel.durationMs shouldBe 60_000L
     }
 
-    // --- downloaded books: positions for the server ----------------------------------------------
+    // --- Speed -------------------------------------------------------------------------------------
 
     @Test
-    fun `stopping a downloaded book saves where it stopped, for the server to hear about later`() {
-        val downloaded = mockk<LocalJellyfinMediaSource>(relaxed = true)
-        every { queueManager.getCurrentMediaSourceOrNull() } returns downloaded
-        every { mockedPlayer.playbackState } returns Player.STATE_READY
-        every { mockedPlayer.currentPosition } returns 95_000L
+    fun `the speed starts as chosen last time`() = runTest {
+        viewModel().speed.value shouldBe 1.25f
+    }
+
+    @Test
+    fun `choosing a speed plays at it and remembers it`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setSpeed(1.5f)
+
+        controller.commands shouldBe listOf("speed 1.5")
+        viewModel.speed.value shouldBe 1.5f
+        verify { preferences.playbackSpeed = 1.5f }
+    }
+
+    @Test
+    fun `choosing the same speed again does nothing`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.setSpeed(1.25f)
+
+        controller.commands shouldBe emptyList()
+        verify(exactly = 0) { preferences.playbackSpeed = any() }
+    }
+
+    @Test
+    fun `holding fast-forward plays faster, without changing or remembering the speed chosen`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.holdSpeedUp(true)
+
+        controller.commands shouldBe listOf("speed ${Constants.HOLD_SPEEDUP_MULTIPLIER}")
+        viewModel.speed.value shouldBe 1.25f
+        verify(exactly = 0) { preferences.playbackSpeed = any() }
+    }
+
+    @Test
+    fun `letting go of fast-forward goes back to the speed chosen`() = runTest {
+        val viewModel = viewModel()
+        viewModel.holdSpeedUp(true)
+
+        viewModel.holdSpeedUp(false)
+
+        controller.commands.last() shouldBe "speed 1.25"
+    }
+
+    // --- Sleep timer and segments ------------------------------------------------------------------
+
+    @Test
+    fun `a sleep timer counts down the minutes chosen`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.startSleepTimer(minutes = 15)
+
+        viewModel.sleepTimer.value shouldBe SleepTimerState.Counting(15 * 60_000L)
+    }
+
+    @Test
+    fun `the sleep timer can wait for the end of the chapter, and be turned off`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.sleepAtEndOfChapter()
+        viewModel.sleepTimer.value shouldBe SleepTimerState.EndOfSegment
+
+        viewModel.cancelSleepTimer()
+        viewModel.sleepTimer.value shouldBe SleepTimerState.Off
+    }
+
+    @Test
+    fun `stopping stops the player and the sleep timer`() = runTest {
+        val viewModel = viewModel()
+        viewModel.startSleepTimer(minutes = 15)
 
         viewModel.stop()
-        idleUntilSettled()
 
-        verify { downloaded.startTime = 95.seconds }
-        verify { downloaded.positionSavedAt = isNull(inverse = true) }
-        verify { downloaded.finished = false }
-        coVerify { downloadDao.insert(any()) }
-    }
-
-    @Test
-    fun `finishing a downloaded track saves it as finished, for the server to hear about later`() {
-        val downloaded = mockk<LocalJellyfinMediaSource>(relaxed = true)
-        every { queueManager.getCurrentMediaSourceOrNull() } returns downloaded
-        every { mockedPlayer.playbackState } returns Player.STATE_ENDED
-
-        viewModel.onPlaybackStateChanged(Player.STATE_ENDED)
-        idleUntilSettled()
-
-        verify { downloaded.startTime = Duration.ZERO }
-        verify { downloaded.positionSavedAt = isNull(inverse = true) }
-        verify { downloaded.finished = true }
-    }
-
-    // --- rewind / fastForward -------------------------------------------------------------------
-
-    @Test
-    fun `rewind seeks back the audiobook skip interval`() {
-        every { mockedPlayer.currentPosition } returns 60_000L
-
-        viewModel.rewind()
-
-        verify { mockedPlayer.seekTo(60_000L - Constants.AUDIOBOOK_SKIP_BACK_MS) }
-    }
-
-    @Test
-    fun `rewind clamps to zero instead of going negative`() {
-        every { mockedPlayer.currentPosition } returns 5_000L
-
-        viewModel.rewind()
-
-        verify { mockedPlayer.seekTo(0L) }
-    }
-
-    @Test
-    fun `fast forward seeks ahead the audiobook skip interval`() {
-        every { mockedPlayer.currentPosition } returns 60_000L
-
-        viewModel.fastForward()
-
-        verify { mockedPlayer.seekTo(60_000L + Constants.AUDIOBOOK_SKIP_FORWARD_MS) }
-    }
-
-    @Test
-    fun `fast forward clamps to the item's total duration instead of overshooting`() {
-        val remoteSource = mockk<RemoteJellyfinMediaSource>(relaxed = true)
-        every { remoteSource.runTime } returns 70_000.milliseconds
-        every { queueManager.getCurrentMediaSourceOrNull() } returns remoteSource
-        every { mockedPlayer.currentPosition } returns 60_000L
-
-        viewModel.fastForward()
-
-        verify { mockedPlayer.seekTo(70_000L) }
-    }
-
-    @Test
-    fun `seeking a transcoded stream restarts the transcode via the queue manager instead of seeking natively`() {
-        val remoteSource = mockk<RemoteJellyfinMediaSource>(relaxed = true)
-        every { remoteSource.playMethod } returns PlayMethod.TRANSCODE
-        every { queueManager.getCurrentMediaSourceOrNull() } returns remoteSource
-        every { mockedPlayer.currentPosition } returns 60_000L
-
-        viewModel.rewind()
-        idle()
-
-        coVerify { queueManager.seekTo((60_000L - Constants.AUDIOBOOK_SKIP_BACK_MS).milliseconds) }
-        verify(exactly = 0) { mockedPlayer.seekTo(any<Long>()) }
-    }
-
-    @Test
-    fun `seeking a direct-play stream seeks the player natively instead of restarting via the queue manager`() {
-        val remoteSource = mockk<RemoteJellyfinMediaSource>(relaxed = true)
-        every { remoteSource.playMethod } returns PlayMethod.DIRECT_PLAY
-        every { queueManager.getCurrentMediaSourceOrNull() } returns remoteSource
-        every { mockedPlayer.currentPosition } returns 60_000L
-
-        viewModel.rewind()
-
-        verify { mockedPlayer.seekTo(60_000L - Constants.AUDIOBOOK_SKIP_BACK_MS) }
-        coVerify(exactly = 0) { queueManager.seekTo(any()) }
-    }
-
-    // --- skipToPrevious / skipToNext -------------------------------------------------------------
-
-    @Test
-    fun `skipping to previous near the start of the track asks the queue manager for the previous item`() {
-        every { mockedPlayer.currentPosition } returns Constants.MAX_SKIP_TO_PREV_MS
-        coEvery { queueManager.previous() } returns true
-
-        viewModel.skipToPrevious()
-        idle()
-
-        coVerify { queueManager.previous() }
-        verify(exactly = 0) { mockedPlayer.seekTo(0L) }
-    }
-
-    @Test
-    fun `skipping to previous with no previous item in the queue restarts the current track instead`() {
-        every { mockedPlayer.currentPosition } returns Constants.MAX_SKIP_TO_PREV_MS
-        coEvery { queueManager.previous() } returns false
-
-        viewModel.skipToPrevious()
-        idle()
-
-        verify { mockedPlayer.seekTo(0L) }
-        verify { mockedPlayer.play() }
-    }
-
-    @Test
-    fun `skipping to previous well into the track restarts it directly without asking the queue manager`() {
-        every { mockedPlayer.currentPosition } returns Constants.MAX_SKIP_TO_PREV_MS + 1
-
-        viewModel.skipToPrevious()
-        idle()
-
-        verify { mockedPlayer.seekTo(0L) }
-        coVerify(exactly = 0) { queueManager.previous() }
-    }
-
-    // --- playback speed --------------------------------------------------------------------------
-
-    @Test
-    fun `changing the playback speed updates the player and persists the new speed`() {
-        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1f)
-
-        val changed = viewModel.setPlaybackSpeed(1.5f)
-
-        changed shouldBe true
-        verify { mockedPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.5f) }
-        verify { appPreferences.playbackSpeed = 1.5f }
-    }
-
-    @Test
-    fun `setting the same playback speed again is a no-op that does not persist`() {
-        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1.5f)
-
-        val changed = viewModel.setPlaybackSpeed(1.5f)
-
-        changed shouldBe false
-        verify(exactly = 0) { appPreferences.playbackSpeed = any() }
-    }
-
-    @Test
-    fun `holding the speed-up button applies the hold speed without persisting it as the base speed`() {
-        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1f)
-
-        viewModel.setPressSpeedUp(isPressing = true, speed = Constants.HOLD_SPEEDUP_MULTIPLIER)
-
-        verify {
-            mockedPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(Constants.HOLD_SPEEDUP_MULTIPLIER)
-        }
-        verify(exactly = 0) { appPreferences.playbackSpeed = any() }
-    }
-
-    @Test
-    fun `releasing the speed-up button restores the previously saved base speed`() {
-        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1f)
-        viewModel.setPlaybackSpeed(1.75f)
-
-        every {
-            mockedPlayer.playbackParameters
-        } returns androidx.media3.common.PlaybackParameters(Constants.HOLD_SPEEDUP_MULTIPLIER)
-        viewModel.setPressSpeedUp(isPressing = false, speed = Constants.HOLD_SPEEDUP_MULTIPLIER)
-
-        verify { mockedPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.75f) }
-    }
-
-    @Test
-    fun `holding the speed-up button doesn't change the speed chosen`() {
-        every { mockedPlayer.playbackParameters } returns androidx.media3.common.PlaybackParameters(1f)
-        viewModel.setPlaybackSpeed(1.75f)
-
-        viewModel.setPressSpeedUp(isPressing = true, speed = Constants.HOLD_SPEEDUP_MULTIPLIER)
-
-        viewModel.playbackSpeed shouldBe 1.75f
-    }
-
-    // --- skip silence --------------------------------------------------------------------------
-
-    @Test
-    fun `enabling skip silence updates the player and persists the preference`() {
-        every { mockedPlayer.skipSilenceEnabled } returns false
-
-        val changed = viewModel.setSkipSilenceEnabled(true)
-
-        changed shouldBe true
-        verify { mockedPlayer.skipSilenceEnabled = true }
-        verify { appPreferences.skipSilenceEnabled = true }
-    }
-
-    @Test
-    fun `setting skip silence to its current value is a no-op that does not persist`() {
-        every { mockedPlayer.skipSilenceEnabled } returns true
-
-        val changed = viewModel.setSkipSilenceEnabled(true)
-
-        changed shouldBe false
-        verify(exactly = 0) { appPreferences.skipSilenceEnabled = any() }
-    }
-
-    @Test
-    fun `setSkipSilenceEnabled returns false when no player is loaded`() {
-        injectPlayer(viewModel, null)
-
-        val changed = viewModel.setSkipSilenceEnabled(true)
-
-        changed shouldBe false
-        verify(exactly = 0) { appPreferences.skipSilenceEnabled = any() }
-    }
-
-    // --- getStateAndPause ------------------------------------------------------------------------
-
-    @Test
-    fun `getStateAndPause pauses playback and returns the current position and play-when-ready state`() {
-        every { mockedPlayer.playWhenReady } returns true
-        every { mockedPlayer.contentPosition } returns 42_000L
-
-        val state = viewModel.getStateAndPause()
-
-        verify { mockedPlayer.pause() }
-        state?.playWhenReady shouldBe true
-        state?.position shouldBe 42_000.milliseconds
-    }
-
-    // --- addSkipAction (media-segment skip race condition) ---------------------------------------
-
-    /**
-     * Regression coverage for the flagged race condition: [MediaSegmentRepository.getSegmentsForItem]
-     * is an async network fetch, so by the time a SKIP segment's action comes back, playback may
-     * already be inside — or past — the segment window. The old code always scheduled a one-shot
-     * [ExoPlayer.createMessage] at the segment's start position regardless; a message whose target
-     * position has already been passed never fires, silently breaking the skip for any segment that
-     * starts near the beginning of a track (exactly the common case for an intro).
-     */
-    private fun invokeAddSkipAction(mediaSegment: MediaSegmentDto) {
-        val method = AudiobookPlayerViewModel::class.java.getDeclaredMethod(
-            "addSkipAction",
-            MediaSegmentDto::class.java,
-        )
-        method.isAccessible = true
-        method.invoke(viewModel, mediaSegment)
-    }
-
-    private fun mediaSegment(startMs: Long, endMs: Long): MediaSegmentDto {
-        val segment = mockk<MediaSegmentDto>(relaxed = true)
-        every { segment.startTicks } returns startMs.milliseconds.inWholeTicks
-        every { segment.endTicks } returns endMs.milliseconds.inWholeTicks
-        return segment
-    }
-
-    @Test
-    fun `a skip segment not yet reached schedules a one-shot seek instead of seeking immediately`() {
-        every { mockedPlayer.currentPosition } returns 5_000L
-
-        invokeAddSkipAction(mediaSegment(startMs = 10_000L, endMs = 20_000L))
-
-        verify { mockedPlayer.createMessage(any()) }
-        verify(exactly = 0) { mockedPlayer.seekTo(any<Long>()) }
-    }
-
-    @Test
-    fun `a skip segment the player is already inside is skipped immediately instead of scheduling a message that would never fire`() {
-        every { mockedPlayer.currentPosition } returns 15_000L
-
-        invokeAddSkipAction(mediaSegment(startMs = 10_000L, endMs = 20_000L))
-
-        verify { mockedPlayer.seekTo(20_000L) }
-        verify(exactly = 0) { mockedPlayer.createMessage(any()) }
-    }
-
-    @Test
-    fun `a skip segment already fully passed is left alone`() {
-        every { mockedPlayer.currentPosition } returns 25_000L
-
-        invokeAddSkipAction(mediaSegment(startMs = 10_000L, endMs = 20_000L))
-
-        verify(exactly = 0) { mockedPlayer.seekTo(any<Long>()) }
-        verify(exactly = 0) { mockedPlayer.createMessage(any()) }
-    }
-
-    // --- playFromSearch (voice search) ------------------------------------------------------------
-
-    private val serverUser = ServerUser(
-        user = UserEntity(
-            id = 1L,
-            serverId = 1L,
-            userId = "11111111-1111-1111-1111-111111111111",
-            accessToken = "token",
-            lastLoginTimestamp = 0L,
-        ),
-        server = ServerEntity(id = 1L, hostname = "https://example.com", lastUsedTimestamp = 0L),
-    )
-
-    private fun resolvableCurrentUser() {
-        every { appPreferences.currentServerId } returns 1L
-        every { appPreferences.currentUserId } returns 1L
-        every { userDao.getServerUser(1L, 1L) } returns serverUser
-    }
-
-    private fun searchHint(itemId: UUID, name: String = "Some Book"): SearchHint {
-        val hint = mockk<SearchHint>(relaxed = true)
-        every { hint.id } returns itemId
-        every { hint.name } returns name
-        return hint
-    }
-
-    @Test
-    fun `playFromSearch with a blank query resumes whatever is already loaded instead of searching`() {
-        viewModel.playFromSearch("   ")
-        idle()
-
-        verify { mockedPlayer.play() }
-        coVerify(exactly = 0) { queueManager.initializePlaybackQueue(any()) }
-    }
-
-    @Test
-    fun `playFromSearch resolves the top search hit and starts playing it`() {
-        resolvableCurrentUser()
-        val itemId = UUID.randomUUID()
-        val response = mockk<Response<SearchHintResult>>(relaxed = true)
-        every { response.content } returns SearchHintResult(listOf(searchHint(itemId)), 1)
-        coEvery {
-            searchApi.getSearchHints(userId = any(), searchTerm = any(), includeItemTypes = any(), limit = any())
-        } returns response
-
-        viewModel.playFromSearch("some book")
-        idleUntilSettled()
-
-        coVerify { queueManager.initializePlaybackQueue(match<PlayOptions> { it.ids == listOf(itemId) }) }
-    }
-
-    @Test
-    fun `playFromSearch does nothing when there are no matching results`() {
-        resolvableCurrentUser()
-        val response = mockk<Response<SearchHintResult>>(relaxed = true)
-        every { response.content } returns SearchHintResult(emptyList(), 0)
-        coEvery {
-            searchApi.getSearchHints(userId = any(), searchTerm = any(), includeItemTypes = any(), limit = any())
-        } returns response
-
-        viewModel.playFromSearch("nonexistent")
-        idleUntilSettled()
-
-        coVerify(exactly = 0) { queueManager.initializePlaybackQueue(any()) }
-    }
-
-    @Test
-    fun `playFromSearch does nothing when the current user cannot be resolved`() {
-        every { appPreferences.currentServerId } returns null
-
-        viewModel.playFromSearch("some book")
-        idle()
-
-        coVerify(exactly = 0) {
-            searchApi.getSearchHints(userId = any(), searchTerm = any(), includeItemTypes = any(), limit = any())
-        }
-        coVerify(exactly = 0) { queueManager.initializePlaybackQueue(any()) }
-    }
-
-    // --- loading a book ----------------------------------------------------------------------------
-
-    private fun streamed(playMethod: PlayMethod, startTime: Duration = Duration.ZERO, chapters: List<ChapterInfo>? = null) =
-        mockk<RemoteJellyfinMediaSource>(relaxed = true) {
-            every { this@mockk.playMethod } returns playMethod
-            every { this@mockk.startTime } returns startTime
-            every { item } returns BaseItemDto(
-                id = UUID.randomUUID(),
-                type = BaseItemKind.AUDIO_BOOK,
-                name = "Test Book",
-                chapters = chapters,
-            )
-        }
-
-    private fun loadAndPlay(source: RemoteJellyfinMediaSource) {
-        every { queueManager.getCurrentMediaSourceOrNull() } returns source
-        viewModel.load(source, mockk<MediaSource>(relaxed = true), playWhenReady = true)
-    }
-
-    @Test
-    fun `a direct-play book starts where it was left off`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, startTime = 10.minutes))
-
-        verify { mockedPlayer.setMediaSource(any(), 10.minutes.inWholeMilliseconds) }
-        verify { mockedPlayer.prepare() }
-        verify { mockedPlayer.playWhenReady = true }
-    }
-
-    @Test
-    fun `a transcoded book counts its position from where the server started the stream`() {
-        // The server starts the transcode at the resume point, so the player starts from zero there
-        loadAndPlay(streamed(PlayMethod.TRANSCODE, startTime = 10.minutes))
-        every { mockedPlayer.currentPosition } returns 30.seconds.inWholeMilliseconds
-
-        verify { mockedPlayer.setMediaSource(any()) }
-        verify(exactly = 0) { mockedPlayer.setMediaSource(any(), any<Long>()) }
-        viewModel.adjustedCurrentPosition shouldBe (10.minutes + 30.seconds).inWholeMilliseconds
-    }
-
-    @Test
-    fun `a direct-play book loaded after a transcoded one doesn't keep the transcode's offset`() {
-        loadAndPlay(streamed(PlayMethod.TRANSCODE, startTime = 10.minutes))
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, startTime = 5.minutes))
-        every { mockedPlayer.currentPosition } returns 5.minutes.inWholeMilliseconds
-
-        viewModel.adjustedCurrentPosition shouldBe 5.minutes.inWholeMilliseconds
-    }
-
-    // --- chapters ---------------------------------------------------------------------------------
-
-    private fun chapter(start: Duration) = ChapterInfo(
-        startPositionTicks = start.inWholeTicks,
-        name = null,
-        imagePath = null,
-        imageDateModified = LocalDateTime.now(),
-        imageTag = null,
-    )
-
-    private val chapters = listOf(chapter(Duration.ZERO), chapter(10.minutes), chapter(20.minutes))
-
-    @Test
-    fun `next chapter jumps to the start of the next chapter`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, chapters = chapters))
-        every { mockedPlayer.currentPosition } returns 12.minutes.inWholeMilliseconds
-
-        viewModel.nextChapter()
-
-        verify { mockedPlayer.seekTo(20.minutes.inWholeMilliseconds) }
-    }
-
-    @Test
-    fun `next chapter in the last chapter moves on to the next track`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, chapters = chapters))
-        every { mockedPlayer.currentPosition } returns 25.minutes.inWholeMilliseconds
-
-        viewModel.nextChapter()
-        idle()
-
-        coVerify { queueManager.next() }
-        verify(exactly = 0) { mockedPlayer.seekTo(any<Long>()) }
-    }
-
-    @Test
-    fun `next chapter in a track without chapters moves on to the next track`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY))
-
-        viewModel.nextChapter()
-        idle()
-
-        coVerify { queueManager.next() }
-    }
-
-    @Test
-    fun `previous chapter well into a chapter goes back to its start`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, chapters = chapters))
-        every { mockedPlayer.currentPosition } returns 15.minutes.inWholeMilliseconds
-
-        viewModel.previousChapter()
-
-        verify { mockedPlayer.seekTo(10.minutes.inWholeMilliseconds) }
-    }
-
-    @Test
-    fun `previous chapter just after a chapter starts goes back to the chapter before`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, chapters = chapters))
-        every { mockedPlayer.currentPosition } returns (10.minutes + 5.seconds).inWholeMilliseconds
-
-        viewModel.previousChapter()
-
-        verify { mockedPlayer.seekTo(0L) }
-    }
-
-    @Test
-    fun `previous chapter at the very start of the book goes to the previous track`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY, chapters = chapters))
-        every { mockedPlayer.currentPosition } returns 3.seconds.inWholeMilliseconds
-        coEvery { queueManager.previous() } returns true
-
-        viewModel.previousChapter()
-        idle()
-
-        coVerify { queueManager.previous() }
-    }
-
-    @Test
-    fun `previous chapter in a track without chapters goes to the previous track`() {
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY))
-        every { mockedPlayer.currentPosition } returns 3.seconds.inWholeMilliseconds
-
-        viewModel.previousChapter()
-        idle()
-
-        coVerify { queueManager.previous() }
-    }
-
-    // --- the queue --------------------------------------------------------------------------------
-
-    @Test
-    fun `picking a track from the queue plays it`() {
-        viewModel.skipToQueueItem(3)
-        idle()
-
-        coVerify { queueManager.skipToIndex(3) }
-    }
-
-    @Test
-    fun `when a track ends, the next one plays`() {
-        every { mockedPlayer.playbackState } returns Player.STATE_ENDED
-        coEvery { queueManager.next() } returns true
-
-        viewModel.onPlaybackStateChanged(Player.STATE_ENDED)
-        idleUntilSettled()
-
-        coVerify { queueManager.next() }
-        verify(exactly = 0) { mockedPlayer.release() }
-    }
-
-    @Test
-    fun `when the last track ends, the player is let go`() {
-        every { mockedPlayer.playbackState } returns Player.STATE_ENDED
-        coEvery { queueManager.next() } returns false
-
-        viewModel.onPlaybackStateChanged(Player.STATE_ENDED)
-        idleUntilSettled()
-
-        verify { mockedPlayer.release() }
-        viewModel.player.value shouldBe null
-    }
-
-    @Test
-    fun `the lock screen offers skip buttons only when there's a track to skip to`() {
-        every { queueManager.hasPrevious() } returns false
-        every { queueManager.hasNext() } returns true
-        every { mockedPlayer.playbackState } returns Player.STATE_BUFFERING
-        // Robolectric doesn't pass a session's state on to its controller, so catch it on the way in
-        val offered = slot<Long>()
-        mockkStatic(MEDIA_EXTENSIONS)
-        try {
-            every { any<MediaSession>().setPlaybackState(any<Player>(), capture(offered), any()) } just Runs
-
-            viewModel.onPlaybackStateChanged(Player.STATE_BUFFERING)
-        } finally {
-            unmockkStatic(MEDIA_EXTENSIONS)
-        }
-
-        (offered.captured and PlaybackState.ACTION_SKIP_TO_NEXT) shouldBe PlaybackState.ACTION_SKIP_TO_NEXT
-        (offered.captured and PlaybackState.ACTION_SKIP_TO_PREVIOUS) shouldBe 0L
-    }
-
-    // --- skippable segments -----------------------------------------------------------------------
-
-    @Test
-    fun `skipping a segment jumps just past its end`() {
-        viewModel.skipMediaSegment(mediaSegment(startMs = 10_000L, endMs = 20_000L))
-
-        verify { mockedPlayer.seekTo(20_001L) }
-    }
-
-    @Test
-    fun `while inside a segment the listener is asked about, the skip button is offered`() {
-        val intro = mediaSegment(startMs = 0L, endMs = 20_000L)
-        coEvery { mediaSegmentRepository.getSegmentsForItem(any()) } returns listOf(intro)
-        every { mediaSegmentRepository.getMediaSegmentAction(intro) } returns MediaSegmentAction.ASK_TO_SKIP
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY))
-        idle()
-
-        every { mockedPlayer.currentPosition } returns 5_000L
-        viewModel.onPositionDiscontinuity(mockk(relaxed = true), mockk(relaxed = true), 0)
-        viewModel.skipSegment.value shouldBe intro
-
-        every { mockedPlayer.currentPosition } returns 25_000L
-        viewModel.onPositionDiscontinuity(mockk(relaxed = true), mockk(relaxed = true), 0)
-        viewModel.skipSegment.value shouldBe null
-    }
-
-    @Test
-    fun `a segment set to skip automatically is never offered as a button`() {
-        val intro = mediaSegment(startMs = 10_000L, endMs = 20_000L)
-        coEvery { mediaSegmentRepository.getSegmentsForItem(any()) } returns listOf(intro)
-        every { mediaSegmentRepository.getMediaSegmentAction(intro) } returns MediaSegmentAction.SKIP
-        every { mockedPlayer.currentPosition } returns 0L
-        loadAndPlay(streamed(PlayMethod.DIRECT_PLAY))
-        idle()
-
-        every { mockedPlayer.currentPosition } returns 15_000L
-        viewModel.onPositionDiscontinuity(mockk(relaxed = true), mockk(relaxed = true), 0)
-
-        viewModel.skipSegment.value shouldBe null
-        verify { mockedPlayer.createMessage(any()) }
-    }
-
-    // --- commands from the notification, a headset or the car -------------------------------------
-
-    private fun send(event: PlayerEvent) {
-        playerEvents.trySend(event).isSuccess shouldBe true
-        idle()
-    }
-
-    @Test
-    fun `a pause command pauses`() {
-        send(PlayerEvent.Pause)
-
-        verify { mockedPlayer.pause() }
-    }
-
-    @Test
-    fun `a resume command plays`() {
-        send(PlayerEvent.Resume)
-
-        verify { mockedPlayer.play() }
-    }
-
-    @Test
-    fun `a seek command seeks`() {
-        send(PlayerEvent.Seek(90.seconds))
-
-        verify { mockedPlayer.seekTo(90_000L) }
-    }
-
-    @Test
-    fun `a stop command stops and lets the player go`() {
-        send(PlayerEvent.Stop)
-
-        verify { mockedPlayer.pause() }
-        verify { mockedPlayer.release() }
-    }
-
-    @Test
-    fun `a volume command sets the media volume`() {
-        val audioManager = ApplicationProvider.getApplicationContext<Application>().getSystemService<AudioManager>()!!
-        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-
-        send(PlayerEvent.SetVolume(50))
-
-        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) shouldBe max * 50 / 100
+        controller.commands shouldBe listOf("stop")
+        viewModel.sleepTimer.value shouldBe SleepTimerState.Off
     }
 }
-
-private const val MEDIA_EXTENSIONS = "org.jellyfin.mobile.utils.MediaExtensionsKt"

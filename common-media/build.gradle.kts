@@ -10,6 +10,7 @@ android {
 dependencies {
     implementation(libs.jellyfin.sdk)
     implementation(libs.androidx.media3.common)
+    implementation(libs.timber)
 
     // Testing
     testImplementation(libs.junit.api)

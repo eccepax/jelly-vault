@@ -11,8 +11,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.Player
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.theme.AppTheme
@@ -26,6 +27,7 @@ import org.jellyfin.mobile.utils.BackPressInterceptor
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -44,16 +46,6 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
     private val binding get() = _binding!!
 
     private var itemMenu by mutableStateOf<ItemMenu?>(null)
-
-    // The mini player's parts arrive separately: the player, then (or before) what's loaded in it
-    private var hasPlayer by mutableStateOf(false)
-    private var isPlaying by mutableStateOf(false)
-    private var nowPlayingTitle by mutableStateOf("")
-
-    // The player exists from sign-in on; the mini player only means something once a book is loaded
-    private var hasBook by mutableStateOf(false)
-    private var nowPlayingCover by mutableStateOf<String?>(null)
-    private var miniPlayerListener: Player.Listener? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentComposeBinding.inflate(inflater, container, false)
@@ -76,24 +68,20 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
             onLongPress = ::onItemLongClick,
             onDismissMenu = { itemMenu = null },
             onOpenPlayer = { activityEventHandler.emit(ActivityEvent.ResumePlayer) },
-            onPlayPause = {
-                playerViewModel.playerOrNull?.let { player ->
-                    if (player.playWhenReady) playerViewModel.pause() else playerViewModel.play()
-                }
-            },
-            onStop = { playerViewModel.stop() },
+            onPlayPause = playerViewModel::togglePlayPause,
+            onStop = playerViewModel::stop,
             coverUrl = { id -> coverUrl(id, coverSize) },
         )
         binding.composeView.setContent {
             AppTheme(VaultBrand.AudioVault) {
-                LibraryScreen(collectState(), actions)
+                LibraryScreen(collectState(coverSize), actions)
             }
         }
-        observeMiniPlayer(coverSize)
+        refreshWhenPlaybackStops()
     }
 
     @Composable
-    private fun collectState(): LibraryUiState {
+    private fun collectState(coverSize: Int): LibraryUiState {
         val title by viewModel.title.collectAsState()
         val canGoUp by viewModel.canGoUp.collectAsState()
         val items by viewModel.items.collectAsState()
@@ -106,6 +94,8 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
         val showHidden by viewModel.showHiddenItems.collectAsState()
         // The ViewModel's, so it outlives a rotation and empties when a folder change clears it
         val query by viewModel.filterQuery.collectAsState()
+        val playback by playerViewModel.state.collectAsState()
+        val nowPlaying = playback.currentTrack
         return LibraryUiState(
             title = title,
             canGoUp = canGoUp,
@@ -119,7 +109,13 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
             downloadedOnly = downloadedOnly,
             showHidden = showHidden,
             itemMenu = itemMenu,
-            nowPlaying = if (hasPlayer && hasBook) NowPlayingBar(nowPlayingTitle, nowPlayingCover, isPlaying) else null,
+            nowPlaying = nowPlaying?.let { track ->
+                NowPlayingBar(
+                    track.title,
+                    track.id.toUUIDOrNull()?.let { coverUrl(it, coverSize) },
+                    playback.playWhenReady,
+                )
+            },
         )
     }
 
@@ -130,31 +126,17 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
         maxHeight = size,
     )
 
-    /** Shows what's loaded in the player in the mini player, and whether it's playing. */
-    private fun observeMiniPlayer(coverSize: Int) {
-        var hadActivePlayer = false
-        playerViewModel.player.observe(viewLifecycleOwner) { player ->
-            val justStopped = hadActivePlayer && player == null
-            hadActivePlayer = player != null
-            if (justStopped) viewModel.onPlaybackStopped()
-            // Detach old listener before attaching a new one
-            miniPlayerListener?.let { playerViewModel.playerOrNull?.removeListener(it) }
-            miniPlayerListener = null
-            hasPlayer = player != null
-            if (player == null) return@observe
-            isPlaying = player.playWhenReady
-            val listener = object : Player.Listener {
-                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                    isPlaying = playWhenReady
+    /** Listening moves resume positions on, so once a book stops the list is loaded again. */
+    private fun refreshWhenPlaybackStops() {
+        var hadBook = false
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                playerViewModel.state.collect { playback ->
+                    val hasBook = playback.currentTrack != null
+                    if (hadBook && !hasBook) viewModel.onPlaybackStopped()
+                    hadBook = hasBook
                 }
             }
-            player.addListener(listener)
-            miniPlayerListener = listener
-        }
-        playerViewModel.queueManager.currentMediaSource.observe(viewLifecycleOwner) { mediaSource ->
-            hasBook = true
-            nowPlayingTitle = mediaSource.getName(requireContext())
-            nowPlayingCover = coverUrl(mediaSource.itemId, coverSize)
         }
     }
 
@@ -165,8 +147,6 @@ class LibraryFragment : Fragment(), BackPressInterceptor {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        miniPlayerListener?.let { playerViewModel.playerOrNull?.removeListener(it) }
-        miniPlayerListener = null
         _binding = null
     }
 

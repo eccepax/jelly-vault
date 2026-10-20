@@ -31,23 +31,13 @@
     <string name="hide_action">Hide</string>
     <string name="unhide_action">Unhide</string>
     <string name="hidden_item_desc">Hidden</string>
-
-    <string name="notification_action_previous">Previous</string>
-    <string name="notification_action_rewind">Rewind</string>
-    <string name="notification_action_play">Play</string>
-    <string name="notification_action_pause">Pause</string>
-    <string name="notification_action_fast_forward">Fast-forward</string>
-    <string name="notification_action_next">Next</string>
     <string name="notification_action_stop">Stop</string>
 
     <string name="player_error_invalid_play_options">Unable to resolve playback info</string>
     <string name="player_error_network_failure">Unable to load media info from server</string>
     <string name="player_error_unsupported_content">Media cannot be played by this device</string>
-    <string name="player_error_unspecific_exception">Something went wrong with the player</string>
-    <string name="playback_info_play_method">Play method: %s</string>
-    <string name="playback_info_audio_streams">Audio streams</string>
-    <string name="playback_info_stream_unknown_title">Unknown title</string>
-    <string name="playback_info_and_x_more">…and %d more</string>
+    <string name="playback_info_from_device">Playing from the download on this device</string>
+    <string name="playback_info_streamed">Streaming from the server</string>
     <string name="skip_media_segment">Skip</string>
 
     <string name="activity_name_settings">Settings</string>

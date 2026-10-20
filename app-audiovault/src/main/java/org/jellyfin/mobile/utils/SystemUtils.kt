@@ -3,8 +3,6 @@ package org.jellyfin.mobile.utils
 import android.Manifest
 import android.app.ActivityManager
 import android.app.AlertDialog
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.getSystemService
@@ -92,17 +90,6 @@ suspend fun MainActivity.removeDownload(download: LocalJellyfinMediaSource, forc
     }
 
     get<AudiobookDownloads>().remove(download.itemId.toString())
-}
-
-fun Context.createMediaNotificationChannel(notificationManager: NotificationManager) {
-    val notificationChannel = NotificationChannel(
-        Constants.MEDIA_NOTIFICATION_CHANNEL_ID,
-        getString(R.string.app_name),
-        NotificationManager.IMPORTANCE_LOW,
-    ).apply {
-        description = "Media notifications"
-    }
-    notificationManager.createNotificationChannel(notificationChannel)
 }
 
 val Context.isLowRamDevice: Boolean

@@ -17,6 +17,8 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
+import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.sdk.model.ClientInfo
 import org.junit.After
 import org.junit.Before
@@ -44,12 +46,15 @@ class SettingsFragmentTest {
     private val downloadManager = mockk<DownloadManager>(relaxed = true)
     private val mainViewModel = mockk<MainViewModel>(relaxed = true)
 
+    private val playback = FakeAudiobookController()
+
     @Before
     fun setUp() {
         startKoin {
             modules(
                 module {
                     single { appPreferences }
+                    single<AudiobookPlaybackController> { playback }
                     single { downloadManager }
                     single { ClientInfo("AudioVault", "9.9.9") }
                     viewModel { mainViewModel }
@@ -73,12 +78,13 @@ class SettingsFragmentTest {
     }
 
     @Test
-    fun `turning on skip silence saves it`() {
+    fun `turning on skip silence saves it, and the book playing skips silence at once`() {
         launch().use {
             composeRule.onNodeWithText(context.getString(R.string.pref_skip_silence_title)).performClick()
         }
 
         appPreferences.skipSilenceEnabled shouldBe true
+        playback.commands shouldBe listOf("skipSilence true")
     }
 
     @Test
