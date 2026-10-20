@@ -36,6 +36,9 @@ interface PlayerHost {
     fun pause()
     fun rewind()
     fun fastForward()
+
+    /** Seeks to [positionMs] in the whole book, restarting a transcode there if need be. */
+    fun seekToPosition(positionMs: Long)
     fun skipToPrevious()
     fun skipToNext()
     fun stop()

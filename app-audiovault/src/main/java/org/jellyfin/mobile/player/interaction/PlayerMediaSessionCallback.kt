@@ -18,7 +18,7 @@ class PlayerMediaSessionCallback(private val viewModel: PlayerHost) : MediaSessi
     }
 
     override fun onSeekTo(pos: Long) {
-        viewModel.playerOrNull?.seekTo(pos)
+        viewModel.seekToPosition(pos)
     }
 
     override fun onRewind() {

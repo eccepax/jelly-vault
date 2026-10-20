@@ -224,7 +224,7 @@ class AudiobookPlayerViewModel(application: Application) :
                     PlayerEvent.Pause -> mediaSessionCallback.onPause()
                     PlayerEvent.Resume -> mediaSessionCallback.onPlay()
                     PlayerEvent.Stop, PlayerEvent.Destroy -> mediaSessionCallback.onStop()
-                    is PlayerEvent.Seek -> playerOrNull?.seekTo(event.duration.inWholeMilliseconds)
+                    is PlayerEvent.Seek -> seekToPosition(event.duration.inWholeMilliseconds)
                     is PlayerEvent.SetVolume -> {
                         setVolume(event.volume)
                         playerOrNull?.reportPlaybackState()
@@ -548,15 +548,17 @@ class AudiobookPlayerViewModel(application: Application) :
 
         when {
             playbackPosition >= mediaSegment.end -> Unit
-            playbackPosition >= mediaSegment.start -> player.seekTo(mediaSegment.end.inWholeMilliseconds)
+            playbackPosition >= mediaSegment.start -> seekToPosition(mediaSegment.end.inWholeMilliseconds)
             else -> {
                 player
                     .createMessage { _, _ ->
                         viewModelScope.launch(Dispatchers.Main) {
-                            player.seekTo(mediaSegment.end.inWholeMilliseconds)
+                            seekToPosition(mediaSegment.end.inWholeMilliseconds)
                         }
                     }
-                    .setPosition(mediaSegment.start.inWholeMilliseconds.coerceAtLeast(1))
+                    // The message fires at a position in the player's own timeline, which for a
+                    // transcode starts at the offset
+                    .setPosition((mediaSegment.start.inWholeMilliseconds - transcodingStartOffset).coerceAtLeast(1))
                     .setDeleteAfterDelivery(false)
                     .send()
             }
@@ -581,7 +583,7 @@ class AudiobookPlayerViewModel(application: Application) :
      *
      * [positionMs] must be an **absolute** position (i.e. already includes [transcodingStartOffset]).
      */
-    fun seekToPosition(positionMs: Long) {
+    override fun seekToPosition(positionMs: Long) {
         if ((mediaSourceOrNull as? RemoteJellyfinMediaSource)?.playMethod == PlayMethod.TRANSCODE) {
             viewModelScope.launch { queueManager.seekTo(positionMs.milliseconds) }
         } else {
@@ -606,17 +608,20 @@ class AudiobookPlayerViewModel(application: Application) :
         seekToPosition(newPosition)
     }
 
+    // Chapters are positions in the whole book, so these use the absolute position and
+    // seekToPosition, which restarts a transcode there rather than seeking inside it.
     fun previousChapter() {
         val chapters = mediaSourceOrNull?.item?.chapters
         if (!chapters.isNullOrEmpty()) {
-            val currentPosition = playerOrNull?.currentPosition?.milliseconds ?: return
+            if (playerOrNull == null) return
+            val currentPosition = adjustedCurrentPosition.milliseconds
             val skipToPreviousDuration = Constants.MAX_SKIP_TO_PREV_CHAPTER_MS.milliseconds
             val playbackPosition = currentPosition - skipToPreviousDuration
             if (playbackPosition < Duration.ZERO) {
                 skipToPrevious()
             } else {
                 val seekToPosition = ChapterNavigation.currentChapterStartPosition(chapters, playbackPosition) ?: return
-                playerOrNull?.seekTo(seekToPosition.inWholeMilliseconds)
+                seekToPosition(seekToPosition.inWholeMilliseconds)
             }
         } else {
             skipToPrevious()
@@ -626,12 +631,13 @@ class AudiobookPlayerViewModel(application: Application) :
     fun nextChapter() {
         val chapters = mediaSourceOrNull?.item?.chapters
         if (!chapters.isNullOrEmpty()) {
-            val currentPosition = playerOrNull?.currentPosition?.milliseconds ?: return
+            if (playerOrNull == null) return
+            val currentPosition = adjustedCurrentPosition.milliseconds
             val playbackPosition = ChapterNavigation.nextChapterStartPosition(chapters, currentPosition) ?: return
             if (playbackPosition == Duration.INFINITE) {
                 skipToNext()
             } else {
-                playerOrNull?.seekTo(playbackPosition.inWholeMilliseconds)
+                seekToPosition(playbackPosition.inWholeMilliseconds)
             }
         } else {
             skipToNext()
@@ -691,16 +697,16 @@ class AudiobookPlayerViewModel(application: Application) :
     }
 
     override fun skipToPrevious() {
-        val player = playerOrNull ?: return
+        if (playerOrNull == null) return
         when {
-            player.currentPosition <= Constants.MAX_SKIP_TO_PREV_MS -> viewModelScope.launch {
+            adjustedCurrentPosition <= Constants.MAX_SKIP_TO_PREV_MS -> viewModelScope.launch {
                 pause()
                 if (!queueManager.previous()) {
-                    playerOrNull?.seekTo(0)
+                    seekToPosition(0)
                     play()
                 }
             }
-            else -> player.seekTo(0)
+            else -> seekToPosition(0)
         }
     }
 
@@ -711,9 +717,9 @@ class AudiobookPlayerViewModel(application: Application) :
     }
 
     fun skipMediaSegment(mediaSegmentDto: MediaSegmentDto?) {
-        val player = playerOrNull ?: return
+        if (playerOrNull == null) return
         val mediaSegment = mediaSegmentDto ?: return
-        player.seekTo(mediaSegment.end.inWholeMilliseconds + 1)
+        seekToPosition(mediaSegment.end.inWholeMilliseconds + 1)
     }
 
     override fun getStateAndPause(): PlayState? {
@@ -853,7 +859,7 @@ class AudiobookPlayerViewModel(application: Application) :
         if (queueManager.hasNext()) {
             playbackActions = playbackActions or PlaybackState.ACTION_SKIP_TO_NEXT
         }
-        mediaSession.setPlaybackState(player, playbackActions)
+        mediaSession.setPlaybackState(player, playbackActions, position = adjustedCurrentPosition)
     }
 
     override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {

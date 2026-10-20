@@ -51,14 +51,15 @@ fun MediaSession.setPlaybackState(isPlaying: Boolean, position: Long, playbackAc
     )
 }
 
-fun MediaSession.setPlaybackState(player: Player, playbackActions: Long) {
+/** [position] defaults to the player's own; a transcode passes its position in the whole book. */
+fun MediaSession.setPlaybackState(player: Player, playbackActions: Long, position: Long = player.currentPosition) {
     val playbackState = when (val playerState = player.playbackState) {
         Player.STATE_IDLE, Player.STATE_ENDED -> PlaybackState.STATE_NONE
         Player.STATE_READY -> if (player.isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         Player.STATE_BUFFERING -> PlaybackState.STATE_BUFFERING
         else -> error("Invalid player playbackState $playerState")
     }
-    setPlaybackState(playbackState, player.currentPosition, playbackActions)
+    setPlaybackState(playbackState, position, playbackActions)
 }
 
 fun AudioManager.getVolumeRange(streamType: Int): IntRange {
