@@ -14,6 +14,7 @@ import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.music.account.SettingsViewModel
 import org.jellyfin.mobile.music.account.tuneVaultSignOut
 import org.jellyfin.mobile.music.catalog.AccountInfo
@@ -56,9 +57,9 @@ import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.music.playback.PlaybackReporter
 import org.jellyfin.mobile.music.playback.PlaybackReportingTracker
 import org.jellyfin.mobile.music.playback.PlaybackService
+import org.jellyfin.mobile.music.playback.PlaybackSleepTimerTarget
 import org.jellyfin.mobile.music.playback.PlaybackVolume
 import org.jellyfin.mobile.music.playback.PlayerPlaybackController
-import org.jellyfin.mobile.music.playback.SleepTimer
 import org.jellyfin.mobile.music.playback.SleepTimerVisibility
 import org.jellyfin.mobile.music.playback.VolumeLeveller
 import org.jellyfin.mobile.music.playback.VolumeLevellingSetting
@@ -131,7 +132,7 @@ val tuneAppModule = module {
     single<PlaybackReporter> { get<OfflinePlayReporter>() }
     single { PlaybackReportingTracker(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main)) }
     single { PlaybackVolume(get()) }
-    single { SleepTimer(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main), get()) }
+    single { SleepTimer(PlaybackSleepTimerTarget(get(), get()), CoroutineScope(SupervisorJob() + Dispatchers.Main)) }
     single { VolumeLevellingSetting(get()) }
     single {
         VolumeLeveller(

@@ -3,8 +3,9 @@ package org.jellyfin.mobile.music.nowplaying
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.music.navigation.PlayerScaffold
-import org.jellyfin.mobile.music.playback.SleepTimer
 import org.jellyfin.mobile.music.playback.SleepTimerVisibility
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -65,7 +66,7 @@ fun PlayerShell(
                             SleepTimerUi(
                                 state = sleepTimerState,
                                 onStart = sleepTimer::start,
-                                onEndOfSong = sleepTimer::stopAtEndOfSong,
+                                onEndOfSegment = sleepTimer::stopAtEndOfSegment,
                                 onExtend = { sleepTimer.extend() },
                                 onCancel = sleepTimer::cancel,
                             )

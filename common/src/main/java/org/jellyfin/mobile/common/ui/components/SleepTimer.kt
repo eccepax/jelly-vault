@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.nowplaying
+package org.jellyfin.mobile.common.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.DropdownMenu
@@ -17,8 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import org.jellyfin.mobile.music.R
-import org.jellyfin.mobile.music.playback.SleepTimerState
+import org.jellyfin.mobile.common.R
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import java.util.Locale
 
 private const val MINUTE_MS = 60_000L
@@ -39,18 +39,21 @@ private val DURATIONS = listOf(
     HOUR to R.string.sleep_60,
 )
 
-/** The sleep timer as Now Playing shows and changes it. */
+/** The sleep timer as a player screen shows and changes it. */
 data class SleepTimerUi(
     val state: SleepTimerState = SleepTimerState.Off,
     val onStart: (durationMs: Long) -> Unit = {},
-    val onEndOfSong: () -> Unit = {},
+    val onEndOfSegment: () -> Unit = {},
     val onExtend: () -> Unit = {},
     val onCancel: () -> Unit = {},
 )
 
-/** A moon that opens the timer's menu; lit while the timer runs. */
+/**
+ * A moon that opens the timer's menu; lit while the timer runs. [endOfSegment] names the choice
+ * to stop at the end of what's playing, in the app's terms ("End of this song").
+ */
 @Composable
-fun SleepTimerButton(ui: SleepTimerUi, modifier: Modifier = Modifier) {
+fun SleepTimerButton(ui: SleepTimerUi, endOfSegment: String, modifier: Modifier = Modifier) {
     var menuOpen by remember { mutableStateOf(false) }
     fun choose(action: () -> Unit) {
         menuOpen = false
@@ -74,10 +77,8 @@ fun SleepTimerButton(ui: SleepTimerUi, modifier: Modifier = Modifier) {
                     ) { Text(stringResource(label)) }
                 }
             }
-            if (ui.state != SleepTimerState.EndOfSong) {
-                DropdownMenuItem(
-                    onClick = { choose(ui.onEndOfSong) },
-                ) { Text(stringResource(R.string.sleep_end_of_song)) }
+            if (ui.state != SleepTimerState.EndOfSegment) {
+                DropdownMenuItem(onClick = { choose(ui.onEndOfSegment) }) { Text(endOfSegment) }
             }
             if (ui.state != SleepTimerState.Off) {
                 DropdownMenuItem(onClick = { choose(ui.onCancel) }) { Text(stringResource(R.string.sleep_off)) }
@@ -86,12 +87,15 @@ fun SleepTimerButton(ui: SleepTimerUi, modifier: Modifier = Modifier) {
     }
 }
 
-/** "Sleeps in 29:41" or "Sleeps after this song"; nothing while the timer is off. */
+/**
+ * "Sleeps in 29:41", or [sleepsAfterSegment] ("Sleeps after this song") when stopping at the end
+ * of what's playing; nothing while the timer is off.
+ */
 @Composable
-fun SleepTimerLabel(state: SleepTimerState, modifier: Modifier = Modifier) {
+fun SleepTimerLabel(state: SleepTimerState, sleepsAfterSegment: String, modifier: Modifier = Modifier) {
     val text = when (state) {
         SleepTimerState.Off -> return
-        SleepTimerState.EndOfSong -> stringResource(R.string.sleeps_after_song)
+        SleepTimerState.EndOfSegment -> sleepsAfterSegment
         is SleepTimerState.Counting -> stringResource(R.string.sleeps_in, formatRemaining(state.remainingMs))
     }
     Text(text, style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary, modifier = modifier)

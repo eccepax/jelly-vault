@@ -48,4 +48,14 @@
     <string name="about_app_version">%1$s %2$s</string>
     <string name="report_bug">Report a bug</string>
     <string name="report_bug_summary">Opens a form on GitHub</string>
+
+    <!-- Sleep timer -->
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_15">15 minutes</string>
+    <string name="sleep_30">30 minutes</string>
+    <string name="sleep_45">45 minutes</string>
+    <string name="sleep_60">1 hour</string>
+    <string name="sleep_extend">+15 minutes</string>
+    <string name="sleep_off">Turn off</string>
+    <string name="sleeps_in">Sleeps in %1$s</string>
 </resources>
