@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.player.interaction
 
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jellyfin.mobile.player.PlayerHost
@@ -24,12 +23,10 @@ class PlayerMediaSessionCallbackTest {
     }
 
     @Test
-    fun `onSeekTo seeks the current player`() {
-        val player = mockk<androidx.media3.exoplayer.ExoPlayer>(relaxed = true)
-        every { viewModel.playerOrNull } returns player
-
+    fun `onSeekTo seeks to that position in the whole book`() {
+        // The lock screen's seek bar spans the whole book; a transcode can't be seeked natively
         callback.onSeekTo(5_000L)
 
-        verify { player.seekTo(5_000L) }
+        verify { viewModel.seekToPosition(5_000L) }
     }
 }
