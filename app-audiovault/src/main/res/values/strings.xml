@@ -20,10 +20,6 @@
     <string name="pref_library_global_flatten_summary_on">All audiobooks shown in a single sorted list</string>
 
 
-    <string name="bluetooth_permission_title">Allow Bluetooth access?</string>
-    <string name="bluetooth_permission_message">To detect when wireless headphones or speakers are disconnected, the app requires Bluetooth access. On Android, this permission is described as access to nearby devices, and warns that Bluetooth devices can be used to infer the current location. However, AudioVault will never use this permission to detect your location.</string>
-    <string name="bluetooth_permission_continue">Continue</string>
-    <string name="bluetooth_permission_granted">Bluetooth permission was granted</string>
     <string name="network_title">Allowed Network Types</string>
     <string name="network_message">Do you want to allow the download to run over mobile data or roaming networks? Charges from your provider may apply. You can change this option later from settings.</string>
     <string name="wifi_only">WiFi Only</string>

@@ -115,7 +115,6 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(project(":common-testing"))
     testImplementation(project(":test-support"))
-    testImplementation(project(":common-testing"))
     // Migration tests (see the debug assets above)
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.fragment.testing)

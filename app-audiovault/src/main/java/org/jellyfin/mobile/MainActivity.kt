@@ -21,7 +21,6 @@ import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.setup.ConnectFragment
 import org.jellyfin.mobile.utils.BackPressInterceptor
-import org.jellyfin.mobile.utils.BluetoothPermissionHelper
 import org.jellyfin.mobile.utils.PermissionRequestHelper
 import org.jellyfin.mobile.utils.extensions.replaceFragment
 import org.koin.android.ext.android.get
@@ -34,7 +33,6 @@ class MainActivity : AppCompatActivity() {
     private val activityEventHandler: ActivityEventHandler = get()
     val mainViewModel: MainViewModel by viewModel()
     private val appPreferences: AudioVaultAppPreferences by inject()
-    val bluetoothPermissionHelper: BluetoothPermissionHelper = BluetoothPermissionHelper(this, get())
     private val permissionRequestHelper: PermissionRequestHelper by inject()
 
     /**

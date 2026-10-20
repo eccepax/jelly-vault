@@ -11,7 +11,6 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.Clock
@@ -54,7 +53,6 @@ import org.jellyfin.mobile.player.ui.AudiobookDisplayPreferences
 import org.jellyfin.mobile.player.ui.PlayState
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.Constants.SUPPORTED_AUDIOBOOK_PLAYBACK_ACTIONS
-import org.jellyfin.mobile.utils.applyDefaultAudioAttributes
 import org.jellyfin.mobile.utils.applyDefaultLocalAudioAttributes
 import org.jellyfin.mobile.utils.extensions.end
 import org.jellyfin.mobile.utils.extensions.scaleInRange
@@ -200,7 +198,7 @@ class AudiobookPlayerViewModel(application: Application) :
             @Suppress("DEPRECATION")
             setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS or MediaSession.FLAG_HANDLES_MEDIA_BUTTONS)
             setCallback(mediaSessionCallback)
-            applyDefaultLocalAudioAttributes(AudioAttributes.CONTENT_TYPE_MUSIC)
+            applyDefaultLocalAudioAttributes(AudioAttributes.CONTENT_TYPE_SPEECH)
         }
     }
     private val mediaSessionCallback = PlayerMediaSessionCallback(this)
@@ -256,9 +254,9 @@ class AudiobookPlayerViewModel(application: Application) :
             setUsePlatformDiagnostics(false)
             setTrackSelector(trackSelector)
             setAnalyticsCollector(analyticsCollector)
+            forAudiobooks()
         }.build().apply {
             addListener(this@AudiobookPlayerViewModel)
-            applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MUSIC)
             val savedSpeed = appPreferences.playbackSpeed
             if (savedSpeed != 1f) playbackParameters = playbackParameters.withSpeed(savedSpeed)
             playSpeed = savedSpeed
