@@ -171,8 +171,11 @@ class AudiobookPlayerViewModelTest {
         viewModel.setupPlayer()
 
         val built = viewModel.playerOrNull!!
-        built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
-        built.release()
+        try {
+            built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+        } finally {
+            built.release()
+        }
     }
 
     @Test
