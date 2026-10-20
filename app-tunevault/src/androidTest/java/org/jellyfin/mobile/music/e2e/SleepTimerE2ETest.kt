@@ -7,10 +7,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.Espresso.pressBack
+import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.music.nowplaying.MiniPlayerTags
 import org.jellyfin.mobile.music.playback.PlaybackController
-import org.jellyfin.mobile.music.playback.SleepTimer
-import org.jellyfin.mobile.music.playback.SleepTimerState
 import org.jellyfin.mobile.music.playback.SleepTimerVisibility
 import org.jellyfin.mobile.testing.VaultFixtures.PatternSuite
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS

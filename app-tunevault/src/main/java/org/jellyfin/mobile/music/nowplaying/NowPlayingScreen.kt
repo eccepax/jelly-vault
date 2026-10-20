@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.common.ui.components.PlayPauseButton
+import org.jellyfin.mobile.common.ui.components.SleepTimerButton
+import org.jellyfin.mobile.common.ui.components.SleepTimerLabel
+import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.RepeatMode
@@ -63,7 +66,7 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse))
                 }
                 Row {
-                    sleepTimer?.let { SleepTimerButton(it) }
+                    sleepTimer?.let { SleepTimerButton(it, stringResource(R.string.sleep_end_of_song)) }
                     FavoriteButton(isFavorite = state.isFavorite, onToggle = actions.onToggleFavorite)
                     IconButton(onClick = actions.onOpenQueue) {
                         Icon(
@@ -106,7 +109,7 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
             TransportControls(state, actions)
-            sleepTimer?.let { SleepTimerLabel(it.state) }
+            sleepTimer?.let { SleepTimerLabel(it.state, stringResource(R.string.sleeps_after_song)) }
         }
     }
 }

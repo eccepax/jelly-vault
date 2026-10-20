@@ -8,18 +8,22 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.SleepTimer.Companion.FADE_MS
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.music.domain.PlayQueue
 import org.jellyfin.mobile.music.domain.track
-import org.jellyfin.mobile.music.playback.SleepTimer.Companion.FADE_MS
 import org.junit.jupiter.api.Test
 
+/** The shared sleep timer driving TuneVault's player, through [PlaybackSleepTimerTarget]. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepTimerTest {
 
     private val playback = FakePlaybackController()
     private val minute = 60_000L
 
-    private fun TestScope.timer() = SleepTimer(playback, backgroundScope).also { runCurrent() }
+    private fun TestScope.timer(volume: PlaybackVolume = PlaybackVolume(playback)) =
+        SleepTimer(PlaybackSleepTimerTarget(playback, volume), backgroundScope).also { runCurrent() }
 
     private fun TestScope.wait(ms: Long) {
         advanceTimeBy(ms)
@@ -113,8 +117,8 @@ class SleepTimerTest {
     fun `end of song pauses when the song finishes`() = runTest {
         val timer = timer()
         playing("a", "b")
-        timer.stopAtEndOfSong()
-        timer.state.value shouldBe SleepTimerState.EndOfSong
+        timer.stopAtEndOfSegment()
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
 
         playback.positionMs = 179_500L
         wait(SleepTimer.TICK_MS)
@@ -130,7 +134,7 @@ class SleepTimerTest {
     fun `end of song keeps waiting when you skip to another song`() = runTest {
         val timer = timer()
         playing("a", "b")
-        timer.stopAtEndOfSong()
+        timer.stopAtEndOfSegment()
 
         playback.positionMs = 30_000L
         wait(SleepTimer.TICK_MS)
@@ -139,14 +143,14 @@ class SleepTimerTest {
         wait(SleepTimer.TICK_MS)
 
         playback.commands.shouldBeEmpty()
-        timer.state.value shouldBe SleepTimerState.EndOfSong
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
     }
 
     @Test
     fun `end of song turns off when the last song ends by itself`() = runTest {
         val timer = timer()
         playing("a")
-        timer.stopAtEndOfSong()
+        timer.stopAtEndOfSegment()
 
         playback.positionMs = 180_000L
         playback.state.value = playback.state.value.copy(isPlaying = false)
@@ -158,7 +162,7 @@ class SleepTimerTest {
     @Test
     fun `a fade on a levelled song starts from its levelled volume, and goes back to it`() = runTest {
         val volume = PlaybackVolume(playback)
-        val timer = SleepTimer(playback, backgroundScope, volume).also { runCurrent() }
+        val timer = timer(volume)
         playing("a")
         volume.setLevel(0.5f)
         timer.start(minute)
