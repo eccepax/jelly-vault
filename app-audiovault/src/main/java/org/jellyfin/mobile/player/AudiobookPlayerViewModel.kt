@@ -1,7 +1,6 @@
 package org.jellyfin.mobile.player
 
 import android.app.Application
-import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -198,7 +197,8 @@ class AudiobookPlayerViewModel(application: Application) :
             @Suppress("DEPRECATION")
             setFlags(MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS or MediaSession.FLAG_HANDLES_MEDIA_BUTTONS)
             setCallback(mediaSessionCallback)
-            applyDefaultLocalAudioAttributes(AudioAttributes.CONTENT_TYPE_SPEECH)
+            // Media3's content types are the platform's values
+            applyDefaultLocalAudioAttributes(AUDIOBOOK_CONTENT_TYPE)
         }
     }
     private val mediaSessionCallback = PlayerMediaSessionCallback(this)
@@ -288,6 +288,7 @@ class AudiobookPlayerViewModel(application: Application) :
         }
 
         initialTracksSelected.set(false)
+        player.setWakeMode(wakeModeFor(jellyfinMediaSource))
 
         val startTime = jellyfinMediaSource.startTime
         if (jellyfinMediaSource is RemoteJellyfinMediaSource &&

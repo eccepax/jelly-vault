@@ -3,8 +3,11 @@ package org.jellyfin.mobile.player
 import android.app.Application
 import android.os.Looper
 import androidx.lifecycle.MutableLiveData
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -48,6 +51,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
@@ -154,6 +158,40 @@ class AudiobookPlayerViewModelTest {
         val field = AudiobookPlayerViewModel::class.java.getDeclaredField("queueManager")
         field.isAccessible = true
         field.set(viewModel, queueManager)
+    }
+
+    // --- how the player is set up ----------------------------------------------------------------
+
+    @Test
+    fun `the player it builds plays as spoken word`() {
+        loadKoinModules(module { single<MediaSource.Factory> { DefaultMediaSourceFactory(viewModel.app) } })
+        every { appPreferences.playbackSpeed } returns 1f
+        injectPlayer(viewModel, null)
+
+        viewModel.setupPlayer()
+
+        val built = viewModel.playerOrNull!!
+        built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+        built.release()
+    }
+
+    @Test
+    fun `a downloaded book plays without keeping Wi-Fi awake`() {
+        viewModel.load(mockk<LocalJellyfinMediaSource>(relaxed = true), mockk(relaxed = true), playWhenReady = false)
+
+        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_LOCAL) }
+    }
+
+    @Test
+    fun `a streamed book keeps Wi-Fi awake while it plays`() {
+        val streamed = mockk<RemoteJellyfinMediaSource>(relaxed = true) {
+            every { playMethod } returns PlayMethod.DIRECT_PLAY
+            every { startTime } returns Duration.ZERO
+        }
+
+        viewModel.load(streamed, mockk(relaxed = true), playWhenReady = false)
+
+        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_NETWORK) }
     }
 
     // --- downloaded books: positions for the server ----------------------------------------------
