@@ -26,8 +26,14 @@ class SleepTimerTest {
     }
 
     /** Playing [segment] (a song, a chapter) of [durationMs], [positionMs] into it. */
-    private fun at(segment: String, positionMs: Long, durationMs: Long = 180_000L, isPlaying: Boolean = true) {
-        target.sample = PlaybackSample(segment, positionMs, durationMs, isPlaying)
+    private fun at(
+        segment: String,
+        positionMs: Long,
+        durationMs: Long = 180_000L,
+        isPlaying: Boolean = true,
+        hasNext: Boolean = true,
+    ) {
+        target.sample = PlaybackSample(segment, positionMs, durationMs, isPlaying, hasNext)
     }
 
     @Test
@@ -144,9 +150,28 @@ class SleepTimerTest {
         at("a", 0L)
         timer.stopAtEndOfSegment()
 
-        at("a", 180_000L, isPlaying = false)
+        at("a", 180_000L, isPlaying = false, hasNext = false)
         wait(TICK_MS)
 
+        timer.state.value shouldBe SleepTimerState.Off
+    }
+
+    @Test
+    fun `end of segment survives a pause in its last seconds, and still pauses after it`() = runTest {
+        val timer = timer()
+        at("chapter 1", 0L)
+        timer.stopAtEndOfSegment()
+
+        at("chapter 1", 178_500L, isPlaying = false)
+        wait(minute)
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
+
+        at("chapter 1", 179_500L)
+        wait(TICK_MS)
+        at("chapter 2", 100L)
+        wait(TICK_MS)
+
+        target.commands shouldBe listOf("pause", "rewindToSegmentStart")
         timer.state.value shouldBe SleepTimerState.Off
     }
 
@@ -182,7 +207,7 @@ class SleepTimerTest {
 }
 
 private class FakeSleepTimerTarget : SleepTimerTarget {
-    var sample = PlaybackSample(segmentId = null, positionMs = 0L, durationMs = 0L, isPlaying = false)
+    var sample = PlaybackSample(segmentId = null, positionMs = 0L, durationMs = 0L, isPlaying = false, hasNext = false)
     val commands = mutableListOf<String>()
     val fades = mutableListOf<Float>()
 

@@ -10,14 +10,14 @@ import org.jellyfin.mobile.common.playback.SleepTimerTarget
  */
 class PlaybackSleepTimerTarget(
     private val playback: PlaybackController,
-    private val volume: PlaybackVolume = PlaybackVolume(playback),
+    private val volume: PlaybackVolume,
 ) : SleepTimerTarget {
 
     override fun sample(): PlaybackSample {
         val state = playback.state.value
         val entry = state.queue.entries.getOrNull(state.queue.currentIndex)
         val durationMs = entry?.track?.durationMs?.takeIf { it > 0 } ?: playback.durationMs
-        return PlaybackSample(entry?.uid, playback.positionMs, durationMs, state.isPlaying)
+        return PlaybackSample(entry?.uid, playback.positionMs, durationMs, state.isPlaying, state.queue.hasNext)
     }
 
     override fun pause() = playback.pause()

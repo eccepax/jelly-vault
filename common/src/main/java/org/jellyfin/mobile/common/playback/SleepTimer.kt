@@ -19,12 +19,14 @@ sealed interface SleepTimerState {
 /**
  * Where playback is: which segment is playing (a song, an audiobook chapter) and how far into it.
  * [positionMs] and [durationMs] are within the segment; [durationMs] is 0 when not known yet.
+ * [hasNext] says whether another segment plays after this one.
  */
 data class PlaybackSample(
     val segmentId: Any?,
     val positionMs: Long,
     val durationMs: Long,
     val isPlaying: Boolean,
+    val hasNext: Boolean,
 )
 
 /** The player as the sleep timer sees it. */
@@ -116,8 +118,8 @@ class SleepTimer(
                     target.rewindToSegmentStart()
                     break
                 }
-            } else if (!now.isPlaying && now.isNearEnd) {
-                break // The last segment ended.
+            } else if (!now.isPlaying && now.isNearEnd && !now.hasNext) {
+                break // The last segment ended. A pause near the end of any other is just a pause.
             }
             last = now
         }

@@ -77,7 +77,6 @@
     <string name="filter_downloaded_only">Downloaded only</string>
     <string name="show_hidden_items">Show hidden items</string>
     <string name="special_episode">Special</string>
-    <string name="sleep_timer">Sleep Timer</string>
     <string name="sleep_timer_set">Sleep timer set for %1$s</string>
     <string name="sleep_timer_15_min">15 minutes</string>
     <string name="sleep_timer_30_min">30 minutes</string>

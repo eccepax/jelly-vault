@@ -160,6 +160,19 @@ class SleepTimerTest {
     }
 
     @Test
+    fun `end of song survives a pause in the song's last seconds`() = runTest {
+        val timer = timer()
+        playing("a", "b")
+        timer.stopAtEndOfSegment()
+
+        playback.positionMs = 178_500L
+        playback.state.value = playback.state.value.copy(isPlaying = false)
+        wait(minute)
+
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
+    }
+
+    @Test
     fun `a fade on a levelled song starts from its levelled volume, and goes back to it`() = runTest {
         val volume = PlaybackVolume(playback)
         val timer = timer(volume)
