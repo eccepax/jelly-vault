@@ -204,6 +204,64 @@ class SleepTimerTest {
 
         target.commands shouldBe listOf("pause", "rewindToSegmentStart")
     }
+
+    @Test
+    fun `end of segment keeps waiting when you skip after pausing in a segment's last seconds`() = runTest {
+        val timer = timer()
+        at("a", 0L)
+        timer.stopAtEndOfSegment()
+
+        at("a", 178_500L, isPlaying = false)
+        wait(10 * minute)
+        at("b", 0L)
+        wait(TICK_MS)
+
+        target.commands.shouldBeEmpty()
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
+    }
+
+    @Test
+    fun `end of segment pauses when a segment on repeat plays out and starts again`() = runTest {
+        val timer = timer()
+        at("a", 0L)
+        timer.stopAtEndOfSegment()
+
+        at("a", 179_500L)
+        wait(TICK_MS)
+        at("a", 100L)
+        wait(TICK_MS)
+
+        target.commands shouldBe listOf("pause", "rewindToSegmentStart")
+        timer.state.value shouldBe SleepTimerState.Off
+    }
+
+    @Test
+    fun `end of segment keeps waiting when you rewind in a segment's last seconds`() = runTest {
+        val timer = timer()
+        at("chapter 1", 0L)
+        timer.stopAtEndOfSegment()
+
+        at("chapter 1", 179_500L)
+        wait(TICK_MS)
+        at("chapter 1", 169_500L)
+        wait(TICK_MS)
+
+        target.commands.shouldBeEmpty()
+        timer.state.value shouldBe SleepTimerState.EndOfSegment
+    }
+
+    @Test
+    fun `end of segment turns off when playback is cleared`() = runTest {
+        val timer = timer()
+        at("a", 30_000L)
+        timer.stopAtEndOfSegment()
+
+        target.sample = PlaybackSample(segmentId = null, 0L, 0L, isPlaying = false, hasNext = false)
+        wait(TICK_MS)
+
+        target.commands.shouldBeEmpty()
+        timer.state.value shouldBe SleepTimerState.Off
+    }
 }
 
 private class FakeSleepTimerTarget : SleepTimerTarget {

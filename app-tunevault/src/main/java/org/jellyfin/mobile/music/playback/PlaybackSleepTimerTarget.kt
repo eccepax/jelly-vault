@@ -16,7 +16,8 @@ class PlaybackSleepTimerTarget(
     override fun sample(): PlaybackSample {
         val state = playback.state.value
         val entry = state.queue.entries.getOrNull(state.queue.currentIndex)
-        val durationMs = entry?.track?.durationMs?.takeIf { it > 0 } ?: playback.durationMs
+        // The stream's own length when the player knows it: a track's listed length can be off by seconds
+        val durationMs = playback.durationMs.takeIf { it > 0 } ?: entry?.track?.durationMs ?: 0L
         return PlaybackSample(entry?.uid, playback.positionMs, durationMs, state.isPlaying, state.queue.hasNext)
     }
 

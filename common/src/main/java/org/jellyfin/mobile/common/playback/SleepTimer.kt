@@ -104,26 +104,35 @@ class SleepTimer(
     /**
      * Watches for the playing segment to finish by itself. Skipping to another segment isn't
      * finishing it, so the timer waits for that one instead; a segment is taken to have finished
-     * when playback moved on from within its last moments. It follows the playback position rather
-     * than the clock, so pauses and playback speed don't throw it off.
+     * when playback moved on, or started it over (on repeat), while playing its last moments. It
+     * follows the playback position rather than the clock, so pauses and playback speed don't
+     * throw it off.
      */
     private suspend fun watchForSegmentEnd() {
         var last = target.sample()
-        while (true) {
+        do {
             delay(TICK_MS)
             val now = target.sample()
-            if (now.segmentId != last.segmentId) {
-                if (last.isNearEnd) {
+            val done = when {
+                now.segmentId == null -> true // Nothing left playing
+                last.playedOut(now) -> {
                     target.pause()
                     target.rewindToSegmentStart()
-                    break
+                    true
                 }
-            } else if (!now.isPlaying && now.isNearEnd && !now.hasNext) {
-                break // The last segment ended. A pause near the end of any other is just a pause.
+                // The last segment ended. A pause near the end of any other is just a pause.
+                else -> !now.isPlaying && now.isNearEnd && !now.hasNext
             }
             last = now
-        }
+        } while (!done)
         _state.value = SleepTimerState.Off
+    }
+
+    /** Whether this segment played out by [next]: playback moved on from its end without a pause. */
+    private fun PlaybackSample.playedOut(next: PlaybackSample): Boolean {
+        if (!isPlaying || !isNearEnd) return false
+        val startedOver = next.segmentId == segmentId && next.positionMs < END_WINDOW_MS
+        return next.segmentId != segmentId || startedOver
     }
 
     private fun restoreVolume() {
