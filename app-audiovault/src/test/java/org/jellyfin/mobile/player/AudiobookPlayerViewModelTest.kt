@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player
 
 import android.app.Application
+import android.content.Intent
 import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -86,10 +87,12 @@ import kotlin.time.Duration.Companion.seconds
  * [QueueManager] — there is no production seam for either, since nothing outside this class has
  * ever needed to fake them before.
  *
- * Deliberately scoped to the control-flow methods reachable without touching [ExoPlayer.Builder],
+ * Mostly scoped to the control-flow methods reachable without touching [ExoPlayer.Builder],
  * [android.media.session.MediaSession], or [org.jellyfin.mobile.player.interaction.PlayerNotificationHelper]
  * construction (all lazy, and untouched by rewind/fastForward/seek/skip/speed logic) to avoid
- * pulling in real ExoPlayer/notification machinery under Robolectric.
+ * pulling in real ExoPlayer/notification machinery under Robolectric. The exception is "how the
+ * player is set up": those tests build the real player, to check what it does rather than which
+ * builder calls were made (that's [AudiobookPlayerSettingsTest]).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -177,8 +180,8 @@ class AudiobookPlayerViewModelTest {
 
     // --- how the player is set up ----------------------------------------------------------------
 
-    @Test
-    fun `the player it builds plays as spoken word`() {
+    /** Runs [block] on the real player [AudiobookPlayerViewModel.setupPlayer] builds, then releases it. */
+    private fun withBuiltPlayer(block: (ExoPlayer) -> Unit) {
         loadKoinModules(module { single<MediaSource.Factory> { DefaultMediaSourceFactory(viewModel.app) } })
         every { appPreferences.playbackSpeed } returns 1f
         injectPlayer(viewModel, null)
@@ -187,10 +190,26 @@ class AudiobookPlayerViewModelTest {
 
         val built = viewModel.playerOrNull!!
         try {
-            built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+            block(built)
         } finally {
             built.release()
         }
+    }
+
+    @Test
+    fun `the player it builds plays as spoken word`() = withBuiltPlayer { built ->
+        built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+    }
+
+    @Test
+    fun `the player it builds pauses when headphones are unplugged`() = withBuiltPlayer { built ->
+        built.playWhenReady = true
+        idle()
+
+        viewModel.app.sendBroadcast(Intent(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        idle()
+
+        built.playWhenReady shouldBe false
     }
 
     @Test

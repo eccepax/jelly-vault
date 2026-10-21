@@ -8,13 +8,6 @@ open class AppPreferences(context: Context) {
     protected val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
 
-    init {
-        // Settings that no longer exist, still in upgraded installs (and their backups)
-        if (RETIRED_PREFS.any(sharedPreferences::contains)) {
-            sharedPreferences.edit { RETIRED_PREFS.forEach { remove(it) } }
-        }
-    }
-
     var currentServerId: Long?
         get() = sharedPreferences.getLong(PREF_SERVER_ID, -1).takeIf { it >= 0 }
         set(value) {
@@ -46,8 +39,5 @@ open class AppPreferences(context: Context) {
         const val PREF_INSTANCE_URL = "pref_instance_url"
         const val PREF_REMOVE_DOWNLOADS_ON_SIGN_OUT = "pref_remove_downloads_on_sign_out"
         const val FRAGMENT_CONNECT_EXTRA_ERROR = "org.jellyfin.mobile.intent.extra.ERROR"
-
-        /** AudioVault's Bluetooth permission prompt, removed in favour of pausing when headphones go */
-        private val RETIRED_PREFS = listOf("pref_ignore_bluetooth_permission")
     }
 }
