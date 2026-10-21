@@ -469,7 +469,7 @@ private fun SleepTimerDialog(active: Boolean, onChoose: (SleepTimerChoice) -> Un
         if (active) add(Choice(SleepTimerChoice.TurnOff, stringResource(R.string.sleep_timer_turn_off)))
     }
     ChoiceDialog<SleepTimerChoice>(
-        title = stringResource(R.string.sleep_timer),
+        title = stringResource(CommonR.string.sleep_timer),
         choices = choices,
         selected = null,
         onSelect = onChoose,

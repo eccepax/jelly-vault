@@ -11,9 +11,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.music.domain.RepeatMode
 import org.jellyfin.mobile.music.domain.track
-import org.jellyfin.mobile.music.playback.SleepTimerState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -205,6 +206,31 @@ class NowPlayingScreenTest {
 
         composeRule.onNodeWithContentDescription("Sleep timer").assertIsDisplayed()
         composeRule.onNodeWithText("Sleeps in 10:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the sleep timer stops at the end of a song`() {
+        composeRule.setContent {
+            NowPlayingScreen(
+                state = NowPlayingUiState(),
+                actions = NowPlayingActions(),
+                sleepTimer = SleepTimerUi(state = SleepTimerState.EndOfSegment),
+            )
+        }
+
+        composeRule.onNodeWithText("Sleeps after this song").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Sleep timer").performClick()
+        composeRule.onNodeWithText("Turn off").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the sleep timer offers the end of the song`() {
+        composeRule.setContent {
+            NowPlayingScreen(state = NowPlayingUiState(), actions = NowPlayingActions(), sleepTimer = SleepTimerUi())
+        }
+
+        composeRule.onNodeWithContentDescription("Sleep timer").performClick()
+        composeRule.onNodeWithText("End of this song").assertIsDisplayed()
     }
 
     @Test

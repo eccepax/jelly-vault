@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.nowplaying
+package org.jellyfin.mobile.common.ui.components
 
 import android.app.Application
 import androidx.compose.foundation.layout.Column
@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.kotest.matchers.shouldBe
-import org.jellyfin.mobile.music.playback.SleepTimerState
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,14 +29,14 @@ class SleepTimerButtonTest {
         val ui = SleepTimerUi(
             state = state,
             onStart = { events += "start ${it / minute}m" },
-            onEndOfSong = { events += "endOfSong" },
+            onEndOfSegment = { events += "endOfSegment" },
             onExtend = { events += "extend" },
             onCancel = { events += "cancel" },
         )
         composeRule.setContent {
             Column {
-                SleepTimerButton(ui)
-                SleepTimerLabel(ui.state)
+                SleepTimerButton(ui, endOfSegment = "End of this chapter")
+                SleepTimerLabel(ui.state, sleepsAfterSegment = "Sleeps after this chapter")
             }
         }
     }
@@ -44,7 +44,7 @@ class SleepTimerButtonTest {
     private fun openMenu() = composeRule.onNodeWithContentDescription("Sleep timer").performClick()
 
     @Test
-    fun `off, it offers durations and the end of the song`() {
+    fun `off, it offers durations and the end of the segment`() {
         show(SleepTimerState.Off)
         openMenu()
 
@@ -52,9 +52,9 @@ class SleepTimerButtonTest {
         composeRule.onNodeWithText("1 hour").assertIsDisplayed()
         composeRule.onNodeWithText("30 minutes").performClick()
         openMenu()
-        composeRule.onNodeWithText("End of this song").performClick()
+        composeRule.onNodeWithText("End of this chapter").performClick()
 
-        events shouldBe listOf("start 30m", "endOfSong")
+        events shouldBe listOf("start 30m", "endOfSegment")
         composeRule.onNodeWithText("Turn off").assertDoesNotExist()
     }
 
@@ -79,12 +79,13 @@ class SleepTimerButtonTest {
     }
 
     @Test
-    fun `end of song says so, and can be turned off`() {
-        show(SleepTimerState.EndOfSong)
+    fun `end of segment says so, and can be turned off`() {
+        show(SleepTimerState.EndOfSegment)
 
-        composeRule.onNodeWithText("Sleeps after this song").assertIsDisplayed()
+        composeRule.onNodeWithText("Sleeps after this chapter").assertIsDisplayed()
         openMenu()
         composeRule.onNodeWithText("+15 minutes").assertDoesNotExist()
+        composeRule.onNodeWithText("End of this chapter").assertDoesNotExist()
         composeRule.onNodeWithText("Turn off").performClick()
 
         events shouldBe listOf("cancel")
