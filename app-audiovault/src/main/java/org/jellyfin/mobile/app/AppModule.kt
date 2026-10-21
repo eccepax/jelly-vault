@@ -14,8 +14,6 @@ import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.TsExtractor
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import coil3.ImageLoader
@@ -53,6 +51,7 @@ import org.jellyfin.mobile.player.playback.JellyfinAudiobookProgress
 import org.jellyfin.mobile.player.playback.JellyfinAudiobooks
 import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
 import org.jellyfin.mobile.player.playback.PlayerAudiobookController
+import org.jellyfin.mobile.player.playback.audioExtractorsFactory
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.utils.Constants
@@ -63,9 +62,8 @@ import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.koin.android.ext.koin.androidApplication
 import org.koin.androidx.fragment.dsl.fragment
 import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.bind
 import org.koin.dsl.module
-
-private const val TS_SEARCH_PACKETS = 1800
 
 val applicationModule = module {
     single { AudioVaultAppPreferences(androidApplication()) }
@@ -103,23 +101,34 @@ val applicationModule = module {
     // Connection helper
 
     // Playback: a MediaController bound to AudiobookPlaybackService, usable before it finishes connecting.
-    single<AudiobookPlaybackController> {
+    single {
         val context = androidApplication()
         val audiobooks = get<JellyfinAudiobooks>()
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
-        val connection = Futures.transform(
-            MediaController.Builder(context, token).buildAsync(),
-            { controller ->
-                PlayerAudiobookController(controller, audiobooks::streamUrl) { enabled ->
-                    val args = bundleOf(AudiobookSessionCallback.KEY_ENABLED to enabled)
-                    controller.sendCustomCommand(AudiobookSessionCallback.SET_SKIP_SILENCE, args)
-                }
-            },
-            mainExecutor,
-        )
-        DeferredAudiobookController(connection, mainExecutor, mainScope())
-    }
+        lateinit var deferred: DeferredAudiobookController
+        // The service let go of the session (swiped away while paused): the next command reconnects
+        val onDisconnected = object : MediaController.Listener {
+            override fun onDisconnected(controller: MediaController) {
+                controller.release()
+                deferred.disconnected()
+            }
+        }
+        val connect = {
+            Futures.transform(
+                MediaController.Builder(context, token).setListener(onDisconnected).buildAsync(),
+                { controller ->
+                    PlayerAudiobookController(controller, audiobooks::streamUrl) { enabled ->
+                        val args = bundleOf(AudiobookSessionCallback.KEY_ENABLED to enabled)
+                        controller.sendCustomCommand(AudiobookSessionCallback.SET_SKIP_SILENCE, args)
+                    }
+                },
+                mainExecutor,
+            )
+        }
+        deferred = DeferredAudiobookController(connect, mainExecutor, mainScope())
+        deferred
+    } bind AudiobookPlaybackController::class
     single { JellyfinAudiobooks(get()) }
     single {
         val audiobooks = get<JellyfinAudiobooks>()
@@ -188,16 +197,10 @@ val applicationModule = module {
 
     single<MediaSource.Factory> {
         val context: Context = get()
-        val extractorsFactory = DefaultExtractorsFactory().apply {
-            // https://github.com/google/ExoPlayer/issues/8571
-            setTsExtractorTimestampSearchBytes(
-                when {
-                    !context.isLowRamDevice -> TS_SEARCH_PACKETS * TsExtractor.TS_PACKET_SIZE // 3x default
-                    else -> TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES
-                },
-            )
-        }
-        DefaultMediaSourceFactory(get<DownloadAwareDataSource.Factory>(), extractorsFactory)
+        DefaultMediaSourceFactory(
+            get<DownloadAwareDataSource.Factory>(),
+            audioExtractorsFactory(context.isLowRamDevice),
+        )
     }
 }
 

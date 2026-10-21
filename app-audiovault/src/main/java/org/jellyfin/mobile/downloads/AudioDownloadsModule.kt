@@ -25,7 +25,6 @@ import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.mobile.data.JellyfinDatabase
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
-import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.MediaSourceResolver
@@ -97,7 +96,6 @@ val audioDownloadsModule = module {
     // Signing out keeps downloads unless the user asked otherwise in Settings
     single {
         val downloadsOnSignOut = DownloadsOnSignOut(get(), get<AudiobookDownloads>()::removeAll)
-        val playback = get<AudiobookPlaybackController>()
         val sleepTimer = get<SleepTimer>()
         val reporter = get<AudiobookProgressReporter>()
         SignOut(
@@ -105,8 +103,7 @@ val audioDownloadsModule = module {
             get<ApiClientController>()::logoutUser,
             whileSignedIn = {
                 sleepTimer.cancel()
-                playback.stop()
-                reporter.finish()
+                reporter.finishAndStop()
             },
             forgetAccount = { downloadsOnSignOut() },
         )

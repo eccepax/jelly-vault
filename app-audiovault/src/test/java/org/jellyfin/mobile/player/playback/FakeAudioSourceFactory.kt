@@ -14,7 +14,8 @@ import java.io.IOException
  * Fake audio sources of [durationMs] that keep the requested [MediaItem] (so media ids and
  * metadata survive). Like TuneVault's TenSecondMediaSourceFactory, but long enough for chapters.
  * [isSeekable] false stands for a live transcode, which the player can't seek in. The tracks in
- * [failing] can't be loaded, as when the server can't be reached.
+ * [failing] can't be loaded, as when the server can't be reached; one taken out of it loads on the
+ * next try.
  */
 class FakeAudioSourceFactory(
     private val durationMs: Long = 100_000L,
@@ -26,7 +27,7 @@ class FakeAudioSourceFactory(
 
     override fun createMediaSource(mediaItem: MediaItem): MediaSource {
         created += mediaItem
-        if (mediaItem.mediaId in failing) return Unreachable()
+        if (mediaItem.mediaId in failing) return Unreachable { mediaItem.mediaId in failing }
         return FakeMediaSource(
             FakeTimeline(
                 FakeTimeline.TimelineWindowDefinition.Builder()
@@ -46,13 +47,16 @@ class FakeAudioSourceFactory(
 
     override fun getSupportedTypes(): IntArray = intArrayOf(C.CONTENT_TYPE_OTHER)
 
-    /** Never loads: the player gives up with a source error. */
-    private class Unreachable : FakeMediaSource() {
+    /** Doesn't load while [isFailing]: the player gives up with a source error. */
+    private class Unreachable(private val isFailing: () -> Boolean) : FakeMediaSource() {
         init {
             setAllowPreparation(false)
         }
 
-        override fun maybeThrowSourceInfoRefreshError() = throw IOException("No route to host")
+        override fun maybeThrowSourceInfoRefreshError() {
+            if (isFailing()) throw IOException("No route to host")
+            setAllowPreparation(true)
+        }
     }
 
     private companion object {

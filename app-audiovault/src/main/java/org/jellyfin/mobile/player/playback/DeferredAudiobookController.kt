@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,13 +12,16 @@ import java.util.concurrent.Executor
 
 /**
  * An [AudiobookPlaybackController] usable immediately while the real one is still connecting (in
- * the app: a MediaController binding to the AudiobookPlaybackService). Commands sent before the
- * connection completes are replayed in order once it does (see [DeferredConnection]).
+ * the app: a MediaController binding to the AudiobookPlaybackService). It connects on the first
+ * command, or when the service starts and asks it to [connect]: connecting starts the service and
+ * its player, not worth it just to follow the state. Commands sent before the connection completes
+ * are replayed in order once it does; once it's [disconnected], the next command connects again
+ * (see [DeferredConnection]).
  */
 // Each method forwards one command; the surface is the controller interface's.
 @Suppress("TooManyFunctions")
 class DeferredAudiobookController(
-    connection: ListenableFuture<out AudiobookPlaybackController>,
+    connect: () -> ListenableFuture<out AudiobookPlaybackController>,
     callbackExecutor: Executor,
     private val scope: CoroutineScope,
 ) : AudiobookPlaybackController {
@@ -25,14 +29,25 @@ class DeferredAudiobookController(
     private val _state = MutableStateFlow(AudiobookPlaybackState())
     override val state: StateFlow<AudiobookPlaybackState> = _state.asStateFlow()
 
-    private val connection = DeferredConnection(connection, callbackExecutor) { connected ->
-        scope.launch { connected.state.collect { _state.value = it } }
+    private var following: Job? = null
+    private val connection = DeferredConnection(connect, callbackExecutor) { connected ->
+        following = scope.launch { connected.state.collect { _state.value = it } }
     }
     private val delegate: AudiobookPlaybackController? get() = this.connection.connected
 
     override val positionMs: Long get() = delegate?.positionMs ?: 0L
     override val durationMs: Long get() = delegate?.durationMs ?: 0L
     override val volume: Float get() = delegate?.volume ?: 1f
+
+    fun connect() = connection.connect()
+
+    /** The connection was lost, and what was playing with it: nothing is now. */
+    fun disconnected() {
+        connection.disconnected()
+        following?.cancel()
+        following = null
+        _state.value = AudiobookPlaybackState()
+    }
 
     private fun send(command: (AudiobookPlaybackController) -> Unit) = connection.send(command)
 

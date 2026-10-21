@@ -27,8 +27,9 @@ import org.robolectric.annotation.Config
 @Config(application = Application::class)
 class PlayerAudiobookControllerTest {
 
+    private val unreachable = mutableSetOf("unreachable")
     private val exoPlayer: ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
-        .setMediaSourceFactory(FakeAudioSourceFactory(durationMs = 100_000L, failing = setOf("unreachable")))
+        .setMediaSourceFactory(FakeAudioSourceFactory(durationMs = 100_000L, failing = unreachable))
         .setSeekBackIncrementMs(10_000L)
         .setSeekForwardIncrementMs(30_000L)
         .build()
@@ -212,6 +213,19 @@ class PlayerAudiobookControllerTest {
         state.error shouldNotBe null
 
         controller.play(listOf(track("b")), startIndex = 0, startPositionMs = 0L)
+        state.error shouldBe null
+    }
+
+    @Test
+    fun `a playback error goes once the book plays again`() {
+        controller.play(listOf(track("unreachable")), startIndex = 0, startPositionMs = 0L)
+        advance(exoPlayer).untilPlayerError()
+        state.error shouldNotBe null
+        unreachable.clear()
+
+        controller.play()
+        advance(exoPlayer).untilState(Player.STATE_READY)
+
         state.error shouldBe null
     }
 

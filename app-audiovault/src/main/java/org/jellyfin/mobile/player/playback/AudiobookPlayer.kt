@@ -3,6 +3,7 @@ package org.jellyfin.mobile.player.playback
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 
@@ -13,9 +14,18 @@ import androidx.media3.common.Timeline
  *
  * A transcode is a live stream the player can't seek in, so seeking in one starts the stream again
  * from the target (the server transcodes from [START_PARAM]). Positions and the length still count
- * from the start of the whole track, for everything that reads them.
+ * from the start of the whole track, for everything that reads them. A track started part way is
+ * put back to its start once it's left, so going back to it later plays it from its beginning.
  */
 class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
+
+    init {
+        player.addListener(
+            object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = restoreLeftTracks()
+            },
+        )
+    }
 
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 
@@ -24,9 +34,13 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
         get() = currentMediaItem?.localConfiguration?.uri?.getQueryParameter(START_PARAM)
             ?.toLongOrNull()?.div(TICKS_PER_MS) ?: 0L
 
-    /** A transcode the player has opened: it can't seek in it. A stream still loading isn't one yet. */
+    /**
+     * A transcode: one the player has opened and can't seek in, or one already started part way,
+     * which only a transcode is (it's still loading, so the player doesn't know yet).
+     */
     private val isLiveTranscode: Boolean
         get() {
+            if (streamStartMs > 0) return true
             val timeline = currentTimeline
             if (timeline.isEmpty) return false
             val window = timeline.getWindow(currentMediaItemIndex, Timeline.Window())
@@ -63,6 +77,17 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
     override fun seekForward() {
         val target = currentPosition + seekForwardIncrement
         seekTo(duration.takeIf { it != C.TIME_UNSET }?.let(target::coerceAtMost) ?: target)
+    }
+
+    /** Puts the tracks not playing that were started part way back to their start. */
+    private fun restoreLeftTracks() {
+        for (index in 0 until mediaItemCount) {
+            val item = getMediaItemAt(index)
+            val uri = item.localConfiguration?.uri
+            if (index != currentMediaItemIndex && uri?.getQueryParameter(START_PARAM) != null) {
+                replaceMediaItem(index, item.buildUpon().setUri(uri.withStart(null)).build())
+            }
+        }
     }
 
     /** Plays the track's stream again from [positionMs], as playing or paused as it was. */
@@ -126,14 +151,18 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
     }
 }
 
-private fun Uri.withStart(positionMs: Long): Uri {
+/** This stream, starting from [positionMs]; from the beginning when that's null. */
+private fun Uri.withStart(positionMs: Long?): Uri {
     val builder = buildUpon().clearQuery()
     for (name in queryParameterNames) {
         if (name.equals(AudiobookPlayer.START_PARAM, ignoreCase = true)) continue
         for (value in getQueryParameters(name)) builder.appendQueryParameter(name, value)
     }
-    return builder.appendQueryParameter(
-        AudiobookPlayer.START_PARAM,
-        (positionMs * AudiobookPlayer.TICKS_PER_MS).toString(),
-    ).build()
+    if (positionMs != null) {
+        builder.appendQueryParameter(
+            AudiobookPlayer.START_PARAM,
+            (positionMs * AudiobookPlayer.TICKS_PER_MS).toString(),
+        )
+    }
+    return builder.build()
 }

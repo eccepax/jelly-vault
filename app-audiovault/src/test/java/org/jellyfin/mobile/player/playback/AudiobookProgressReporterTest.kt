@@ -207,6 +207,27 @@ class AudiobookProgressReporterTest {
         server.reports shouldBe listOf("started streamed at 100000", "stopped streamed at 100000")
     }
 
+    @Test
+    fun `signing out stops the book only once where it got to is reported, as stopping loses it`() = runTest {
+        // As through the app's MediaController: the position is gone the moment the book stops, and
+        // the state only catches up later
+        val mediaController = object : AudiobookPlaybackController by controller {
+            override fun stop() {
+                controller.commands += "stop"
+                controller.positionMs = 0L
+            }
+        }
+        val reporter = AudiobookProgressReporter(mediaController, server, device, backgroundScope)
+        reporter.start()
+        controller.playing(streamed, positionMs = 100_000L)
+        runCurrent()
+
+        reporter.finishAndStop()
+
+        server.reports.last() shouldBe "stopped streamed at 100000"
+        controller.commands shouldBe listOf("stop")
+    }
+
     // --- Downloaded tracks --------------------------------------------------------------------------
 
     @Test

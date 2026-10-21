@@ -148,4 +148,32 @@ class TranscodedAudiobookPlayerTest {
         player.playWhenReady shouldBe true
         player.currentPosition shouldBeGreaterThanOrEqual 1_200_000L
     }
+
+    @Test
+    fun `going back to a track that was sought in starts it from its beginning`() {
+        load(track("a"), track("b"))
+        player.seekTo(1_200_000L)
+        settle()
+        player.seekToNextMediaItem()
+        settle()
+
+        player.seekToPreviousMediaItem()
+        settle()
+
+        player.currentMediaItemIndex shouldBe 0
+        player.currentPosition shouldBe 0L
+        lastStreamUrl shouldNotContain AudiobookPlayer.START_PARAM
+    }
+
+    @Test
+    fun `seeking back again before the restarted stream has loaded still gets there`() {
+        load(track("a"))
+        player.seekTo(1_200_000L)
+
+        player.seekTo(600_000L)
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=6000000000"
+        player.currentPosition shouldBe 600_000L
+    }
 }

@@ -16,6 +16,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,15 +42,17 @@ class AudiobookSessionCallbackTest {
         startPositionMs = 12_000L,
     )
     private var match: AudiobookQueue? = found
+    private var search: suspend () -> AudiobookQueue? = { match }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val callback = AudiobookSessionCallback(
         exoPlayer = exoPlayer,
         findBook = { query ->
             searches += query
-            match
+            search()
         },
         streamUrl = { "https://vault.test/Audio/$it/universal" },
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+        scope = scope,
     )
 
     @After
@@ -105,6 +109,34 @@ class AudiobookSessionCallbackTest {
         val result = searchFor("nonexistent")
 
         runCatching { result.get() }.exceptionOrNull()?.javaClass shouldBe ExecutionException::class.java
+    }
+
+    @Test
+    fun `a search that fails plays nothing, rather than crashing the app`() {
+        search = { throw IllegalStateException("The database is gone") }
+
+        val result = searchFor("anything")
+
+        result.isDone shouldBe true
+        runCatching { result.get() }.exceptionOrNull()?.javaClass shouldBe ExecutionException::class.java
+    }
+
+    @Test
+    fun `a search cut short by the service stopping doesn't leave the request waiting`() {
+        search = { awaitCancellation() }
+        val result = searchFor("anything")
+
+        scope.cancel()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        result.isDone shouldBe true
+    }
+
+    @Test
+    fun `a search after the service stopped doesn't leave the request waiting`() {
+        scope.cancel()
+
+        searchFor("anything").isDone shouldBe true
     }
 
     @Test

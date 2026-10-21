@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.SettableFuture
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -11,9 +12,15 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DeferredAudiobookControllerTest {
 
-    private val connection = SettableFuture.create<FakeAudiobookController>()
+    /** Each connection asked for, in order; the test completes them. */
+    private val attempts = mutableListOf<SettableFuture<FakeAudiobookController>>()
+    private val connection get() = attempts.last()
     private val scope = TestScope(UnconfinedTestDispatcher())
-    private val controller = DeferredAudiobookController(connection, MoreExecutors.directExecutor(), scope)
+    private val controller = DeferredAudiobookController(
+        connect = { SettableFuture.create<FakeAudiobookController>().also { attempts += it } },
+        callbackExecutor = MoreExecutors.directExecutor(),
+        scope = scope,
+    )
 
     private val book = listOf(AudiobookTrack(id = "a", title = "a", durationMs = 0L))
 
@@ -31,6 +38,7 @@ class DeferredAudiobookControllerTest {
     @Test
     fun `commands after the connection go straight through`() {
         val delegate = FakeAudiobookController()
+        controller.connect()
         connection.set(delegate)
 
         controller.togglePlayPause()
@@ -53,6 +61,7 @@ class DeferredAudiobookControllerTest {
     @Test
     fun `state, position and length mirror the connected controller`() {
         val delegate = FakeAudiobookController()
+        controller.connect()
         connection.set(delegate)
 
         delegate.playing(AudiobookTrack(id = "a", title = "A", durationMs = 60_000L), positionMs = 1_234L)
@@ -67,5 +76,37 @@ class DeferredAudiobookControllerTest {
         controller.state.value shouldBe AudiobookPlaybackState()
         controller.positionMs shouldBe 0L
         controller.volume shouldBe 1f
+    }
+
+    /** Connecting starts the playback service and its player: not worth it until there's something to play. */
+    @Test
+    fun `following its state and position doesn't connect`() {
+        controller.state.value
+        controller.positionMs
+        controller.durationMs
+
+        attempts.shouldBeEmpty()
+    }
+
+    @Test
+    fun `when the connection is lost nothing is playing, and the next command connects again`() {
+        val lost = FakeAudiobookController()
+        controller.connect()
+        connection.set(lost)
+        lost.playing(AudiobookTrack(id = "a", title = "A", durationMs = 60_000L), positionMs = 1_234L)
+
+        controller.disconnected()
+
+        controller.state.value shouldBe AudiobookPlaybackState()
+        controller.positionMs shouldBe 0L
+        lost.playing(AudiobookTrack(id = "b", title = "B", durationMs = 60_000L))
+        controller.state.value shouldBe AudiobookPlaybackState()
+
+        controller.play()
+        val delegate = FakeAudiobookController()
+        connection.set(delegate)
+
+        attempts.size shouldBe 2
+        delegate.commands shouldBe listOf("play")
     }
 }

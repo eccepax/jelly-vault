@@ -32,6 +32,7 @@ import org.jellyfin.mobile.player.playback.Chapter
 import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.utils.Constants
+import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -174,6 +175,26 @@ class PlayerFragmentTest {
             controller.stop()
             idle()
 
+            scenario.onFragment { it.parentFragmentManager.fragments.none { f -> f is PlayerFragment } shouldBe true }
+        }
+    }
+
+    @Test
+    fun `when the book can't be started, it says why and the screen goes`() {
+        val viewModel = playerViewModel(controller, items = { throw ApiClientException("No route to host") })
+        startKoinWith(viewModel)
+        val fragmentArgs = Bundle().apply { putParcelable(Constants.EXTRA_MEDIA_PLAY_OPTIONS, playOptions()) }
+
+        launchFragmentInContainer<Fragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { below ->
+                below.parentFragmentManager.beginTransaction()
+                    .replace(below.id, PlayerFragment().apply { arguments = fragmentArgs })
+                    .addToBackStack(null)
+                    .commit()
+            }
+            idle()
+
+            ShadowToast.getTextOfLatestToast() shouldBe string(R.string.player_error_network_failure)
             scenario.onFragment { it.parentFragmentManager.fragments.none { f -> f is PlayerFragment } shouldBe true }
         }
     }

@@ -75,6 +75,15 @@ class AudiobookProgressReporter(
         withTimeoutOrNull(FINISH_TIMEOUT_MS) { sent.await() }
     }
 
+    /**
+     * [finish]es, then stops the book, for signing out. In that order: through the app's
+     * MediaController the position is gone the moment the book stops, before its state says so.
+     */
+    suspend fun finishAndStop() {
+        finish()
+        controller.stop()
+    }
+
     private fun onState(state: AudiobookPlaybackState) {
         val current = listen
         val track = state.currentTrack

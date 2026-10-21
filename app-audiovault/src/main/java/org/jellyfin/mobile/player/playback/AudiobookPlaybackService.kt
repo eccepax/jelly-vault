@@ -18,6 +18,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.player.forAudiobooks
 import org.jellyfin.mobile.player.wakeModeFor
 import org.koin.android.ext.android.inject
+import timber.log.Timber
 
 /**
  * Hosts the ExoPlayer behind a MediaSession, so a book keeps playing with the app swiped away, and
@@ -45,12 +47,19 @@ class AudiobookPlaybackService : MediaSessionService() {
     private val preferences: AudioVaultAppPreferences by inject()
     private val voiceSearch: AudiobookVoiceSearch by inject()
     private val audiobooks: JellyfinAudiobooks by inject()
+    private val appController: DeferredAudiobookController by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var session: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
+        session = newSession()
+        // Started from outside the app (a voice search, a media button): the app follows it too
+        appController.connect()
+    }
+
+    private fun newSession(): MediaSession {
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory(), mediaSourceFactory)
             .forAudiobooks()
             .setSeekBackIncrementMs(SEEK_BACK_MS)
@@ -63,7 +72,7 @@ class AudiobookPlaybackService : MediaSessionService() {
                 addListener(WakeModeFollowsTrack(this))
             }
 
-        session = MediaSession.Builder(this, AudiobookPlayer(exoPlayer))
+        return MediaSession.Builder(this, AudiobookPlayer(exoPlayer))
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
             .setSessionActivity(
@@ -124,22 +133,32 @@ class AudiobookPlaybackService : MediaSessionService() {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    /** A new session if the last was let go of, for a controller connecting again before the service stops. */
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession =
+        session ?: newSession().also { session = it }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiping the app away while paused shouldn't leave a dead notification behind.
+        // Swiping the app away while paused shouldn't leave a dead notification behind: the session
+        // goes, and with it the notification and the app's controller, which kept the service bound
         val player = session?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) stopSelf()
+        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+            releaseSession()
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {
         scope.cancel()
+        releaseSession()
+        super.onDestroy()
+    }
+
+    private fun releaseSession() {
         session?.run {
             player.release()
             release()
         }
         session = null
-        super.onDestroy()
     }
 
     companion object {
@@ -192,13 +211,24 @@ class AudiobookSessionCallback(
 
         val result = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
         scope.launch {
-            val book = findBook(query)
+            val book = try {
+                findBook(query)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.w(e, "Couldn't search for \"%s\"", query)
+                result.setException(e)
+                return@launch
+            }
             if (book == null) {
                 result.setException(NoSuchElementException("Nothing matches \"$query\""))
             } else {
                 val items = book.tracks.map { it.toMediaItem(streamUrl) }
                 result.set(MediaSession.MediaItemsWithStartPosition(items, book.startIndex, book.startPositionMs))
             }
+        }.invokeOnCompletion { cause ->
+            // The service stopped before the search was done, or even started
+            if (cause != null) result.setException(cause)
         }
         return result
     }

@@ -62,7 +62,11 @@ class PlayerFragment : Fragment() {
                 is PlayerException.InvalidPlayOptions -> context.toast(R.string.player_error_invalid_play_options)
                 is PlayerException.NetworkFailure -> context.toast(R.string.player_error_network_failure)
                 is PlayerException.UnsupportedContent -> context.toast(R.string.player_error_unsupported_content)
-                null -> Unit // success
+                null -> return@launch // success
+            }
+            // Nothing to show: back to where the book was picked
+            if (viewModel.state.value.currentTrack == null && !parentFragmentManager.isStateSaved) {
+                parentFragmentManager.popBackStack()
             }
         }
     }

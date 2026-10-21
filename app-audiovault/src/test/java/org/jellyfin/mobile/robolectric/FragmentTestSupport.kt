@@ -15,6 +15,7 @@ import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import java.util.UUID
 
 /**
  * A real [AudiobookPlayerViewModel] over [controller], a fake of the playback service, for
@@ -25,10 +26,14 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 fun playerViewModel(
     controller: FakeAudiobookController = FakeAudiobookController(),
     speed: Float = 1f,
+    /** The server's items with these ids: by default, each a book called "Book". */
+    items: suspend (List<UUID>) -> List<BaseItemDto> = { ids ->
+        ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "Book") }
+    },
 ): AudiobookPlayerViewModel {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val loader = AudiobookQueueLoader(
-        items = { ids -> ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "Book") } },
+        items = items,
         playable = { null },
         coverUrl = { null },
     )

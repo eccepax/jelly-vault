@@ -9,9 +9,11 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.junit.After
@@ -35,6 +37,7 @@ class AudiobookPlaybackServiceTest {
         every { playbackSpeed } returns 1.5f
         every { skipSilenceEnabled } returns true
     }
+    private val appController = mockk<DeferredAudiobookController>(relaxed = true)
     private lateinit var controller: ServiceController<AudiobookPlaybackService>
     private val service get() = controller.get()
 
@@ -48,6 +51,7 @@ class AudiobookPlaybackServiceTest {
                     single { preferences }
                     single { mockk<AudiobookVoiceSearch>() }
                     single { mockk<JellyfinAudiobooks>() }
+                    single { appController }
                 },
             )
         }
@@ -114,5 +118,25 @@ class AudiobookPlaybackServiceTest {
         service.onTaskRemoved(null)
 
         shadowOf(service).isStoppedBySelf shouldBe false
+    }
+
+    @Test
+    fun `starting, it connects the app to it, so the app follows a book started outside it (by voice, say)`() {
+        verify { appController.connect() }
+    }
+
+    @Test
+    fun `swiping the app away while paused takes the paused book, and its notification, with it`() {
+        val paused = player
+        paused.setMediaItem(
+            AudiobookTrack(id = "a", title = "a", durationMs = 0L).toMediaItem { "https://vault.test/$it" },
+        )
+        paused.prepare()
+
+        service.onTaskRemoved(null)
+
+        shadowOf(service).isStoppedBySelf shouldBe true
+        player shouldNotBe paused
+        player.mediaItemCount shouldBe 0
     }
 }

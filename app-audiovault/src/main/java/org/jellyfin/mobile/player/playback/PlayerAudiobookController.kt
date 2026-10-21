@@ -101,7 +101,9 @@ class PlayerAudiobookController(
                 isPlaying = player.isPlaying,
                 isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 isEnded = player.playbackState == Player.STATE_ENDED,
-                error = player.playerError?.let { it.localizedMessage ?: it.errorCodeName } ?: state.error,
+                // Kept while the player sits stopped by it; gone once it plays again
+                error = player.playerError?.let { it.localizedMessage ?: it.errorCodeName }
+                    ?: state.error.takeIf { player.playbackState == Player.STATE_IDLE },
             )
         }
     }
