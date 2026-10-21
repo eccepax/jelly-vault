@@ -12,6 +12,7 @@ import org.junit.Test
  * something to hardcode expectations against): after switching to "Sort by Title", whatever's
  * currently on screen must be in ascending alphabetical order.
  */
+@BrowseArea
 class LibrarySortE2ETest : LoggedInE2ETest() {
 
     @Test

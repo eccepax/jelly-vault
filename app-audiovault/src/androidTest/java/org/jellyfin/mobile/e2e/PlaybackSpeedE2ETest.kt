@@ -10,6 +10,7 @@ import org.junit.Test
  * The player's speed button shows the speed in use and opens the choice of speeds, matched by
  * their text ("1.5x"). Verifies the saved result via [koinGet], which is what the next book reads.
  */
+@PlaybackArea
 class PlaybackSpeedE2ETest : LoggedInE2ETest() {
 
     @Test
