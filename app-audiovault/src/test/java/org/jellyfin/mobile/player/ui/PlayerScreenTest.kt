@@ -21,7 +21,6 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
-import org.jellyfin.mobile.player.sleeptimer.SleepTimerManager.SleepTimerDuration
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

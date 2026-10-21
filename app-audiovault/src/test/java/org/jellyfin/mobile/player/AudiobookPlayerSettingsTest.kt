@@ -8,8 +8,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
-import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
 import org.junit.jupiter.api.Test
 
 /** The settings every audiobook player is built with; ExoPlayer has no getters for most of them. */
@@ -46,11 +44,11 @@ class AudiobookPlayerSettingsTest {
 
     @Test
     fun `a streamed book keeps the network awake while the screen is off`() {
-        wakeModeFor(mockk<RemoteJellyfinMediaSource>()) shouldBe C.WAKE_MODE_NETWORK
+        wakeModeFor(onDevice = false) shouldBe C.WAKE_MODE_NETWORK
     }
 
     @Test
     fun `a downloaded book keeps only the CPU awake, not Wi-Fi`() {
-        wakeModeFor(mockk<LocalJellyfinMediaSource>()) shouldBe C.WAKE_MODE_LOCAL
+        wakeModeFor(onDevice = true) shouldBe C.WAKE_MODE_LOCAL
     }
 }

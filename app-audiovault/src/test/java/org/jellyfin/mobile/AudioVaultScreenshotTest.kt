@@ -15,8 +15,7 @@ import org.jellyfin.mobile.library.LibraryItem
 import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.library.SortOption
 import org.jellyfin.mobile.player.ui.PlayerFragment
-import org.jellyfin.mobile.robolectric.mockedPlayerViewModel
-import org.jellyfin.mobile.robolectric.mockedPlayerViewModelForPlayerFragment
+import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
@@ -88,7 +87,7 @@ class AudioVaultScreenshotTest {
                     single { mockk<ActivityEventHandler>(relaxed = true) }
                     single { apiClient }
                     viewModel { library }
-                    viewModel { mockedPlayerViewModel() }
+                    viewModel { playerViewModel() }
                 },
             )
         }
@@ -106,7 +105,7 @@ class AudioVaultScreenshotTest {
                     single { apiClient }
                     single { mockk<AppPreferences>(relaxed = true) }
                     single { mockk<AudioVaultAppPreferences>(relaxed = true) }
-                    viewModel { mockedPlayerViewModelForPlayerFragment() }
+                    viewModel { playerViewModel() }
                 },
             )
         }

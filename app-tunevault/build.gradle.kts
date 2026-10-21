@@ -34,6 +34,7 @@ dependencies {
     // Common module
     implementation(project(":common"))
     implementation(project(":common-downloads"))
+    implementation(project(":common-media"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)

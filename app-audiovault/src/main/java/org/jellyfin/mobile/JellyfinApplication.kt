@@ -8,6 +8,9 @@ import org.jellyfin.mobile.common.app.apiModule
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.data.databaseModule
 import org.jellyfin.mobile.downloads.audioDownloadsModule
+import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
+import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
+import org.jellyfin.mobile.player.playback.removeRetiredNotificationChannels
 import org.jellyfin.mobile.utils.JellyTree
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
@@ -32,12 +35,17 @@ class JellyfinApplication : Application() {
 
         // Setup logging
         Timber.plant(JellyTree())
+        removeRetiredNotificationChannels(this)
 
-        startKoin {
+        val koin = startKoin {
             androidContext(this@JellyfinApplication)
             fragmentFactory()
 
             modules(audioVaultModules)
-        }
+        }.koin
+
+        // App-wide, like the player in the playback service: they follow a book wherever it plays
+        koin.get<AudiobookProgressReporter>().start()
+        koin.get<MediaSegmentSkipper>().start()
     }
 }

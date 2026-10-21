@@ -18,6 +18,7 @@ import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.downloads.applyDownloadMethod
+import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.activityViewModel
@@ -28,6 +29,7 @@ class SettingsFragment : Fragment() {
     private val appPreferences: AudioVaultAppPreferences by inject()
     private val downloadManager: DownloadManager by inject()
     private val clientInfo: ClientInfo by inject()
+    private val playback: AudiobookPlaybackController by inject()
 
     private var _binding: FragmentComposeBinding? = null
     private val binding get() = _binding!!
@@ -46,7 +48,11 @@ class SettingsFragment : Fragment() {
         val actions = SettingsActions(
             onBack = { requireActivity().onBackPressedDispatcher.onBackPressed() },
             onHoldToSpeedUp = { appPreferences.exoPlayerAllowPressSpeedUp = it },
-            onSkipSilence = { appPreferences.skipSilenceEnabled = it },
+            onSkipSilence = { enabled ->
+                appPreferences.skipSilenceEnabled = enabled
+                // The book playing, too: the service reads the setting only as it starts
+                playback.setSkipSilence(enabled)
+            },
             onFlatLibrary = { appPreferences.libraryGlobalFlattened = it },
             onDownloadMethod = { method ->
                 appPreferences.downloadMethod = method

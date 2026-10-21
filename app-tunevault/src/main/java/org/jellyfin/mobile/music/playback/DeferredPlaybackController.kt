@@ -7,14 +7,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.music.domain.Track
-import timber.log.Timber
-import java.util.concurrent.ExecutionException
+import org.jellyfin.mobile.player.session.DeferredConnection
 import java.util.concurrent.Executor
 
 /**
  * A [PlaybackController] usable immediately while the real one is still connecting (in the app: a
  * MediaController binding to the PlaybackService). Commands sent before the connection completes
- * are replayed in order once it does; if it fails they're dropped and logged.
+ * are replayed in order once it does; if it fails they're dropped and logged (see [DeferredConnection]).
  */
 class DeferredPlaybackController(
     connection: ListenableFuture<out PlaybackController>,
@@ -25,41 +24,17 @@ class DeferredPlaybackController(
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
+    private val connection = DeferredConnection(connection, callbackExecutor) { connected ->
+        scope.launch { connected.state.collect { _state.value = it } }
+    }
+    private val delegate: PlaybackController? get() = this.connection.connected
+
     override val positionMs: Long get() = delegate?.positionMs ?: 0L
 
     override val durationMs: Long get() = delegate?.durationMs ?: 0L
     override val volume: Float get() = delegate?.volume ?: 1f
 
-    private var delegate: PlaybackController? = null
-    private var failed = false
-    private val pending = mutableListOf<(PlaybackController) -> Unit>()
-
-    init {
-        connection.addListener({ onConnected(connection) }, callbackExecutor)
-    }
-
-    private fun onConnected(connection: ListenableFuture<out PlaybackController>) {
-        val connected = try {
-            connection.get()
-        } catch (e: ExecutionException) {
-            Timber.e(e, "Couldn't connect to the playback service")
-            failed = true
-            pending.clear()
-            return
-        }
-        delegate = connected
-        scope.launch { connected.state.collect { _state.value = it } }
-        pending.forEach { it(connected) }
-        pending.clear()
-    }
-
-    private fun send(command: (PlaybackController) -> Unit) {
-        val connected = delegate
-        when {
-            connected != null -> command(connected)
-            !failed -> pending += command
-        }
-    }
+    private fun send(command: (PlaybackController) -> Unit) = connection.send(command)
 
     override fun play(tracks: List<Track>, startIndex: Int) = send { it.play(tracks, startIndex) }
     override fun playShuffled(tracks: List<Track>) = send { it.playShuffled(tracks) }

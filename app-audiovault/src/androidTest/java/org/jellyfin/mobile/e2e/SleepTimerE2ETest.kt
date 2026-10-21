@@ -10,9 +10,9 @@ import org.jellyfin.mobile.player.ui.PlayerTags
 import org.junit.Test
 
 /**
- * Player -> Sleep timer -> pick a length. No on-screen player UI shows the running timer's time
- * (only the notification does, via `PlayerNotificationHelper`, not checked here), so this confirms
- * the choice closes the dialog and playback keeps running afterward.
+ * Player -> Sleep timer -> pick a length. No on-screen player UI shows the running timer's time,
+ * so this confirms the choice closes the dialog and playback keeps running afterward. The timer
+ * itself is tested in common's SleepTimerTest and AudiobookSleepTimerTargetTest.
  */
 class SleepTimerE2ETest : LoggedInE2ETest() {
 
