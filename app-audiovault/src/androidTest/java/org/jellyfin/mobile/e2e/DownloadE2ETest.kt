@@ -7,10 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.matcher.RootMatchers.isDialog
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -37,10 +33,10 @@ class DownloadE2ETest : LoggedInE2ETest() {
 
     @Before
     fun grantNotificationPermission() {
-        // SystemUtils.kt's requestDownload also asks for POST_NOTIFICATIONS (API 33+) before
-        // proceeding — grant it upfront via UiAutomation rather than dealing with a system
-        // permission dialog outside the app's own window (Espresso can't reach it; would need
-        // UiAutomator). Self-contained: works on a fresh install without any manual adb setup.
+        // The first download also asks for POST_NOTIFICATIONS (API 33+), once: grant it upfront
+        // via UiAutomation rather than dealing with a system permission dialog outside the app's
+        // own window (the Compose test APIs can't reach it). Self-contained: works on a fresh
+        // install without any manual adb setup.
         // The permission only exists on API 33+; older versions refuse to grant it.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
@@ -62,10 +58,10 @@ class DownloadE2ETest : LoggedInE2ETest() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         composeRule.onNodeWithText(context.getString(R.string.download_action)).performClick()
 
-        // First-ever download on a fresh install: MainActivity.requestDownload (SystemUtils.kt)
-        // asks which network types are allowed before it'll proceed at all. Mobile data allows any
-        // network, so whether the emulator's network counts as metered can't hold the download back.
-        onView(withText(context.getString(R.string.mobile_data))).inRoot(isDialog()).perform(click())
+        // First-ever download on a fresh install: the library (DownloadRequests) asks which
+        // network types are allowed before it'll proceed at all. Mobile data allows any network,
+        // so whether the emulator's network counts as metered can't hold the download back.
+        composeRule.onNodeWithText(context.getString(R.string.mobile_data)).performClick()
 
         composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadedIds().isNotEmpty() }
 

@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Browse -> play: after logging in, tapping the first item in the (flattened-by-default) library
- * list starts playback and lands on `PlayerFragment`. Runs against the test server
+ * list starts playback and lands on the player (`PlayerRoute`). Runs against the test server
  * (see [BaseE2ETest]).
  */
 class LibraryPlaybackE2ETest : LoggedInE2ETest() {

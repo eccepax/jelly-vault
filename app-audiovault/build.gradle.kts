@@ -121,14 +121,6 @@ dependencies {
     testRuntimeOnly(libs.junit.vintage.engine)
     androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
-    // RecyclerViewActions (e.g. clicking a library item at a given adapter position).
-    androidTestImplementation(libs.androidx.test.espresso.contrib) {
-        // Pulls in an old support-library appcompat transitively; this project is AndroidX-only.
-        exclude(group = "com.android.support", module = "support-annotations")
-        exclude(group = "com.android.support", module = "appcompat-v7")
-        exclude(group = "com.android.support", module = "support-v4")
-        exclude(group = "com.android.support", module = "recyclerview-v7")
-    }
     // Compose UI testing: every screen is Compose
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)

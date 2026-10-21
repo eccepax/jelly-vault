@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * Hides the first library item via its long-press menu (`hide_action`, already exercised at the
- * unit level in `LibraryFragmentTest`), confirms it drops out of the list, then confirms toggling
+ * unit level in `LibraryRouteTest`), confirms it drops out of the list, then confirms toggling
  * "Show hidden items" brings it back. Hidden-item state lives in
  * `HiddenItemEntity`/Room, which [BaseE2ETest.resetAppState] already clears before/after every
  * test — no manual unhide needed for cleanup.
