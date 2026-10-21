@@ -217,6 +217,30 @@ class PlayerAudiobookControllerTest {
     }
 
     @Test
+    fun `a playback error goes with the book, when it's stopped`() {
+        controller.play(listOf(track("unreachable")), startIndex = 0, startPositionMs = 0L)
+        advance(exoPlayer).untilPlayerError()
+        state.error shouldNotBe null
+
+        controller.stop()
+
+        state.error shouldBe null
+    }
+
+    /** As when a voice search loads a book in the service: not through [PlayerAudiobookController.play]. */
+    @Test
+    fun `a playback error goes when another book is loaded on the player`() {
+        controller.play(listOf(track("unreachable")), startIndex = 0, startPositionMs = 0L)
+        advance(exoPlayer).untilPlayerError()
+        state.error shouldNotBe null
+
+        exoPlayer.stop()
+        exoPlayer.setMediaItem(track("b").toMediaItem { "https://vault.test/Audio/$it/universal" })
+
+        state.error shouldBe null
+    }
+
+    @Test
     fun `a playback error goes once the book plays again`() {
         controller.play(listOf(track("unreachable")), startIndex = 0, startPositionMs = 0L)
         advance(exoPlayer).untilPlayerError()

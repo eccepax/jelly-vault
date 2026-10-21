@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player.playback
 
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,9 @@ class PlayerAudiobookController(
 
     private val _state = MutableStateFlow(AudiobookPlaybackState())
     override val state: StateFlow<AudiobookPlaybackState> = _state.asStateFlow()
+
+    /** The player's error at the last sync: a MediaController's is a new copy each time, so it's matched by value. */
+    private var seenError: PlaybackException? = null
 
     override val positionMs: Long get() = player.currentPosition
 
@@ -96,7 +100,16 @@ class PlayerAudiobookController(
 
     private fun syncFromPlayer() {
         val tracks = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toAudiobookTrack() }
+        // The player keeps its error past stop() and a new playlist, until it's prepared again: only
+        // one not seen before is news.
+        val playerError = player.playerError
+        val newError = playerError?.takeUnless { seen ->
+            seenError?.let { it.errorCode == seen.errorCode && it.timestampMs == seen.timestampMs } == true
+        }
+        seenError = playerError
         _state.update { state ->
+            // Kept while the player sits stopped by it; gone once it plays again, or with the book
+            val kept = state.error.takeIf { player.playbackState == Player.STATE_IDLE && tracks == state.tracks }
             state.copy(
                 tracks = tracks,
                 currentIndex = if (tracks.isEmpty()) 0 else player.currentMediaItemIndex,
@@ -104,9 +117,7 @@ class PlayerAudiobookController(
                 isPlaying = player.isPlaying,
                 isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 isEnded = player.playbackState == Player.STATE_ENDED,
-                // Kept while the player sits stopped by it; gone once it plays again
-                error = player.playerError?.let { it.localizedMessage ?: it.errorCodeName }
-                    ?: state.error.takeIf { player.playbackState == Player.STATE_IDLE },
+                error = newError?.let { it.localizedMessage ?: it.errorCodeName } ?: kept,
             )
         }
     }

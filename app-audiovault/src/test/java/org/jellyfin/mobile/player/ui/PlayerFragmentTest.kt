@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.testing.FragmentScenario
 import androidx.fragment.app.testing.launchFragmentInContainer
 import androidx.lifecycle.Lifecycle
@@ -21,6 +22,7 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.app.AppPreferences
@@ -33,6 +35,7 @@ import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.exception.ApiClientException
+import org.jellyfin.sdk.model.api.BaseItemDto
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -41,6 +44,7 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -195,6 +199,68 @@ class PlayerFragmentTest {
             idle()
 
             ShadowToast.getTextOfLatestToast() shouldBe string(R.string.player_error_network_failure)
+            scenario.onFragment { it.parentFragmentManager.fragments.none { f -> f is PlayerFragment } shouldBe true }
+        }
+    }
+
+    /** The screen can't go while the app's in the background: it goes when the app comes back, not never. */
+    @Test
+    fun `when the book can't be started while the app's in the background, the screen goes when it's back`() {
+        val loading = CompletableDeferred<List<BaseItemDto>>()
+        startKoinWith(playerViewModel(controller, items = { loading.await() }))
+        val fragmentArgs = Bundle().apply { putParcelable(Constants.EXTRA_MEDIA_PLAY_OPTIONS, playOptions()) }
+
+        // Not a FragmentScenario: its own lifecycle moves can't be made once the state's saved
+        val activity = Robolectric.buildActivity(FragmentActivity::class.java)
+        activity.get().setTheme(CommonR.style.AppTheme)
+        activity.setup()
+        val fragments = activity.get().supportFragmentManager
+        fragments.beginTransaction().add(android.R.id.content, Fragment()).commitNow()
+        fragments.beginTransaction()
+            .replace(android.R.id.content, PlayerFragment().apply { arguments = fragmentArgs })
+            .addToBackStack(null)
+            .commit()
+        idle()
+        activity.pause().stop().saveInstanceState(Bundle())
+
+        loading.completeExceptionally(ApiClientException("No route to host"))
+        idle()
+        activity.start().resume()
+        idle()
+
+        fragments.fragments.none { it is PlayerFragment } shouldBe true
+        activity.pause().stop().destroy()
+    }
+
+    /** Going back then would close the screen opened on top, not the empty player under it. */
+    @Test
+    fun `when the book can't be started after another screen was opened, that screen stays`() {
+        val loading = CompletableDeferred<List<BaseItemDto>>()
+        startKoinWith(playerViewModel(controller, items = { loading.await() }))
+        val fragmentArgs = Bundle().apply { putParcelable(Constants.EXTRA_MEDIA_PLAY_OPTIONS, playOptions()) }
+        val onTop = Fragment()
+
+        launchFragmentInContainer<Fragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { below ->
+                below.parentFragmentManager.beginTransaction()
+                    .replace(below.id, PlayerFragment().apply { arguments = fragmentArgs })
+                    .addToBackStack(null)
+                    .commit()
+                below.parentFragmentManager.executePendingTransactions()
+                below.parentFragmentManager.beginTransaction()
+                    .replace(below.id, onTop)
+                    .addToBackStack(null)
+                    .commit()
+            }
+            idle()
+
+            loading.completeExceptionally(ApiClientException("No route to host"))
+            idle()
+            scenario.onFragment { it.parentFragmentManager.fragments shouldBe listOf(onTop) }
+
+            // Back to the empty player, which then goes too
+            scenario.onFragment { it.parentFragmentManager.popBackStack() }
+            idle()
             scenario.onFragment { it.parentFragmentManager.fragments.none { f -> f is PlayerFragment } shouldBe true }
         }
     }

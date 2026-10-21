@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.withStarted
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,9 +65,10 @@ class PlayerFragment : Fragment() {
                 is PlayerException.UnsupportedContent -> context.toast(R.string.player_error_unsupported_content)
                 null -> return@launch // success
             }
-            // Nothing to show: back to where the book was picked
-            if (viewModel.state.value.currentTrack == null && !parentFragmentManager.isStateSaved) {
-                parentFragmentManager.popBackStack()
+            // Nothing to show: back to where the book was picked. Once this screen's showing again,
+            // if the app's in the background or another screen was opened over it meanwhile.
+            lifecycle.withStarted {
+                if (viewModel.state.value.currentTrack == null) parentFragmentManager.popBackStack()
             }
         }
     }
