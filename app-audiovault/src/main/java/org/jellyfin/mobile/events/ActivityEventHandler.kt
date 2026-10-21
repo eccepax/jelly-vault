@@ -77,11 +77,6 @@ class ActivityEventHandler {
             ActivityEvent.OpenDownloads -> {
                 supportFragmentManager.addFragment<DownloadsFragment>()
             }
-            ActivityEvent.RequestBluetoothPermission -> {
-                lifecycleScope.launch {
-                    bluetoothPermissionHelper.requestBluetoothPermissionIfNecessary()
-                }
-            }
             ActivityEvent.OpenSettings -> {
                 supportFragmentManager.addFragment<SettingsFragment>()
             }

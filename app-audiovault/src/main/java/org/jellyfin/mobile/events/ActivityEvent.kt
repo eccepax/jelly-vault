@@ -11,7 +11,6 @@ sealed class ActivityEvent {
     class DownloadTracks(val trackIds: List<String>) : ActivityEvent()
     class RemoveTracks(val trackIds: List<String>) : ActivityEvent()
     class RemoveDownload(val download: LocalJellyfinMediaSource, val force: Boolean = false) : ActivityEvent()
-    data object RequestBluetoothPermission : ActivityEvent()
     data object OpenSettings : ActivityEvent()
     data object SelectServer : ActivityEvent()
     data object ExitApp : ActivityEvent()

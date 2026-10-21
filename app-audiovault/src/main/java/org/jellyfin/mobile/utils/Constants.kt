@@ -14,7 +14,6 @@ object Constants {
     const val PREF_SERVER_ID = "pref_server_id"
     const val PREF_USER_ID = "pref_user_id"
     const val PREF_INSTANCE_URL = "pref_instance_url"
-    const val PREF_IGNORE_BLUETOOTH_PERMISSION = "pref_ignore_bluetooth_permission"
     const val PREF_DOWNLOAD_METHOD = "pref_download_method"
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
     const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"

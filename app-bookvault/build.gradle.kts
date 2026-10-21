@@ -96,7 +96,6 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.mockwebserver)
-    testImplementation(project(":common-testing"))
     // Migration tests (see the debug assets above)
     testImplementation(libs.androidx.room.testing)
     // Robolectric shadows the Android framework for Fragment/Activity-level JVM tests. Robolectric

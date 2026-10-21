@@ -1,14 +1,17 @@
 package org.jellyfin.mobile.player
 
 import android.app.Application
+import android.content.Intent
 import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Looper
 import androidx.core.content.getSystemService
 import androidx.lifecycle.MutableLiveData
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
@@ -61,6 +64,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
@@ -83,10 +87,12 @@ import kotlin.time.Duration.Companion.seconds
  * [QueueManager] — there is no production seam for either, since nothing outside this class has
  * ever needed to fake them before.
  *
- * Deliberately scoped to the control-flow methods reachable without touching [ExoPlayer.Builder],
+ * Mostly scoped to the control-flow methods reachable without touching [ExoPlayer.Builder],
  * [android.media.session.MediaSession], or [org.jellyfin.mobile.player.interaction.PlayerNotificationHelper]
  * construction (all lazy, and untouched by rewind/fastForward/seek/skip/speed logic) to avoid
- * pulling in real ExoPlayer/notification machinery under Robolectric.
+ * pulling in real ExoPlayer/notification machinery under Robolectric. The exception is "how the
+ * player is set up": those tests build the real player, to check what it does rather than which
+ * builder calls were made (that's [AudiobookPlayerSettingsTest]).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -170,6 +176,59 @@ class AudiobookPlayerViewModelTest {
         val field = AudiobookPlayerViewModel::class.java.getDeclaredField("queueManager")
         field.isAccessible = true
         field.set(viewModel, queueManager)
+    }
+
+    // --- how the player is set up ----------------------------------------------------------------
+
+    /** Runs [block] on the real player [AudiobookPlayerViewModel.setupPlayer] builds, then releases it. */
+    private fun withBuiltPlayer(block: (ExoPlayer) -> Unit) {
+        loadKoinModules(module { single<MediaSource.Factory> { DefaultMediaSourceFactory(viewModel.app) } })
+        every { appPreferences.playbackSpeed } returns 1f
+        injectPlayer(viewModel, null)
+
+        viewModel.setupPlayer()
+
+        val built = viewModel.playerOrNull!!
+        try {
+            block(built)
+        } finally {
+            built.release()
+        }
+    }
+
+    @Test
+    fun `the player it builds plays as spoken word`() = withBuiltPlayer { built ->
+        built.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+    }
+
+    @Test
+    fun `the player it builds pauses when headphones are unplugged`() = withBuiltPlayer { built ->
+        built.playWhenReady = true
+        idle()
+
+        viewModel.app.sendBroadcast(Intent(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        idle()
+
+        built.playWhenReady shouldBe false
+    }
+
+    @Test
+    fun `a downloaded book plays without keeping Wi-Fi awake`() {
+        viewModel.load(mockk<LocalJellyfinMediaSource>(relaxed = true), mockk(relaxed = true), playWhenReady = false)
+
+        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_LOCAL) }
+    }
+
+    @Test
+    fun `a streamed book keeps Wi-Fi awake while it plays`() {
+        val streamed = mockk<RemoteJellyfinMediaSource>(relaxed = true) {
+            every { playMethod } returns PlayMethod.DIRECT_PLAY
+            every { startTime } returns Duration.ZERO
+        }
+
+        viewModel.load(streamed, mockk(relaxed = true), playWhenReady = false)
+
+        verify { mockedPlayer.setWakeMode(C.WAKE_MODE_NETWORK) }
     }
 
     // --- downloaded books: positions for the server ----------------------------------------------

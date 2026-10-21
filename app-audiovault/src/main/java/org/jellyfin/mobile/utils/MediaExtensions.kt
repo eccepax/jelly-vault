@@ -7,13 +7,11 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
-import androidx.media3.common.C
 import androidx.media3.common.Player
 import org.jellyfin.mobile.common.ui.content.ImageProvider
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.utils.extensions.width
 import org.jellyfin.sdk.model.api.ImageType
-import androidx.media3.common.AudioAttributes as Media3AudioAttributes
 
 inline fun MediaSession.applyDefaultLocalAudioAttributes(contentType: Int) {
     val audioAttributes = AudioAttributes.Builder().apply {
@@ -75,15 +73,4 @@ fun AudioManager.getVolumeLevelPercent(): Int {
     val volumeRange = getVolumeRange(stream)
     val currentVolume = getStreamVolume(stream)
     return (currentVolume - volumeRange.first) * Constants.PERCENT_MAX / volumeRange.width
-}
-
-/**
- * Configure [Media3AudioAttributes] to handle audio focus
- */
-inline fun Player.applyDefaultAudioAttributes(@C.AudioContentType contentType: Int) {
-    val audioAttributes = Media3AudioAttributes.Builder()
-        .setUsage(C.USAGE_MEDIA)
-        .setContentType(contentType)
-        .build()
-    setAudioAttributes(audioAttributes, true)
 }
