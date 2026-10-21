@@ -19,13 +19,15 @@ import java.util.UUID
 
 /**
  * A real [AudiobookPlayerViewModel] over [controller], a fake of the playback service, for
- * Fragments under test: the screens see what a playing book looks like, and their buttons reach
+ * screens under test: the screens see what a playing book looks like, and their buttons reach
  * [FakeAudiobookController.commands]. Books started through it are found on a server where every
  * item is called "Book".
  */
 fun playerViewModel(
     controller: FakeAudiobookController = FakeAudiobookController(),
     speed: Float = 1f,
+    /** The "Hold to speed up" setting. */
+    holdToSpeedUp: Boolean = true,
     /** The server's items with these ids: by default, each a book called "Book". */
     items: suspend (List<UUID>) -> List<BaseItemDto> = { ids ->
         ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "Book") }
@@ -37,7 +39,10 @@ fun playerViewModel(
         playable = { null },
         coverUrl = { null },
     )
-    val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) { every { playbackSpeed } returns speed }
+    val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
+        every { playbackSpeed } returns speed
+        every { exoPlayerAllowPressSpeedUp } returns holdToSpeedUp
+    }
     return AudiobookPlayerViewModel(
         controller,
         loader,

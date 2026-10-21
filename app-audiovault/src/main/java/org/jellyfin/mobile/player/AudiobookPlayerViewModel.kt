@@ -1,9 +1,16 @@
 package org.jellyfin.mobile.player
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
@@ -46,8 +53,31 @@ class AudiobookPlayerViewModel(
     /** The segment playing (an intro, an outro) that the listener is offered to skip; null when none. */
     val skipSegment: StateFlow<MediaSegmentDto?> = segments.offered
 
-    /** Plays what the library or the downloads asked for; says why when it can't. */
-    suspend fun start(options: PlayOptions): PlayerException? = loader.load(options).fold(
+    private val _startFailures = Channel<PlayerException>(Channel.BUFFERED)
+
+    /** Why a book couldn't be started; each kept until it's heard, so a screen not showing yet still hears it. */
+    val startFailures: Flow<PlayerException> = _startFailures.receiveAsFlow()
+
+    /** Where playback is, about 4 times a second while followed: the player has no event for it moving. */
+    val progress: Flow<PlayerProgress> = flow {
+        while (true) {
+            emit(PlayerProgress(positionMs = playback.positionMs, durationMs = playback.durationMs))
+            delay(PROGRESS_INTERVAL_MS)
+        }
+    }
+
+    /** Whether holding fast-forward speeds playback up: the setting, as it is now. */
+    val holdToSpeedUp: Boolean get() = preferences.exoPlayerAllowPressSpeedUp
+
+    /**
+     * Plays what the library or the downloads asked for, in this view model's scope so a rotation
+     * doesn't cut it short. Why it can't goes to [startFailures].
+     */
+    fun play(options: PlayOptions) {
+        viewModelScope.launch { start(options)?.let { _startFailures.send(it) } }
+    }
+
+    private suspend fun start(options: PlayOptions): PlayerException? = loader.load(options).fold(
         onSuccess = { queue ->
             playback.play(queue.tracks, queue.startIndex, queue.startPositionMs)
             null
@@ -97,5 +127,9 @@ class AudiobookPlayerViewModel(
 
     private companion object {
         const val MS_PER_MINUTE = 60_000L
+        const val PROGRESS_INTERVAL_MS = 250L
     }
 }
+
+/** Where playback is in the current track, and how long the track is (0 until known). */
+data class PlayerProgress(val positionMs: Long, val durationMs: Long)

@@ -62,7 +62,9 @@ class SettingsRouteTest {
         }
     }
 
-    private fun click(resId: Int) = composeRule.onNodeWithText(context.getString(resId)).performScrollTo().performClick()
+    private fun click(resId: Int) = composeRule.onNodeWithText(
+        context.getString(resId),
+    ).performScrollTo().performClick()
 
     @Test
     fun `about shows the app and version the app was built as`() {

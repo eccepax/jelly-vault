@@ -31,7 +31,6 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true
         compose = true
     }
 
@@ -58,7 +57,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
-    implementation(libs.androidx.fragment)
 
     // Lifecycle
     implementation(libs.bundles.androidx.lifecycle)
@@ -120,10 +118,6 @@ dependencies {
     testImplementation(project(":test-support"))
     // Migration tests (see the debug assets above)
     testImplementation(libs.androidx.room.testing)
-    testImplementation(libs.androidx.fragment.testing)
-    // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
-    // into the debug variant, which is what unit tests actually run against.
-    debugImplementation(libs.androidx.fragment.testing.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
     androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
@@ -135,14 +129,13 @@ dependencies {
         exclude(group = "com.android.support", module = "support-v4")
         exclude(group = "com.android.support", module = "recyclerview-v7")
     }
-    // Compose UI testing (drives ConnectFragment's ConnectScreen); Espresso above handles the
-    // classic-View fragments (LoginFragment, LibraryFragment, PlayerFragment) in the same tests.
+    // Compose UI testing: every screen is Compose
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
 }
 
 androidComponents {
-    // Robolectric fragment tests rely on the debug-only fragment-testing manifest, so unit tests run against debug builds only
+    // Robolectric Compose tests rely on the debug-only ui-test-manifest, so unit tests run against debug builds only
     beforeVariants(selector().withBuildType("release")) { variant ->
         variant.enableUnitTest = false
     }

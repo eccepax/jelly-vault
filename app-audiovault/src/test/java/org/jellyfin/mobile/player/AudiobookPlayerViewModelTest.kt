@@ -5,10 +5,17 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
@@ -21,9 +28,12 @@ import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** The player screen's view model, over the playback service's controller. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -47,6 +57,17 @@ class AudiobookPlayerViewModelTest {
         return AudiobookPlayerViewModel(controller, loader, sleepTimer, segments, preferences).also { runCurrent() }
     }
 
+    @BeforeEach
+    fun setMain() {
+        // play() starts the book in the view model's scope, so it outlives a rotation
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @AfterEach
+    fun resetMain() {
+        Dispatchers.resetMain()
+    }
+
     private fun bookNamed(id: UUID) = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = "Book")
 
     private fun options(vararg ids: UUID, startPositionMs: Long? = null) = PlayOptions(
@@ -65,18 +86,20 @@ class AudiobookPlayerViewModelTest {
     fun `starting a book plays it from where asked`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.start(options(book, startPositionMs = 42_000L)) shouldBe null
+        viewModel.play(options(book, startPositionMs = 42_000L))
 
         controller.commands shouldBe listOf("play $book from 0 at 42000")
     }
 
+    /** Kept until the player screen is there to hear it: it may be covered, or the app in the background. */
     @Test
-    fun `a book that can't be had says why, and plays nothing`() = runTest {
+    fun `a book that can't be had says why, once heard, and plays nothing`() = runTest {
         onServer.clear()
         val viewModel = viewModel()
 
-        viewModel.start(options(book)).shouldBeInstanceOf<PlayerException.NetworkFailure>()
+        viewModel.play(options(book))
 
+        viewModel.startFailures.first().shouldBeInstanceOf<PlayerException.NetworkFailure>()
         controller.commands shouldBe emptyList()
     }
 
@@ -100,12 +123,28 @@ class AudiobookPlayerViewModelTest {
     }
 
     @Test
-    fun `position and length are the player's`() = runTest {
+    fun `the progress is the player's position and length`() = runTest {
         val viewModel = viewModel()
         controller.playing(AudiobookTrack(id = "a", title = "a", durationMs = 60_000L), positionMs = 1_234L)
 
-        viewModel.positionMs shouldBe 1_234L
-        viewModel.durationMs shouldBe 60_000L
+        viewModel.progress.first() shouldBe PlayerProgress(positionMs = 1_234L, durationMs = 60_000L)
+    }
+
+    @Test
+    fun `the progress follows the player as it moves`() = runTest {
+        val viewModel = viewModel()
+        val track = AudiobookTrack(id = "a", title = "a", durationMs = 60_000L)
+        controller.playing(track, positionMs = 1_000L)
+        val seen = mutableListOf<Long>()
+        val following = backgroundScope.launch { viewModel.progress.collect { seen += it.positionMs } }
+        runCurrent()
+
+        controller.playing(track, positionMs = 2_000L)
+        advanceTimeBy(1.seconds)
+
+        seen.first() shouldBe 1_000L
+        seen.last() shouldBe 2_000L
+        following.cancel()
     }
 
     // --- Speed -------------------------------------------------------------------------------------

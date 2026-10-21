@@ -20,6 +20,8 @@ fun VaultRoot(
     mainViewModel: MainViewModel,
     appPreferences: AppPreferences,
     @DrawableRes logoRes: Int,
+    /** Below the connect screen's form: anything the app offers before connecting, such as its downloads. */
+    connectActions: (@Composable () -> Unit)? = null,
     signedIn: @Composable () -> Unit,
 ) {
     val serverState by mainViewModel.serverState.collectAsState()
@@ -31,6 +33,7 @@ fun VaultRoot(
             mainViewModel = mainViewModel,
             showExternalConnectionError = false,
             logoRes = logoRes,
+            bottomActions = connectActions,
         )
         RootScreen.Login -> LoginRoute(mainViewModel)
         RootScreen.SignedIn -> signedIn()
