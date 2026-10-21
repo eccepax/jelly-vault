@@ -10,6 +10,13 @@ import org.jellyfin.sdk.model.api.MediaSegmentType
 
 class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
 
+    init {
+        // Settings that no longer exist, still in upgraded installs (and their backups)
+        if (RETIRED_PREFS.any(sharedPreferences::contains)) {
+            sharedPreferences.edit { RETIRED_PREFS.forEach { remove(it) } }
+        }
+    }
+
     var downloadMethod: Int?
         get() = sharedPreferences.getInt(Constants.PREF_DOWNLOAD_METHOD, -1).takeIf { it >= 0 }
         set(value) {
@@ -47,4 +54,9 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
     var skipSilenceEnabled: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_SKIP_SILENCE, false)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_SKIP_SILENCE, value) }
+
+    private companion object {
+        /** The Bluetooth permission prompt, removed in favour of pausing when headphones go */
+        val RETIRED_PREFS = listOf("pref_ignore_bluetooth_permission")
+    }
 }

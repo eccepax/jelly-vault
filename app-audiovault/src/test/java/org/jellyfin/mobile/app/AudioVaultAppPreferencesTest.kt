@@ -130,6 +130,21 @@ class AudioVaultAppPreferencesTest {
         preferences.skipSilenceEnabled shouldBe true
         fakeSharedPreferences.getBoolean(Constants.PREF_SKIP_SILENCE, false) shouldBe true
     }
+
+    // --- retired settings -------------------------------------------------------------------------
+
+    @Test
+    fun `settings that no longer exist are cleared from upgraded installs`() {
+        fakeSharedPreferences.edit()
+            .putBoolean("pref_ignore_bluetooth_permission", true)
+            .putBoolean(Constants.PREF_SKIP_SILENCE, true)
+            .apply()
+
+        val upgraded = AudioVaultAppPreferences(context)
+
+        fakeSharedPreferences.contains("pref_ignore_bluetooth_permission") shouldBe false
+        upgraded.skipSilenceEnabled shouldBe true
+    }
 }
 
 private class FakeSharedPreferences : SharedPreferences {
