@@ -6,12 +6,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import org.jellyfin.mobile.data.entity.DownloadEntity
 
 /** The downloads screen's list: tracks whose download is complete (see [AudiobookDownloads.finished]). */
-class DownloadsViewModel(finished: Flow<List<DownloadEntity>>) : ViewModel() {
+class DownloadsViewModel(
+    finished: Flow<List<DownloadEntity>>,
+    private val remove: suspend (trackId: String) -> Unit,
+) : ViewModel() {
     val downloads: StateFlow<List<DownloadEntity>> =
         finished.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    fun remove(download: DownloadEntity) {
+        viewModelScope.launch { remove.invoke(download.itemId) }
+    }
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
