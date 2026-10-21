@@ -1,6 +1,10 @@
 package org.jellyfin.mobile.player.playback
 
 import android.app.Application
+import android.content.Intent
+import android.media.AudioManager
+import android.os.Looper
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
@@ -74,6 +78,22 @@ class AudiobookPlaybackServiceTest {
     fun `it plays at the speed chosen last time, with silence skipped if that was on`() {
         player.playbackParameters.speed shouldBe 1.5f
         exoPlayer.skipSilenceEnabled shouldBe true
+    }
+
+    @Test
+    fun `it plays as spoken word`() {
+        player.audioAttributes.contentType shouldBe C.AUDIO_CONTENT_TYPE_SPEECH
+    }
+
+    @Test
+    fun `it pauses when headphones are unplugged`() {
+        player.playWhenReady = true
+        shadowOf(Looper.getMainLooper()).idle()
+
+        service.sendBroadcast(Intent(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        player.playWhenReady shouldBe false
     }
 
     @Test
