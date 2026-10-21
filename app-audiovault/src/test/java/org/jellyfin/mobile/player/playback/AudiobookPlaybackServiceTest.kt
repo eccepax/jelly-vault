@@ -6,8 +6,10 @@ import android.media.AudioManager
 import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -46,7 +48,7 @@ class AudiobookPlaybackServiceTest {
         startKoin {
             modules(
                 module {
-                    single<MediaSource.Factory> { FakeAudioSourceFactory() }
+                    single<MediaSource.Factory> { FakeAudioSourceFactory(failing = setOf("unreachable")) }
                     single<ItemDownloads> { mockk { every { fileFor(any()) } returns null } }
                     single { preferences }
                     single { mockk<AudiobookVoiceSearch>() }
@@ -138,5 +140,38 @@ class AudiobookPlaybackServiceTest {
         shadowOf(service).isStoppedBySelf shouldBe true
         player shouldNotBe paused
         player.mediaItemCount shouldBe 0
+    }
+
+    @Test
+    fun `swiping the app away with the book stopped by an error takes it, and its notification, with it`() {
+        val stopped = player
+        stopped.setMediaItem(
+            AudiobookTrack(id = "unreachable", title = "a", durationMs = 0L).toMediaItem { "https://vault.test/$it" },
+        )
+        stopped.prepare()
+        stopped.play()
+        advance(exoPlayer).untilPlayerError()
+
+        service.onTaskRemoved(null)
+
+        shadowOf(service).isStoppedBySelf shouldBe true
+        player shouldNotBe stopped
+    }
+
+    @Test
+    fun `swiping the app away with the book finished takes it, and its notification, with it`() {
+        val finished = player
+        finished.setMediaItem(
+            AudiobookTrack(id = "a", title = "a", durationMs = 0L).toMediaItem { "https://vault.test/$it" },
+        )
+        finished.prepare()
+        finished.play()
+        finished.seekTo(99_900L)
+        advance(exoPlayer).untilState(Player.STATE_ENDED)
+
+        service.onTaskRemoved(null)
+
+        shadowOf(service).isStoppedBySelf shouldBe true
+        player shouldNotBe finished
     }
 }

@@ -12,11 +12,12 @@ import java.util.concurrent.Executor
 
 /**
  * An [AudiobookPlaybackController] usable immediately while the real one is still connecting (in
- * the app: a MediaController binding to the AudiobookPlaybackService). It connects on the first
- * command, or when the service starts and asks it to [connect]: connecting starts the service and
- * its player, not worth it just to follow the state. Commands sent before the connection completes
- * are replayed in order once it does; once it's [disconnected], the next command connects again
- * (see [DeferredConnection]).
+ * the app: a MediaController binding to the AudiobookPlaybackService). It connects when a book is
+ * started, or when the service starts and asks it to [connect]: connecting starts the service and
+ * its player, not worth it just to follow the state or for a command with nothing playing (the
+ * service takes the speed and skipping silence from the settings). Commands sent while it connects
+ * are replayed in order once it's up; once it's [disconnected], the next book started connects
+ * again (see [DeferredConnection]).
  */
 // Each method forwards one command; the surface is the controller interface's.
 @Suppress("TooManyFunctions")
@@ -24,13 +25,15 @@ class DeferredAudiobookController(
     connect: () -> ListenableFuture<out AudiobookPlaybackController>,
     callbackExecutor: Executor,
     private val scope: CoroutineScope,
+    /** Lets go of a connection given up on while it was being made. */
+    release: (AudiobookPlaybackController) -> Unit = {},
 ) : AudiobookPlaybackController {
 
     private val _state = MutableStateFlow(AudiobookPlaybackState())
     override val state: StateFlow<AudiobookPlaybackState> = _state.asStateFlow()
 
     private var following: Job? = null
-    private val connection = DeferredConnection(connect, callbackExecutor) { connected ->
+    private val connection = DeferredConnection(connect, callbackExecutor, release) { connected ->
         following = scope.launch { connected.state.collect { _state.value = it } }
     }
     private val delegate: AudiobookPlaybackController? get() = this.connection.connected
@@ -49,10 +52,11 @@ class DeferredAudiobookController(
         _state.value = AudiobookPlaybackState()
     }
 
-    private fun send(command: (AudiobookPlaybackController) -> Unit) = connection.send(command)
+    /** Only for a book playing, or about to: with nothing connected there's nothing to send it to. */
+    private fun send(command: (AudiobookPlaybackController) -> Unit) = connection.sendIfConnected(command)
 
     override fun play(tracks: List<AudiobookTrack>, startIndex: Int, startPositionMs: Long) =
-        send { it.play(tracks, startIndex, startPositionMs) }
+        connection.send { it.play(tracks, startIndex, startPositionMs) }
     override fun play() = send { it.play() }
     override fun pause() = send { it.pause() }
     override fun togglePlayPause() = send { it.togglePlayPause() }

@@ -48,6 +48,9 @@ class AudiobookProgressReporter(
     private val reports = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private var listen: Listen? = null
 
+    /** The track (its index and id) signed out of, still playing until its stop comes through. */
+    private var signedOutOf: Pair<Int, String>? = null
+
     fun start(): Job = scope.launch {
         launch { sendReports() }
         launch { controller.state.collect(::onState) }
@@ -60,31 +63,40 @@ class AudiobookProgressReporter(
     }
 
     /**
-     * Ends the listen now and waits (up to [FINISH_TIMEOUT_MS]) until every report so far has gone,
-     * for signing out: once the token is gone, nothing more can be reported.
+     * For signing out: ends the listen, stops the book, and waits (up to [FINISH_TIMEOUT_MS]) until
+     * every report so far has gone, as once the token is gone nothing more can be reported. The
+     * listen ends before the book stops: through the app's MediaController the position is gone the
+     * moment it stops, before its state says so.
      */
-    suspend fun finish() {
+    suspend fun finishAndStop() {
+        endListen()
+        // Until the stop comes through, the book playing on isn't a new listen to report
+        val state = controller.state.value
+        signedOutOf = state.currentTrack?.let { state.currentIndex to it.id }
+        controller.stop()
+        awaitReports()
+    }
+
+    private fun endListen() {
         listen?.let { ended ->
             ended.lastPositionMs = controller.positionMs.takeIf { controller.state.value.currentTrack != null }
                 ?: ended.lastPositionMs
             end(ended)
         }
         listen = null
+    }
+
+    private suspend fun awaitReports() {
         val sent = CompletableDeferred<Unit>()
         reports.trySend { sent.complete(Unit) }
         withTimeoutOrNull(FINISH_TIMEOUT_MS) { sent.await() }
     }
 
-    /**
-     * [finish]es, then stops the book, for signing out. In that order: through the app's
-     * MediaController the position is gone the moment the book stops, before its state says so.
-     */
-    suspend fun finishAndStop() {
-        finish()
-        controller.stop()
-    }
-
     private fun onState(state: AudiobookPlaybackState) {
+        signedOutOf?.let { (index, id) ->
+            if (state.currentIndex == index && state.currentTrack?.id == id) return
+            signedOutOf = null
+        }
         val current = listen
         val track = state.currentTrack
         when {

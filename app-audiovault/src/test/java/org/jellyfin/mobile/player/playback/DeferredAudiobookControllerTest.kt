@@ -88,8 +88,31 @@ class DeferredAudiobookControllerTest {
         attempts.shouldBeEmpty()
     }
 
+    /** Signing out with nothing loaded, or a setting changed, mustn't start the service and its player. */
     @Test
-    fun `when the connection is lost nothing is playing, and the next command connects again`() {
+    fun `with nothing playing, only starting a book connects`() {
+        controller.stop()
+        controller.pause()
+        controller.play()
+        controller.togglePlayPause()
+        controller.seekTo(5_000L)
+        controller.rewind()
+        controller.fastForward()
+        controller.previousChapter()
+        controller.nextChapter()
+        controller.skipTo(1)
+        controller.setSpeed(1.5f)
+        controller.setSkipSilence(true)
+        controller.setVolume(0.5f)
+        attempts.shouldBeEmpty()
+
+        controller.play(book, startIndex = 0, startPositionMs = 0L)
+
+        attempts.size shouldBe 1
+    }
+
+    @Test
+    fun `when the connection is lost nothing is playing, and the next book started connects again`() {
         val lost = FakeAudiobookController()
         controller.connect()
         connection.set(lost)
@@ -102,11 +125,11 @@ class DeferredAudiobookControllerTest {
         lost.playing(AudiobookTrack(id = "b", title = "B", durationMs = 60_000L))
         controller.state.value shouldBe AudiobookPlaybackState()
 
-        controller.play()
+        controller.play(book, startIndex = 0, startPositionMs = 0L)
         val delegate = FakeAudiobookController()
         connection.set(delegate)
 
         attempts.size shouldBe 2
-        delegate.commands shouldBe listOf("play")
+        delegate.commands shouldBe listOf("play a from 0 at 0")
     }
 }

@@ -126,7 +126,9 @@ val applicationModule = module {
                 mainExecutor,
             )
         }
-        deferred = DeferredAudiobookController(connect, mainExecutor, mainScope())
+        deferred = DeferredAudiobookController(connect, mainExecutor, mainScope()) { givenUp ->
+            (givenUp as? PlayerAudiobookController)?.release()
+        }
         deferred
     } bind AudiobookPlaybackController::class
     single { JellyfinAudiobooks(get()) }

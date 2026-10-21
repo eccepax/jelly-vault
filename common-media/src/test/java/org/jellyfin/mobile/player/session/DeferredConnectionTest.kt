@@ -1,11 +1,13 @@
 package org.jellyfin.mobile.player.session
 
+import com.google.common.util.concurrent.ForwardingListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.SettableFuture
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import java.io.IOException
+import java.util.concurrent.Executor
 
 class DeferredConnectionTest {
 
@@ -17,9 +19,11 @@ class DeferredConnectionTest {
     private val attempts = mutableListOf<SettableFuture<Remote>>()
     private val future get() = attempts.last()
     private val connectedTo = mutableListOf<Remote>()
+    private val released = mutableListOf<Remote>()
     private val connection = DeferredConnection(
         connect = { SettableFuture.create<Remote>().also { attempts += it } },
         callbackExecutor = MoreExecutors.directExecutor(),
+        release = { released += it },
     ) { connectedTo += it }
 
     @Test
@@ -114,15 +118,68 @@ class DeferredConnectionTest {
     }
 
     @Test
-    fun `a connection lost while it's still being made is let go of`() {
+    fun `a connection given up on while it's still being made is released when it comes`() {
         connection.connect()
         val abandoned = future
 
         connection.disconnected()
         connection.connect()
-        abandoned.set(Remote())
+        val late = Remote()
+        abandoned.set(late)
 
         connectedTo.shouldBeEmpty()
+        released shouldBe listOf(late)
         attempts.size shouldBe 2
+    }
+
+    @Test
+    fun `commands waiting when the connection is lost are dropped, not replayed on the next one`() {
+        connection.send { it.calls += "stale" }
+
+        connection.disconnected()
+        connection.send { it.calls += "fresh" }
+        val remote = Remote()
+        future.set(remote)
+
+        remote.calls shouldBe listOf("fresh")
+    }
+
+    @Test
+    fun `a command only for a live connection doesn't connect`() {
+        connection.sendIfConnected { it.calls += "dropped" }
+
+        attempts.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a command only for a live connection waits for one being made, and goes straight to one made`() {
+        connection.send { it.calls += "play" }
+        connection.sendIfConnected { it.calls += "while connecting" }
+        val remote = Remote()
+        future.set(remote)
+
+        connection.sendIfConnected { it.calls += "connected" }
+
+        remote.calls shouldBe listOf("play", "while connecting", "connected")
+    }
+
+    @Test
+    fun `with a single connection given, once it fails commands are dropped without trying it again`() {
+        val failed = SettableFuture.create<Remote>()
+        var listeners = 0
+        val counted = object : ForwardingListenableFuture.SimpleForwardingListenableFuture<Remote>(failed) {
+            override fun addListener(listener: Runnable, executor: Executor) {
+                listeners++
+                super.addListener(listener, executor)
+            }
+        }
+        val single = DeferredConnection(counted, MoreExecutors.directExecutor()) { connectedTo += it }
+        failed.setException(IOException("service gone"))
+
+        single.send { it.calls += "dropped" }
+        single.send { it.calls += "dropped too" }
+
+        listeners shouldBe 1
+        connectedTo.shouldBeEmpty()
     }
 }

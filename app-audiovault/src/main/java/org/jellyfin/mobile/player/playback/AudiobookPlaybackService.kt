@@ -138,10 +138,10 @@ class AudiobookPlaybackService : MediaSessionService() {
         session ?: newSession().also { session = it }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiping the app away while paused shouldn't leave a dead notification behind: the session
-        // goes, and with it the notification and the app's controller, which kept the service bound
-        val player = session?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+        // Swiping the app away with nothing playing (paused, finished, stopped by an error) shouldn't
+        // leave a dead notification behind: the session goes, and with it the notification and the
+        // app's controller, which kept the service bound
+        if (session?.player?.isPlaybackOngoing() != true) {
             releaseSession()
             stopSelf()
         }
@@ -258,3 +258,7 @@ class AudiobookSessionCallback(
         const val KEY_ENABLED = "enabled"
     }
 }
+
+/** Playing, or about to once it has loaded: not paused, finished, or stopped by an error. */
+private fun Player.isPlaybackOngoing(): Boolean =
+    playWhenReady && mediaItemCount > 0 && (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)

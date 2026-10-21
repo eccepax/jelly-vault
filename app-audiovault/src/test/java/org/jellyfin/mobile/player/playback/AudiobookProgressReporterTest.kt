@@ -189,7 +189,7 @@ class AudiobookProgressReporterTest {
         runCurrent()
         play(2_000L)
 
-        reporter.finish()
+        reporter.finishAndStop()
 
         server.reports.last() shouldBe "stopped streamed at 102000"
     }
@@ -199,9 +199,8 @@ class AudiobookProgressReporterTest {
         val reporter = reporter()
         controller.playing(streamed, positionMs = 100_000L)
         runCurrent()
-        reporter.finish()
 
-        controller.stop()
+        reporter.finishAndStop()
         runCurrent()
 
         server.reports shouldBe listOf("started streamed at 100000", "stopped streamed at 100000")
@@ -226,6 +225,42 @@ class AudiobookProgressReporterTest {
 
         server.reports.last() shouldBe "stopped streamed at 100000"
         controller.commands shouldBe listOf("stop")
+    }
+
+    @Test
+    fun `nothing is reported after signing out's last report, though the book takes a moment to stop`() = runTest {
+        // As through the app's MediaController: the book goes on a moment before its state says it stopped
+        val mediaController = object : AudiobookPlaybackController by controller {
+            override fun stop() {
+                controller.commands += "stop"
+            }
+        }
+        val reporter = AudiobookProgressReporter(mediaController, server, device, backgroundScope)
+        reporter.start()
+        controller.playing(streamed, positionMs = 100_000L)
+        runCurrent()
+
+        reporter.finishAndStop()
+        controller.pause()
+        play(PROGRESS_INTERVAL_MS)
+        controller.state.value = AudiobookPlaybackState()
+        runCurrent()
+
+        server.reports shouldBe listOf("started streamed at 100000", "stopped streamed at 100000")
+    }
+
+    @Test
+    fun `after signing out, the next book is reported again`() = runTest {
+        val reporter = reporter()
+        controller.playing(streamed, positionMs = 100_000L)
+        runCurrent()
+        reporter.finishAndStop()
+        runCurrent()
+
+        controller.playing(nextPart, positionMs = 0L)
+        runCurrent()
+
+        server.reports.last() shouldBe "started next at 0"
     }
 
     // --- Downloaded tracks --------------------------------------------------------------------------

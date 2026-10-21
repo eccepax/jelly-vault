@@ -91,6 +91,9 @@ class PlayerAudiobookController(
         syncFromPlayer()
     }
 
+    /** Lets go of the player: in the app, the MediaController and its binding to the service. */
+    fun release() = player.release()
+
     private fun syncFromPlayer() {
         val tracks = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toAudiobookTrack() }
         _state.update { state ->
