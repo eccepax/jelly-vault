@@ -17,10 +17,10 @@ import org.junit.Test
  * loaded. Searches for a word from one fixture book's title rather than a generic term, so the
  * assertion that the list actually narrowed isn't just luck.
  */
-@Smoke
 @BrowseArea
 class LibrarySearchE2ETest : LoggedInE2ETest() {
 
+    @Smoke
     @Test
     fun searchingFiltersTheLibraryList() {
         loginAndWaitForLibrary()

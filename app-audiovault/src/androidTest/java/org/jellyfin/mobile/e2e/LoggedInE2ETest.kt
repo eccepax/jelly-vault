@@ -23,8 +23,9 @@ import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.jellyfin.mobile.common.R as CommonR
 
 /**
- * Base for any e2e test that needs to start from a logged-in library screen — the connect/login
- * dance itself is exercised directly by [LoginFlowE2ETest]; this just gets other flows past it.
+ * Base for every AudioVault e2e test: each starts signed out on a cleared app, and signs in itself.
+ * Most get past the connect/login dance with [loginAndWaitForLibrary]; [LoginFlowE2ETest] and
+ * [QuickConnectE2ETest] exercise signing in, so nothing here may sign in before a test (no @Before).
  */
 abstract class LoggedInE2ETest : SignedInE2ETest<MainActivity>(MainActivity::class.java) {
 
