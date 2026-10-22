@@ -2,22 +2,12 @@ package org.jellyfin.mobile.downloads
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import org.jellyfin.mobile.common.server.ServerPositions
 import org.jellyfin.mobile.common.server.isNetworkFailure
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import timber.log.Timber
 import java.time.Instant
-import java.util.UUID
-import kotlin.time.Duration
-
-/** Where the server keeps the listener's place in each track. */
-interface ServerPositions {
-    /** When the listener last played [itemId] anywhere, per the server; null if never. */
-    suspend fun lastPlayed(itemId: UUID): Instant?
-
-    /** Records the listener at [position] in [itemId], or done with it if [finished], as of [at]. */
-    suspend fun record(itemId: UUID, position: Duration, finished: Boolean, at: Instant)
-}
 
 /**
  * Sends the server the listening it hasn't heard about: positions in downloaded tracks saved on

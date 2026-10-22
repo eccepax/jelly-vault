@@ -4,6 +4,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.common.server.JellyfinServerPositions
 import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi

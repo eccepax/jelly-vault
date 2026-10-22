@@ -6,6 +6,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.jellyfin.mobile.common.server.ServerPositions
 import org.jellyfin.mobile.data.JellyfinDatabase
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource

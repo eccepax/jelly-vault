@@ -19,8 +19,9 @@ import kotlinx.coroutines.test.setMain
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
 import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
+import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.jellyfin.mobile.books.downloads.BookFiles
-import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.mobile.books.progress.BookProgressSync
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -44,7 +45,7 @@ class BookReaderViewModelTest {
     @TempDir
     lateinit var cacheDir: File
 
-    private val apiClient = mockk<ApiClient>(relaxed = true)
+    private val progressSync = mockk<BookProgressSync>(relaxed = true)
     private val bookProgressDao = mockk<BookProgressDao>()
     private val bookFiles = mockk<BookFiles>()
     private val bookBookmarkDao = mockk<BookBookmarkDao>(relaxed = true)
@@ -60,10 +61,9 @@ class BookReaderViewModelTest {
 
         val epubFile = File(cacheDir, "source.epub").apply { writeBytes(buildMinimalEpub()) }
         coEvery { bookFiles.fileFor("book-1") } returns epubFile
-        coEvery { bookProgressDao.getProgress("book-1") } returns null
         every { bookBookmarkDao.getForBook(any()) } returns flowOf(emptyList())
 
-        viewModel = BookReaderViewModel(app, apiClient, bookProgressDao, bookFiles, bookBookmarkDao)
+        viewModel = BookReaderViewModel(app, progressSync, bookProgressDao, bookFiles, bookBookmarkDao)
     }
 
     @AfterEach
@@ -138,7 +138,6 @@ class BookReaderViewModelTest {
             writeBytes(byteArrayOf(0x25, 0x50, 0x44, 0x46)) // %PDF
         }
         coEvery { bookFiles.fileFor("book-pdf") } returns pdfFile
-        coEvery { bookProgressDao.getProgress("book-pdf") } returns null
         every { bookBookmarkDao.getForBook("book-pdf") } returns flowOf(emptyList())
 
         viewModel.loadBook("book-pdf", initialNightMode = false)
@@ -318,7 +317,6 @@ class BookReaderViewModelTest {
     fun `an unsupported format surfaces as an error and stops loading`() = runTest {
         val badFile = File(cacheDir, "bad.bin").apply { writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03)) }
         coEvery { bookFiles.fileFor("book-bad") } returns badFile
-        coEvery { bookProgressDao.getProgress("book-bad") } returns null
 
         viewModel.loadBook("book-bad", initialNightMode = false)
 
@@ -332,27 +330,41 @@ class BookReaderViewModelTest {
         viewModel.bookType.value shouldBe BookType.UNKNOWN
     }
 
-    // --- playbackStopPositionTicks ----------------------------------------------------------------
+    // --- reading place -----------------------------------------------------------------------------
 
     @Test
-    fun `zero ticks at page 0`() {
-        playbackStopPositionTicks(page = 0, totalPages = 10) shouldBe 0L
+    fun `a book opens at its place, here or from another device`() = runTest {
+        coEvery { progressSync.startPage("book-1", totalPages = 2) } returns 1
+
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+
+        viewModel.currentPage.value shouldBe 1
     }
 
     @Test
-    fun `proportional ticks mid-book`() {
-        // page 5 of 10 -> halfway -> half of a fictional 10_000_000-tick-per-page*100 scale
-        playbackStopPositionTicks(page = 5, totalPages = 10) shouldBe 500_000_000L
+    fun `turning a page saves the place, to be sent to the server`() = runTest {
+        coEvery { bookProgressDao.upsertProgress(any()) } returns Unit
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+
+        viewModel.setPage(1)
+        advanceUntilIdle()
+
+        val saved = slot<BookProgressEntity>()
+        coVerify { bookProgressDao.upsertProgress(capture(saved)) }
+        saved.captured.pageNumber shouldBe 1
+        saved.captured.pendingSync shouldBe true
     }
 
     @Test
-    fun `proportional ticks on the last page`() {
-        playbackStopPositionTicks(page = 1, totalPages = 2) shouldBe 500_000_000L
-    }
+    fun `leaving a book sends its place`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
 
-    @Test
-    fun `zero ticks, not a divide-by-zero, when totalPages is 0`() {
-        playbackStopPositionTicks(page = 5, totalPages = 0) shouldBe 0L
+        viewModel.sendProgress()
+
+        coVerify { progressSync.sendSoon() }
     }
 
     // --- setPage bounds clamping ------------------------------------------------------------------

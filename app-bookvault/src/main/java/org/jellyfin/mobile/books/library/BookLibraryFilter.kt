@@ -1,6 +1,8 @@
 package org.jellyfin.mobile.books.library
 
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
+import org.jellyfin.mobile.books.progress.ServerBookProgress
+import org.jellyfin.mobile.books.progress.serverProgress
 import org.jellyfin.sdk.model.api.BaseItemDto
 
 /**
@@ -16,20 +18,15 @@ internal fun filterAndSortBooks(
     tag: String?,
 ): List<BaseItemDto> = books
     .filter { book ->
-        val itemId = book.id?.toString() ?: return@filter true
-        val bookProgress = progressByItemId[itemId]
-        when (progressFilter) {
-            ProgressFilter.ALL -> true
-            ProgressFilter.UNREAD -> bookProgress == null || bookProgress.pageNumber == 0
-            ProgressFilter.IN_PROGRESS ->
-                bookProgress != null &&
-                    bookProgress.pageNumber > 0 &&
-                    bookProgress.totalPages > 0 &&
-                    bookProgress.pageNumber < bookProgress.totalPages - 1
-            ProgressFilter.FINISHED ->
-                bookProgress != null &&
-                    bookProgress.totalPages > 0 &&
-                    bookProgress.pageNumber >= bookProgress.totalPages - 1
+        if (progressFilter == ProgressFilter.ALL) return@filter true
+        val local = progressByItemId[book.id?.toString() ?: return@filter true]
+        val server = book.serverProgress()
+        val serverAt = server.knownAt
+        // The place read most recently wins, here or on another device
+        if (serverAt != null && (local == null || serverAt.toEpochMilli() > local.lastUpdated)) {
+            server.matches(progressFilter)
+        } else {
+            local.matches(progressFilter)
         }
     }
     .filter { book ->
@@ -52,3 +49,19 @@ internal fun availableTags(books: List<BaseItemDto>): List<String> = books
     .flatMap { it.tags.orEmpty() }
     .distinct()
     .sorted()
+
+private fun BookProgressEntity?.matches(filter: ProgressFilter): Boolean = when (filter) {
+    ProgressFilter.ALL -> true
+    ProgressFilter.UNREAD -> this == null || pageNumber == 0
+    ProgressFilter.IN_PROGRESS ->
+        this != null && pageNumber > 0 && totalPages > 0 && pageNumber < totalPages - 1
+    ProgressFilter.FINISHED -> this != null && totalPages > 0 && pageNumber >= totalPages - 1
+}
+
+/** A book finished elsewhere is played with no place left in it (see [ServerBookProgress.page]). */
+private fun ServerBookProgress.matches(filter: ProgressFilter): Boolean = when (filter) {
+    ProgressFilter.ALL -> true
+    ProgressFilter.UNREAD -> positionTicks == 0L && !played
+    ProgressFilter.IN_PROGRESS -> positionTicks > 0L
+    ProgressFilter.FINISHED -> positionTicks == 0L && played
+}

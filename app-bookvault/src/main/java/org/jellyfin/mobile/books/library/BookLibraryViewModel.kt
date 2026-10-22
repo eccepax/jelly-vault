@@ -30,6 +30,8 @@ class BookLibraryViewModel(
     private val bookProgressDao: BookProgressDao,
     private val bookDownloads: BookDownloads,
     private val libraryId: String?,
+    /** Sends the server the places read here (see [org.jellyfin.mobile.books.progress.BookProgressSync]). */
+    private val syncProgress: suspend () -> Unit = {},
 ) : ViewModel() {
 
     private val _allBooks = MutableStateFlow<List<BaseItemDto>>(emptyList())
@@ -102,6 +104,8 @@ class BookLibraryViewModel(
                     BookSortOption.DATE_ADDED -> ItemSortBy.DATE_CREATED
                 }
 
+                // First, so the books come back with this device's reading as well as the others'
+                syncProgress()
                 val result = withContext(Dispatchers.IO) {
                     apiClient.itemsApi.getItems(
                         includeItemTypes = listOf(BaseItemKind.BOOK),

@@ -12,7 +12,9 @@ import androidx.media3.exoplayer.offline.DownloadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.jellyfin.mobile.books.app.bookVaultSignOut
 import org.jellyfin.mobile.books.data.BookDatabase
+import org.jellyfin.mobile.books.progress.BookProgressSync
 import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
@@ -80,9 +82,14 @@ val bookDownloadsModule = module {
         val apiClient = get<ApiClient>()
         BookFiles(get(), androidContext().cacheDir, get(), uriOf = apiClient::bookUri)
     }
-    // Signing out keeps downloads unless the user asked otherwise in Settings
-    single {
+    // Signing out sends the places read here, and keeps downloads unless the user asked otherwise in Settings
+    single<SignOut> {
         val downloadsOnSignOut = DownloadsOnSignOut(get(), get<BookDownloads>()::removeAll)
-        SignOut(get(), get<ApiClientController>()::logoutUser, forgetAccount = { downloadsOnSignOut() })
+        bookVaultSignOut(
+            session = get(),
+            logout = get<ApiClientController>()::logoutUser,
+            syncProgress = get<BookProgressSync>()::sync,
+            forgetAccount = { downloadsOnSignOut() },
+        )
     }
 }
