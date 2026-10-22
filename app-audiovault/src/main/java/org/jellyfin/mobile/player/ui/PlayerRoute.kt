@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player.ui
 
 import android.content.Context
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,8 +35,17 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinViewModel()) {
     val context = LocalContext.current
-    val leave by rememberUpdatedState(onBack)
+    val goBack by rememberUpdatedState(onBack)
+    // Once: a book that can't start can stop the one playing too, and each would leave
+    var left by remember { mutableStateOf(false) }
+    val leave = {
+        if (!left) {
+            left = true
+            goBack()
+        }
+    }
     val playback by viewModel.state.collectAsState()
+    val starting by viewModel.starting.collectAsState()
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
@@ -43,7 +53,8 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     val holdToSpeedUp = remember(viewModel) { viewModel.holdToSpeedUp }
 
     LeaveWhenStartFails(viewModel) { leave() }
-    LeaveWhenStopped(hasBook = playback.currentTrack != null) { leave() }
+    LeaveWhenStopped(hasBook = playback.currentTrack != null, starting = starting) { leave() }
+    ForgetStartFailuresOnLeaving(viewModel)
     ToastErrors(playback.error)
     KeepScreenOn(playback.isPlaying)
 
@@ -90,8 +101,7 @@ private fun rememberProgress(viewModel: AudiobookPlayerViewModel): PlayerProgres
 
 /**
  * Says why a book couldn't be started, and leaves if there's nothing else to show. Heard only while
- * the screen's showing: one that failed with the app in the background, or this screen covered,
- * leaves once it's back, not from under whatever's in front.
+ * the screen's showing: one that failed with the app in the background leaves once it's back.
  */
 @Composable
 private fun LeaveWhenStartFails(viewModel: AudiobookPlayerViewModel, leave: () -> Unit) {
@@ -107,12 +117,24 @@ private fun LeaveWhenStartFails(viewModel: AudiobookPlayerViewModel, leave: () -
     }
 }
 
-/** Leaves once a book that was showing stops; saved, so it holds across a rotation. */
+/**
+ * Leaves once a book that was showing stops (saved, so it holds across a rotation), or with no book
+ * and none [starting]: as it's restored once the app's process has gone, playback with it.
+ */
 @Composable
-private fun LeaveWhenStopped(hasBook: Boolean, leave: () -> Unit) {
+private fun LeaveWhenStopped(hasBook: Boolean, starting: Boolean, leave: () -> Unit) {
     var hadBook by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(hasBook) {
-        if (hasBook) hadBook = true else if (hadBook) leave()
+    LaunchedEffect(hasBook, starting) {
+        if (hasBook) hadBook = true else if (hadBook || !starting) leave()
+    }
+}
+
+/** Once the screen's left (not just rotated), a book that couldn't start is no longer said to have. */
+@Composable
+private fun ForgetStartFailuresOnLeaving(viewModel: AudiobookPlayerViewModel) {
+    val activity = LocalActivity.current
+    DisposableEffect(viewModel) {
+        onDispose { if (activity?.isChangingConfigurations != true) viewModel.forgetStartFailures() }
     }
 }
 

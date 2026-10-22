@@ -5,16 +5,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.components.ConfirmDialog
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.library.CoverUrl
+import org.jellyfin.mobile.library.listCoverSizePx
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -29,13 +28,15 @@ fun DownloadsRoute(
 ) {
     val downloads by viewModel.downloads.collectAsState()
     val rows = rows(downloads, coverUrl)
-    var removing by remember { mutableStateOf<DownloadRow?>(null) }
+    // The download asked about, by its key; saved, so a rotation doesn't drop the question
+    var removingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val removing = rows.find { it.download.itemId == removingId }
     DownloadsScreen(
         rows = rows,
         actions = DownloadsActions(
             onBack = onBack,
             onPlay = { onPlay(playOptions(it, downloads)) },
-            onRemove = { download -> removing = rows.find { it.download == download } },
+            onRemove = { download -> removingId = download.itemId },
         ),
     )
     removing?.let { row ->
@@ -44,7 +45,7 @@ fun DownloadsRoute(
             message = stringResource(R.string.confirm_deletion_desc, row.title),
             confirmLabel = stringResource(R.string.yes),
             onConfirm = { viewModel.remove(row.download) },
-            onDismiss = { removing = null },
+            onDismiss = { removingId = null },
         )
     }
 }
@@ -52,7 +53,7 @@ fun DownloadsRoute(
 @Composable
 private fun rows(downloads: List<DownloadEntity>, coverUrl: CoverUrl): List<DownloadRow> {
     val context = LocalContext.current
-    val coverSize = dimensionResource(R.dimen.movie_thumbnail_list_size).toPx()
+    val coverSize = listCoverSizePx()
     return remember(downloads, coverSize) {
         downloads.map { download ->
             val item = download.mediaSource.item
@@ -65,9 +66,6 @@ private fun rows(downloads: List<DownloadEntity>, coverUrl: CoverUrl): List<Down
         }
     }
 }
-
-@Composable
-private fun Dp.toPx(): Int = with(LocalDensity.current) { roundToPx() }
 
 /** Plays [download]'s whole downloaded book, starting at [download]. */
 private fun playOptions(download: DownloadEntity, downloads: List<DownloadEntity>): PlayOptions {

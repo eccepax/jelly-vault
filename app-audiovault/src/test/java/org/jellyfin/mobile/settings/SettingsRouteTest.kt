@@ -44,8 +44,8 @@ class SettingsRouteTest {
     private var backs = 0
     private var signedOut = 0
 
-    private fun show() {
-        val viewModel = SettingsViewModel(
+    private val viewModel by lazy {
+        SettingsViewModel(
             preferences = appPreferences,
             downloadManager = downloadManager,
             playback = playback,
@@ -55,6 +55,9 @@ class SettingsRouteTest {
             },
             app = ClientInfo("AudioVault", "9.9.9"),
         )
+    }
+
+    private fun show() {
         composeRule.setContent {
             AppTheme(VaultBrand.AudioVault) {
                 SettingsRoute(onBack = { backs++ }, onSignedOut = { signedOut++ }, viewModel = viewModel)
@@ -85,6 +88,20 @@ class SettingsRouteTest {
         // Shown by reading it back: off again takes it off
         click(R.string.pref_skip_silence_title)
         composeRule.waitForIdle()
+        appPreferences.skipSilenceEnabled shouldBe false
+    }
+
+    @Test
+    fun `settings changed elsewhere since it was last open are shown as they are now`() {
+        // Opened before (the view model outlives the screen), then changed from elsewhere
+        viewModel.state.value.skipSilence shouldBe false
+        appPreferences.skipSilenceEnabled = true
+        show()
+
+        // Showing it on, so the switch turns it off
+        click(R.string.pref_skip_silence_title)
+        composeRule.waitForIdle()
+
         appPreferences.skipSilenceEnabled shouldBe false
     }
 

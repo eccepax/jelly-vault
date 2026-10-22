@@ -185,6 +185,7 @@ private fun downloadNetworks() = listOf(
 fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.reload() }
     LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
     SettingsScreen(
         state = state,

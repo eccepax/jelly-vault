@@ -21,6 +21,7 @@ import androidx.core.view.children
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.common.ui.theme.AppTheme
@@ -33,6 +34,8 @@ import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.api.client.exception.ApiClientException
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -129,10 +132,10 @@ class PlayerRouteTest {
 
     @Test
     fun `when the book can't be started, it says why and the screen goes`() {
-        val viewModel = show(unreachable())
-
+        // As the app opens it: the book asked for, then the player opened on it
+        val viewModel = unreachable()
         viewModel.play(playOptions())
-        idle()
+        show(viewModel)
 
         ShadowToast.getTextOfLatestToast() shouldBe string(R.string.player_error_network_failure)
         backs shouldBe 1
@@ -154,6 +157,54 @@ class PlayerRouteTest {
 
         ShadowToast.getTextOfLatestToast() shouldBe string(R.string.player_error_network_failure)
         backs shouldBe 1
+    }
+
+    @Test
+    fun `while the book is starting, the screen waits for it`() {
+        val loading = CompletableDeferred<Unit>()
+        val viewModel = playerViewModel(controller, items = { ids ->
+            loading.await()
+            ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "The Book") }
+        })
+        viewModel.play(playOptions())
+        show(viewModel)
+        backs shouldBe 0
+
+        loading.complete(Unit)
+        idle()
+
+        composeRule.onNodeWithText("The Book").assertExists()
+        backs shouldBe 0
+    }
+
+    /** As it's restored once the app's process has gone, and the book playing with it. */
+    @Test
+    fun `with no book and none starting, the screen goes`() {
+        show()
+
+        backs shouldBe 1
+    }
+
+    @Test
+    fun `a book that fails to start once the screen's been left isn't said to have, later`() {
+        val loading = CompletableDeferred<Unit>()
+        val viewModel = playerViewModel(controller, items = {
+            loading.await()
+            throw ApiClientException("No route to host")
+        })
+        viewModel.play(playOptions())
+        show(viewModel)
+
+        showing = false
+        idle()
+        loading.complete(Unit)
+        idle()
+        controller.playing(book)
+        showing = true
+        idle()
+
+        ShadowToast.shownToastCount() shouldBe 0
+        composeRule.onNodeWithText("The Book").assertExists()
     }
 
     @Test

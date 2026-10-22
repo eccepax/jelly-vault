@@ -11,8 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -45,7 +43,7 @@ fun LibraryRoute(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val coverSize = with(LocalDensity.current) { dimensionResource(R.dimen.movie_thumbnail_list_size).roundToPx() }
+    val coverSize = listCoverSizePx()
     var itemMenu by remember { mutableStateOf<ItemMenu?>(null) }
     val canGoUp by viewModel.canGoUp.collectAsState()
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -55,8 +56,24 @@ class AudiobookPlayerViewModel(
 
     private val _startFailures = Channel<PlayerException>(Channel.BUFFERED)
 
-    /** Why a book couldn't be started; each kept until it's heard, so a screen not showing yet still hears it. */
+    /**
+     * Why the book last asked for couldn't be started; kept until it's heard, so a player screen
+     * not showing yet (the app in the background) still hears it. Dropped once another book is
+     * asked for, or the player screen is left (see [forgetStartFailures]): it'd be out of place then.
+     */
     val startFailures: Flow<PlayerException> = _startFailures.receiveAsFlow()
+
+    /** Counts the books asked for, so a start that's been overtaken keeps its failure to itself. */
+    private var request = 0
+
+    private val _starting = MutableStateFlow(false)
+
+    /**
+     * True from a book being asked for until it's playing; it stays so if it fails, until another
+     * is asked for, as the player screen leaves on the failure itself. The screen, showing no
+     * book and none starting (as it's restored with the app's process gone), has nothing to show.
+     */
+    val starting: StateFlow<Boolean> = _starting.asStateFlow()
 
     /** Where playback is, about 4 times a second while followed: the player has no event for it moving. */
     val progress: Flow<PlayerProgress> = flow {
@@ -74,7 +91,30 @@ class AudiobookPlayerViewModel(
      * doesn't cut it short. Why it can't goes to [startFailures].
      */
     fun play(options: PlayOptions) {
-        viewModelScope.launch { start(options)?.let { _startFailures.send(it) } }
+        val asked = nextRequest()
+        _starting.value = true
+        viewModelScope.launch {
+            val failure = start(options)
+            if (asked != request) return@launch
+            if (failure != null) {
+                _startFailures.send(failure)
+            } else {
+                // The service tells of the book playing a moment after it's asked
+                playback.state.first { it.currentTrack != null }
+                if (asked == request) _starting.value = false
+            }
+        }
+    }
+
+    /** The player screen's been left: why a book couldn't start is no longer for anyone to hear. */
+    fun forgetStartFailures() {
+        nextRequest()
+        _starting.value = false
+    }
+
+    private fun nextRequest(): Int {
+        while (_startFailures.tryReceive().isSuccess) Unit
+        return ++request
     }
 
     private suspend fun start(options: PlayOptions): PlayerException? = loader.load(options).fold(

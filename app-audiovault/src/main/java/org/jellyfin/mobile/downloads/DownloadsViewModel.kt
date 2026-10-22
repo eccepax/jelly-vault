@@ -9,16 +9,38 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.data.entity.DownloadEntity
 
-/** The downloads screen's list: tracks whose download is complete (see [AudiobookDownloads.finished]). */
+/**
+ * The downloads screen's list: tracks whose download is complete (see [AudiobookDownloads.finished]).
+ * Downloading, removing and repairing run here too, in this view model's scope, so leaving the
+ * screen that asked, or a rotation, doesn't cut them short. Track ids are in their dashed form.
+ */
 class DownloadsViewModel(
     finished: Flow<List<DownloadEntity>>,
+    private val download: suspend (trackIds: List<String>) -> Unit,
     private val remove: suspend (trackId: String) -> Unit,
+    private val repair: suspend () -> Unit,
 ) : ViewModel() {
     val downloads: StateFlow<List<DownloadEntity>> =
         finished.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
-    fun remove(download: DownloadEntity) {
-        viewModelScope.launch { remove.invoke(download.itemId) }
+    private var repairing = false
+
+    fun download(trackIds: List<String>) {
+        viewModelScope.launch { download.invoke(trackIds) }
+    }
+
+    fun remove(trackIds: List<String>) {
+        viewModelScope.launch { trackIds.forEach { remove.invoke(it) } }
+    }
+
+    // Kept by its track's id, not by DownloadEntity.itemId, which is the media source's
+    fun remove(download: DownloadEntity) = remove(listOf(download.mediaSource.itemId.toString()))
+
+    /** Fetches again any downloaded track whose file has gone; once, however often it's asked. */
+    fun repairOnce() {
+        if (repairing) return
+        repairing = true
+        viewModelScope.launch { repair.invoke() }
     }
 
     private companion object {

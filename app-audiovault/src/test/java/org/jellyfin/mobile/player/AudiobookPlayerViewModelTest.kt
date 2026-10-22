@@ -5,6 +5,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
@@ -46,9 +48,11 @@ class AudiobookPlayerViewModelTest {
     private val book = UUID.fromString("00000000-0000-4000-8000-000000000001")
     private val onServer = mutableSetOf(book)
 
-    private fun TestScope.viewModel(): AudiobookPlayerViewModel {
+    private fun TestScope.viewModel(
+        items: suspend (List<UUID>) -> List<BaseItemDto> = { ids -> ids.filter(onServer::contains).map(::bookNamed) },
+    ): AudiobookPlayerViewModel {
         val loader = AudiobookQueueLoader(
-            items = { ids -> ids.filter(onServer::contains).map(::bookNamed) },
+            items = items,
             playable = { null },
             coverUrl = { null },
         )
@@ -101,6 +105,64 @@ class AudiobookPlayerViewModelTest {
 
         viewModel.startFailures.first().shouldBeInstanceOf<PlayerException.NetworkFailure>()
         controller.commands shouldBe emptyList()
+    }
+
+    @Test
+    fun `a failure is dropped once another book is asked for`() = runTest {
+        val viewModel = viewModel()
+        onServer.clear()
+        viewModel.play(options(book))
+        onServer += book
+
+        viewModel.play(options(book))
+
+        withTimeoutOrNull(1.seconds) { viewModel.startFailures.first() } shouldBe null
+    }
+
+    @Test
+    fun `once the player screen's left, a failure isn't kept, even one still on its way`() = runTest {
+        val loading = CompletableDeferred<Unit>()
+        val viewModel = viewModel(items = {
+            loading.await()
+            emptyList()
+        })
+        onServer.clear()
+        viewModel.play(options(book))
+        viewModel.play(options(book))
+
+        viewModel.forgetStartFailures()
+        loading.complete(Unit)
+        runCurrent()
+
+        withTimeoutOrNull(1.seconds) { viewModel.startFailures.first() } shouldBe null
+    }
+
+    @Test
+    fun `a book is starting from being asked for until it plays`() = runTest {
+        val loading = CompletableDeferred<Unit>()
+        val viewModel = viewModel(items = { ids ->
+            loading.await()
+            ids.map(::bookNamed)
+        })
+        viewModel.starting.value shouldBe false
+
+        viewModel.play(options(book))
+        viewModel.starting.value shouldBe true
+        loading.complete(Unit)
+        runCurrent()
+
+        viewModel.starting.value shouldBe false
+    }
+
+    @Test
+    fun `a book that fails stays starting, the player screen leaving on the failure itself`() = runTest {
+        onServer.clear()
+        val viewModel = viewModel()
+
+        viewModel.play(options(book))
+
+        viewModel.startFailures.first()
+        viewModel.starting.value shouldBe true
     }
 
     // --- Transport ----------------------------------------------------------------------------------

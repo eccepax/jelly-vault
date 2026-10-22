@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.downloads
 
 import android.app.Application
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -44,7 +45,7 @@ class DownloadsRouteTest {
     private var backs = 0
 
     private fun show() {
-        val viewModel = DownloadsViewModel(downloads, remove = { removed += it })
+        val viewModel = DownloadsViewModel(downloads, download = {}, remove = { removed += it }, repair = {})
         composeRule.setContent {
             AppTheme(VaultBrand.AudioVault) {
                 DownloadsRoute(
@@ -61,10 +62,11 @@ class DownloadsRouteTest {
         val itemId = item?.id ?: UUID.randomUUID()
         val mediaSource = mockk<LocalJellyfinMediaSource>(relaxed = true)
         every { mediaSource.itemId } returns itemId
-        every { mediaSource.id } returns "source-1"
+        // As the server gives it: the track's id, without its dashes
+        every { mediaSource.id } returns itemId.toString().replace("-", "")
         every { mediaSource.item } returns item
         every { mediaSource.getName(any()) } returns name
-        return DownloadEntity(itemId = itemId.toString(), mediaSource = mediaSource)
+        return DownloadEntity(mediaSource)
     }
 
     private fun chapter(index: Int) = BaseItemDto(
@@ -102,8 +104,29 @@ class DownloadsRouteTest {
         composeRule.onNodeWithText(context.getString(R.string.yes)).performClick()
         composeRule.waitForIdle()
 
-        removed shouldBe listOf(download.itemId)
+        removed shouldBe listOf(download.mediaSource.itemId.toString())
         composeRule.onNodeWithText(context.getString(R.string.confirm_deletion_desc, "Dune")).assertDoesNotExist()
+    }
+
+    @Test
+    fun `asking to remove survives a rotation`() {
+        val download = downloadEntity(name = "Dune")
+        downloads.value = listOf(download)
+        val restoration = StateRestorationTester(composeRule)
+        val viewModel = DownloadsViewModel(downloads, download = {}, remove = { removed += it }, repair = {})
+        restoration.setContent {
+            AppTheme(VaultBrand.AudioVault) {
+                DownloadsRoute(onBack = {}, onPlay = {}, viewModel = viewModel, coverUrl = { _, _ -> null })
+            }
+        }
+        composeRule.onNodeWithText("Dune").performTouchInput { longClick() }
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText(context.getString(R.string.confirm_deletion_desc, "Dune")).assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.yes)).performClick()
+        composeRule.waitForIdle()
+        removed shouldBe listOf(download.mediaSource.itemId.toString())
     }
 
     @Test

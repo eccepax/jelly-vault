@@ -77,7 +77,7 @@ val applicationModule = module {
     // ViewModels
     viewModel {
         val downloads = get<AudiobookDownloads>()
-        DownloadsViewModel(downloads.finished, downloads::remove)
+        DownloadsViewModel(downloads.finished, downloads::download, downloads::remove, downloads::repair)
     }
     viewModel {
         val downloads = get<AudiobookDownloads>()

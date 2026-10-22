@@ -31,6 +31,14 @@ class SettingsViewModel(
 
     private var signingOut = false
 
+    /**
+     * Reads the settings again, for the screen as it opens: this view model outlives it, and a
+     * setting can change elsewhere meanwhile (the networks downloads may use, asked by the library).
+     */
+    fun reload() {
+        _state.value = read()
+    }
+
     fun setHoldToSpeedUp(enabled: Boolean) = save { preferences.exoPlayerAllowPressSpeedUp = enabled }
 
     fun setSkipSilence(enabled: Boolean) = save {
