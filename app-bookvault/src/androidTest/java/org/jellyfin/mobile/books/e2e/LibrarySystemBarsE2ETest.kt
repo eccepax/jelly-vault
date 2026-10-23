@@ -11,6 +11,7 @@ import org.junit.Test
  * this check can't run below API 30: AndroidX derives nav-bar insets there from the window's stable
  * insets, which Robolectric doesn't have.
  */
+@BrowseArea
 class LibrarySystemBarsE2ETest : LoggedInE2ETest() {
 
     @Test
