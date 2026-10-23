@@ -4,20 +4,29 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
-import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
-import androidx.viewpager2.widget.ViewPager2
+import io.kotest.matchers.floats.shouldBeGreaterThan
 import io.kotest.matchers.floats.shouldBeLessThanOrEqual
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -70,6 +79,8 @@ class BookReaderRouteTest {
         every { readerViewModel.chosenTocEntry } returns MutableStateFlow(null)
         every { readerViewModel.tocJumps } returns MutableSharedFlow()
         every { readerViewModel.getTableOfContents() } returns emptyList()
+        every { readerViewModel.pageAspectRatio(any()) } returns A4_ASPECT_RATIO
+        coEvery { readerViewModel.renderPage(any()) } returns null
 
         every { appPreferences.epubFontScale } returns 1.0f
         every { appPreferences.epubFontFamily } returns EpubFontFamily.SERIF
@@ -182,25 +193,38 @@ class BookReaderRouteTest {
 
         show()
 
-        val root = view<View>(android.R.id.content)
-        val pages = view<RecyclerView>(R.id.recycler_view)
+        val root = composeRule.onRoot().fetchSemanticsNode().size
+        val pages = composeRule.onNodeWithTag(READER_PAGES).fetchSemanticsNode().size
         pages.width shouldBe root.width
         pages.height shouldBeGreaterThan root.height / 2
     }
 
-    private fun zoomFrame(): ZoomFrame = view<RecyclerView>(R.id.recycler_view).parent as ZoomFrame
+    private fun zoomScale(): Float =
+        composeRule.onNodeWithTag(READER_PAGES).fetchSemanticsNode().config[PageZoomScale]
 
     @Test
-    fun `a PDF's pages zoom, and read as a scroll they scroll themselves up and down`() {
+    fun `a double tap zooms a PDF's pages in, and another zooms them back out`() {
         pdf()
 
         show()
-        zoomFrame().zoomEnabled shouldBe true
-        zoomFrame().childScrollsVertically shouldBe true
+        zoomScale() shouldBe 1f
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { doubleClick() }
+        zoomScale() shouldBe PageZoom.DOUBLE_TAP_SCALE
 
-        composeRule.onNodeWithContentDescription(string(R.string.reader_page_mode)).performClick()
-        composeRule.waitForIdle()
-        zoomFrame().childScrollsVertically shouldBe false
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { doubleClick() }
+        zoomScale() shouldBe 1f
+    }
+
+    @Test
+    fun `a pinch zooms a PDF's pages in`() {
+        pdf()
+
+        show()
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput {
+            pinch(center - Offset(50f, 0f), centerLeft, center + Offset(50f, 0f), centerRight)
+        }
+
+        zoomScale() shouldBeGreaterThan 1.5f
     }
 
     @Test
@@ -208,41 +232,86 @@ class BookReaderRouteTest {
         epub()
 
         show()
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { doubleClick() }
 
-        zoomFrame().zoomEnabled shouldBe false
+        zoomScale() shouldBe 1f
+    }
+
+    @Test
+    fun `read as a scroll, a zoomed-in PDF still scrolls up and down, and the place follows`() {
+        pdf()
+
+        show()
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { doubleClick() }
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { swipeUp() }
+        composeRule.waitForIdle()
+
+        verify { readerViewModel.setPage(match { it > 0 }) }
+    }
+
+    @Test
+    fun `turning to another page (page mode) zooms back out`() {
+        pdf()
+
+        show()
+        composeRule.onNodeWithContentDescription(string(R.string.reader_page_mode)).performClick()
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { doubleClick() }
+        zoomScale() shouldBe PageZoom.DOUBLE_TAP_SCALE
+        composeRule.runOnIdle { currentPageFlow.value = 3 }
+        composeRule.waitForIdle()
+
+        zoomScale() shouldBe 1f
     }
 
     @Test
     fun `jumping to a page via setPage moves the displayed EPUB page even without a swipe`() {
         // Regression test: TOC/bookmark jumps and the PDF page-jump dialog all call
-        // viewModel.setPage(...) directly — that has no path back to the ViewPager2 unless
-        // something observes currentPage and moves it explicitly.
+        // viewModel.setPage(...) directly; that has no path back to the pager unless something
+        // observes currentPage and moves it explicitly.
         epub(chapters = 5)
 
         show()
         composeRule.runOnIdle { currentPageFlow.value = 3 } // simulates a TOC/bookmark jump, not a swipe
         composeRule.waitForIdle()
 
-        view<ViewPager2>(R.id.view_pager).currentItem shouldBe 3
+        composeRule.onNodeWithTag(readerPageTag(3)).assertIsDisplayed()
     }
 
     @Test
-    fun `a programmatic PDF page jump is not overwritten by later relayout-driven scroll tracking`() {
-        // The scroll's page bitmaps arrive asynchronously, so pages around a jump target keep
-        // changing height for several frames, and each relayout fires the scroll listener. Tracking
-        // those would overwrite the jump target (jumping to page 10 could save page 3), so tracking
-        // stays off until a real user drag; no timer is long enough to be reliable.
+    fun `swiping to another page (page mode) moves the place there`() {
+        pdf()
+
+        show()
+        composeRule.onNodeWithContentDescription(string(R.string.reader_page_mode)).performClick()
+        composeRule.onNodeWithTag(READER_PAGES).performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+
+        verify { readerViewModel.setPage(1) }
+    }
+
+    @Test
+    fun `a PDF opens as a scroll at the place it was left`() {
+        pdf()
+        currentPageFlow.value = 9
+
+        show()
+
+        composeRule.onNodeWithTag(readerPageTag(9)).assertIsDisplayed()
+        verify(exactly = 0) { readerViewModel.setPage(any()) }
+    }
+
+    @Test
+    fun `a programmatic PDF page jump is not overwritten by pages drawn after it`() {
+        // The scroll's page pictures arrive after the jump. Each page has its size from the start, so
+        // a picture arriving moves nothing; and only the reader's own scrolling moves the place.
         pdf()
         coEvery { readerViewModel.renderPage(any()) } returns Bitmap.createBitmap(200, 2000, Bitmap.Config.ARGB_8888)
 
         show()
-        val recyclerView = view<RecyclerView>(R.id.recycler_view)
         composeRule.runOnIdle { currentPageFlow.value = 9 } // simulates a TOC/bookmark/page-jump dialog
-        // Simulates a relayout landing well after the jump (a late-arriving bitmap), still
-        // with no real user interaction in between.
-        composeRule.runOnIdle { recyclerView.scrollBy(0, 5) }
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag(readerPageTag(9)).assertIsDisplayed()
         verify(exactly = 0) { readerViewModel.setPage(any()) }
     }
 
@@ -265,8 +334,8 @@ class BookReaderRouteTest {
         restoration.emulateSavedInstanceStateRestore()
         composeRule.waitForIdle()
 
-        zoomFrame().childScrollsVertically shouldBe false
-        view<ViewPager2>(R.id.view_pager).visibility shouldBe View.VISIBLE
+        composeRule.onNodeWithContentDescription(string(R.string.reader_scroll_mode)).assertExists()
+        composeRule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)).assertExists()
     }
 
     @Test
@@ -363,5 +432,6 @@ class BookReaderRouteTest {
 
     private companion object {
         const val NAV_BAR_PX = 126
+        const val A4_ASPECT_RATIO = 210f / 297f
     }
 }
