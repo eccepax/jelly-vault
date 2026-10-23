@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The launcher icon's layers, so the splash screen shows the same icon -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@mipmap/ic_launcher_background" />
-    <item android:drawable="@mipmap/ic_launcher_foreground" />
-</layer-list>
