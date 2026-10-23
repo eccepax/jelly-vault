@@ -116,6 +116,23 @@ class OfflineListeningSyncTest {
     }
 
     @Test
+    fun `a server that isn't ready for it takes it next time`() = runTest {
+        // Jellyfin restarting behind a proxy, overloaded, or the sign-in run out
+        val track = UUID.randomUUID()
+        for (status in listOf(401, 403, 429, 500, 502, 503)) {
+            saved(position = 12.minutes, savedAt = noon, itemId = track)
+            server.fails = status
+
+            sync.sync()
+
+            database.downloadDao.getAllDownloads().first().single().mediaSource.positionSavedAt shouldBe noon
+            server.fails = null
+            sync.sync()
+            database.downloadDao.getAllDownloads().first().single().mediaSource.positionSavedAt shouldBe null
+        }
+    }
+
+    @Test
     fun `a server that refuses it isn't asked again`() = runTest {
         saved(position = 12.minutes, savedAt = noon)
         server.refuses = true
@@ -183,10 +200,12 @@ class OfflineListeningSyncTest {
         val asked = mutableListOf<UUID>()
         var unreachable = false
         var refuses = false
+        var fails: Int? = null
         var onAsk: suspend () -> Unit = {}
 
         override suspend fun lastPlayed(itemId: UUID): Instant? {
             if (unreachable) throw TimeoutException("Vault unreachable")
+            fails?.let { throw InvalidStatusException(it) }
             asked += itemId
             onAsk()
             return lastPlayed[itemId]

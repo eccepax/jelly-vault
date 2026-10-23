@@ -3,7 +3,7 @@ package org.jellyfin.mobile.downloads
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.jellyfin.mobile.common.server.ServerPositions
-import org.jellyfin.mobile.common.server.isNetworkFailure
+import org.jellyfin.mobile.common.server.worthRetrying
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import timber.log.Timber
@@ -18,7 +18,10 @@ class OfflineListeningSync(
     private val dao: DownloadDao,
     private val server: ServerPositions,
 ) {
-    /** Sends what's waiting, until the server can't be reached; the rest waits for next time. */
+    /**
+     * Sends what's waiting, until the server can't be reached or isn't ready (restarting,
+     * overloaded, signed out); the rest waits for next time.
+     */
     suspend fun sync() {
         for (download in dao.getAllDownloads().first()) {
             val source = download.mediaSource
@@ -31,7 +34,7 @@ class OfflineListeningSync(
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                if (e.isNetworkFailure()) return
+                if (e.worthRetrying()) return
                 // Sending it again wouldn't change the server's mind
                 Timber.w(e, "The server refused the listening in %s", source.itemId)
             }
