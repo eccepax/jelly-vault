@@ -148,12 +148,26 @@ class BookLibraryViewModelTest {
         coVerify { bookDownloads.remove(duneId) }
     }
 
+    @Test
+    fun `loading the books sends the places read here too, without waiting for them`() = runBlocking<Unit> {
+        var sent = 0
+        sendProgress = { sent++ }
+
+        val viewModel = loadedViewModel()
+
+        sent shouldBe 1
+        viewModel.filteredBooks.shouldBecome(listOf(dune, emma, ubik))
+    }
+
+    private var sendProgress: () -> Unit = {}
+
     private suspend fun loadedViewModel(libraryId: String? = null) = BookLibraryViewModel(
         apiClient = apiClient,
         appPreferences = appPreferences,
         bookProgressDao = mockk<BookProgressDao> { coEvery { getAllProgress() } returns emptyList() },
         bookDownloads = bookDownloads,
         libraryId = libraryId,
+        sendProgress = sendProgress,
     ).also { viewModel -> withTimeout(5.seconds) { viewModel.loading.first { !it } } }
 
     /** The filters run through a combine, so they land a moment after the input that changed them. */

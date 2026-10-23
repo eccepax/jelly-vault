@@ -10,14 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
-import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
-import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.jellyfin.mobile.books.downloads.BookFiles
-import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.api.client.extensions.playStateApi
-import org.jellyfin.sdk.model.api.PlaybackStopInfo
-import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.mobile.books.progress.BookProgressSync
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
@@ -26,8 +21,7 @@ enum class BookType { PDF, EPUB, UNKNOWN }
 
 class BookReaderViewModel(
     app: Application,
-    private val apiClient: ApiClient,
-    private val bookProgressDao: BookProgressDao,
+    private val progressSync: BookProgressSync,
     private val bookFiles: BookFiles,
     private val bookBookmarkDao: BookBookmarkDao,
 ) : AndroidViewModel(app) {
@@ -89,7 +83,6 @@ class BookReaderViewModel(
         _error.value = null
         viewModelScope.launch {
             try {
-                val savedProgress = bookProgressDao.getProgress(bookItemId)
                 val cachedFile = bookFiles.fileFor(bookItemId)
                 val type = detectBookType(cachedFile)
                 // Populate totalPages/currentPage BEFORE publishing bookType — the Fragment's
@@ -100,15 +93,15 @@ class BookReaderViewModel(
                     BookType.PDF -> {
                         pdfCore.openFile(cachedFile)
                         _totalPages.value = pdfCore.pageCount
-                        _currentPage.value = savedProgress?.pageNumber?.coerceIn(0, pdfCore.pageCount - 1) ?: 0
                     }
                     BookType.EPUB -> {
                         epubRenderer.openFile(cachedFile, bookItemId)
                         _totalPages.value = epubRenderer.chapterCount
-                        _currentPage.value = savedProgress?.pageNumber?.coerceIn(0, epubRenderer.chapterCount - 1) ?: 0
                     }
                     BookType.UNKNOWN -> throw IOException("Unsupported book format")
                 }
+                // Where it was left, here or on another device
+                _currentPage.value = progressSync.startPage(bookItemId, _totalPages.value)
                 _bookType.value = type
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load book $bookItemId")
@@ -138,16 +131,8 @@ class BookReaderViewModel(
         if (clampedIndex == _currentPage.value) return
         _currentPage.value = clampedIndex
         val itemId = currentBookItemId ?: return
-        viewModelScope.launch {
-            bookProgressDao.upsertProgress(
-                BookProgressEntity(
-                    bookItemId = itemId,
-                    pageNumber = clampedIndex,
-                    totalPages = total,
-                    lastUpdated = System.currentTimeMillis(),
-                ),
-            )
-        }
+        // Saved where leaving the book can't cut it off, ahead of the send that leaving starts
+        progressSync.save(itemId, clampedIndex, total)
     }
 
     /** Bookmarks the current position. Auto-labels from the chapter title (EPUB) or page number (PDF). */
@@ -185,21 +170,9 @@ class BookReaderViewModel(
         }
     }
 
-    fun reportPlaybackStopped() {
-        val itemId = currentBookItemId ?: return
-        val page = _currentPage.value
-        val total = _totalPages.value
-        viewModelScope.launch {
-            runCatching {
-                apiClient.playStateApi.reportPlaybackStopped(
-                    PlaybackStopInfo(
-                        itemId = itemId.toUUID(),
-                        positionTicks = playbackStopPositionTicks(page, total),
-                        failed = false,
-                    ),
-                )
-            }.onFailure { Timber.e(it, "Failed to report playback stopped") }
-        }
+    /** Sends the server the place in the book, so it opens there on the reader's other devices. */
+    fun sendProgress() {
+        if (currentBookItemId != null) progressSync.sendSoon()
     }
 
     internal fun detectBookType(file: File): BookType {
@@ -231,12 +204,3 @@ class BookReaderViewModel(
         const val SIGNATURE_HEADER_BYTES = 4
     }
 }
-
-// Jellyfin reports book progress on the same tick-based scale as audio/video, so a page/totalPages
-// fraction is mapped onto a fixed virtual duration rather than a real playback position.
-private const val TICKS_PER_SECOND = 10_000_000L
-private const val VIRTUAL_DURATION_SECONDS = 100L
-
-/** Converts a page/totalPages fraction into Jellyfin ticks (100ns units) for progress reporting. */
-internal fun playbackStopPositionTicks(page: Int, totalPages: Int): Long =
-    if (totalPages > 0) (page.toLong() * TICKS_PER_SECOND * VIRTUAL_DURATION_SECONDS / totalPages) else 0L

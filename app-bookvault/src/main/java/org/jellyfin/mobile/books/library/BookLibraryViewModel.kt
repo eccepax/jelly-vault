@@ -30,6 +30,11 @@ class BookLibraryViewModel(
     private val bookProgressDao: BookProgressDao,
     private val bookDownloads: BookDownloads,
     private val libraryId: String?,
+    /**
+     * Sends the server the places read here, in the background (see
+     * [org.jellyfin.mobile.books.progress.BookProgressSync.sendSoon]).
+     */
+    private val sendProgress: () -> Unit = {},
 ) : ViewModel() {
 
     private val _allBooks = MutableStateFlow<List<BaseItemDto>>(emptyList())
@@ -102,6 +107,8 @@ class BookLibraryViewModel(
                     BookSortOption.DATE_ADDED -> ItemSortBy.DATE_CREATED
                 }
 
+                // Not waited for: the filter weighs each place here against the server's anyway, newest wins
+                sendProgress()
                 val result = withContext(Dispatchers.IO) {
                     apiClient.itemsApi.getItems(
                         includeItemTypes = listOf(BaseItemKind.BOOK),

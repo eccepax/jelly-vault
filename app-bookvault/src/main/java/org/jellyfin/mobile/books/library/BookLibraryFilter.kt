@@ -1,6 +1,9 @@
 package org.jellyfin.mobile.books.library
 
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
+import org.jellyfin.mobile.books.progress.ReadingState
+import org.jellyfin.mobile.books.progress.readingState
+import org.jellyfin.mobile.books.progress.serverProgress
 import org.jellyfin.sdk.model.api.BaseItemDto
 
 /**
@@ -16,21 +19,10 @@ internal fun filterAndSortBooks(
     tag: String?,
 ): List<BaseItemDto> = books
     .filter { book ->
-        val itemId = book.id?.toString() ?: return@filter true
-        val bookProgress = progressByItemId[itemId]
-        when (progressFilter) {
-            ProgressFilter.ALL -> true
-            ProgressFilter.UNREAD -> bookProgress == null || bookProgress.pageNumber == 0
-            ProgressFilter.IN_PROGRESS ->
-                bookProgress != null &&
-                    bookProgress.pageNumber > 0 &&
-                    bookProgress.totalPages > 0 &&
-                    bookProgress.pageNumber < bookProgress.totalPages - 1
-            ProgressFilter.FINISHED ->
-                bookProgress != null &&
-                    bookProgress.totalPages > 0 &&
-                    bookProgress.pageNumber >= bookProgress.totalPages - 1
-        }
+        if (progressFilter == ProgressFilter.ALL) return@filter true
+        val local = progressByItemId[book.id?.toString() ?: return@filter true]
+        // The place read most recently wins, here or on another device
+        readingState(local, book.serverProgress()).matches(progressFilter)
     }
     .filter { book ->
         if (tag == null) {
@@ -52,3 +44,10 @@ internal fun availableTags(books: List<BaseItemDto>): List<String> = books
     .flatMap { it.tags.orEmpty() }
     .distinct()
     .sorted()
+
+private fun ReadingState.matches(filter: ProgressFilter): Boolean = when (filter) {
+    ProgressFilter.ALL -> true
+    ProgressFilter.UNREAD -> this == ReadingState.UNREAD
+    ProgressFilter.IN_PROGRESS -> this == ReadingState.IN_PROGRESS
+    ProgressFilter.FINISHED -> this == ReadingState.FINISHED
+}

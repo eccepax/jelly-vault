@@ -108,12 +108,12 @@ class BookReaderFragmentTest {
     }
 
     @Test
-    fun `leaving the reader reports the current playback position`() {
+    fun `leaving the reader sends the reading place`() {
         launch().use { scenario ->
             scenario.moveToState(Lifecycle.State.CREATED) // RESUMED -> CREATED crosses onStop()
         }
 
-        verify { readerViewModel.reportPlaybackStopped() }
+        verify { readerViewModel.sendProgress() }
     }
 
     @Test

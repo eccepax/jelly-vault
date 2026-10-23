@@ -348,7 +348,7 @@ class BookReaderFragment : Fragment() {
 
     override fun onStop() {
         super.onStop()
-        viewModel.reportPlaybackStopped()
+        viewModel.sendProgress()
     }
 
     override fun onDestroyView() {
