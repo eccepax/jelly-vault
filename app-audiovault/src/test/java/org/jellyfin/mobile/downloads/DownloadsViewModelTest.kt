@@ -29,9 +29,9 @@ class DownloadsViewModelTest {
     private val viewModel by lazy {
         DownloadsViewModel(
             finished = emptyFlow(),
-            download = { downloaded += it },
-            remove = { removed += it },
-            repair = {
+            downloadTracks = { downloaded += it },
+            removeTrack = { removed += it },
+            repairDownloads = {
                 repairs++
                 repairing.await()
             },

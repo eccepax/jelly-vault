@@ -16,9 +16,9 @@ import org.jellyfin.mobile.data.entity.DownloadEntity
  */
 class DownloadsViewModel(
     finished: Flow<List<DownloadEntity>>,
-    private val download: suspend (trackIds: List<String>) -> Unit,
-    private val remove: suspend (trackId: String) -> Unit,
-    private val repair: suspend () -> Unit,
+    private val downloadTracks: suspend (trackIds: List<String>) -> Unit,
+    private val removeTrack: suspend (trackId: String) -> Unit,
+    private val repairDownloads: suspend () -> Unit,
 ) : ViewModel() {
     val downloads: StateFlow<List<DownloadEntity>> =
         finished.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
@@ -26,11 +26,11 @@ class DownloadsViewModel(
     private var repairing = false
 
     fun download(trackIds: List<String>) {
-        viewModelScope.launch { download.invoke(trackIds) }
+        viewModelScope.launch { downloadTracks(trackIds) }
     }
 
     fun remove(trackIds: List<String>) {
-        viewModelScope.launch { trackIds.forEach { remove.invoke(it) } }
+        viewModelScope.launch { trackIds.forEach { removeTrack(it) } }
     }
 
     // Kept by its track's id, not by DownloadEntity.itemId, which is the media source's
@@ -40,7 +40,7 @@ class DownloadsViewModel(
     fun repairOnce() {
         if (repairing) return
         repairing = true
-        viewModelScope.launch { repair.invoke() }
+        viewModelScope.launch { repairDownloads() }
     }
 
     private companion object {

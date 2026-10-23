@@ -45,7 +45,12 @@ class DownloadsRouteTest {
     private var backs = 0
 
     private fun show() {
-        val viewModel = DownloadsViewModel(downloads, download = {}, remove = { removed += it }, repair = {})
+        val viewModel = DownloadsViewModel(
+            downloads,
+            downloadTracks = {},
+            removeTrack = { removed += it },
+            repairDownloads = {},
+        )
         composeRule.setContent {
             AppTheme(VaultBrand.AudioVault) {
                 DownloadsRoute(
@@ -113,7 +118,12 @@ class DownloadsRouteTest {
         val download = downloadEntity(name = "Dune")
         downloads.value = listOf(download)
         val restoration = StateRestorationTester(composeRule)
-        val viewModel = DownloadsViewModel(downloads, download = {}, remove = { removed += it }, repair = {})
+        val viewModel = DownloadsViewModel(
+            downloads,
+            downloadTracks = {},
+            removeTrack = { removed += it },
+            repairDownloads = {},
+        )
         restoration.setContent {
             AppTheme(VaultBrand.AudioVault) {
                 DownloadsRoute(onBack = {}, onPlay = {}, viewModel = viewModel, coverUrl = { _, _ -> null })

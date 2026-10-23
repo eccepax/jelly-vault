@@ -22,6 +22,7 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
+import org.jellyfin.mobile.player.PlayerPresence
 import org.jellyfin.mobile.player.PlayerProgress
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackState
 import org.jellyfin.mobile.utils.toast
@@ -45,7 +46,7 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
         }
     }
     val playback by viewModel.state.collectAsState()
-    val starting by viewModel.starting.collectAsState()
+    val presence by viewModel.presence.collectAsState()
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
@@ -53,7 +54,7 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     val holdToSpeedUp = remember(viewModel) { viewModel.holdToSpeedUp }
 
     LeaveWhenStartFails(viewModel) { leave() }
-    LeaveWhenStopped(hasBook = playback.currentTrack != null, starting = starting) { leave() }
+    LeaveWhenStopped(presence) { leave() }
     ForgetStartFailuresOnLeaving(viewModel)
     ToastErrors(playback.error)
     KeepScreenOn(playback.isPlaying)
@@ -119,13 +120,13 @@ private fun LeaveWhenStartFails(viewModel: AudiobookPlayerViewModel, leave: () -
 
 /**
  * Leaves once a book that was showing stops (saved, so it holds across a rotation), or with no book
- * and none [starting]: as it's restored once the app's process has gone, playback with it.
+ * and none starting: as it's restored once the app's process has gone, playback with it.
  */
 @Composable
-private fun LeaveWhenStopped(hasBook: Boolean, starting: Boolean, leave: () -> Unit) {
+private fun LeaveWhenStopped(presence: PlayerPresence, leave: () -> Unit) {
     var hadBook by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(hasBook, starting) {
-        if (hasBook) hadBook = true else if (hadBook || !starting) leave()
+    LaunchedEffect(presence) {
+        if (presence.hasBook) hadBook = true else if (hadBook || !presence.starting) leave()
     }
 }
 

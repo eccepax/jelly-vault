@@ -144,14 +144,14 @@ class AudiobookPlayerViewModelTest {
             loading.await()
             ids.map(::bookNamed)
         })
-        viewModel.starting.value shouldBe false
+        viewModel.presence.value.starting shouldBe false
 
         viewModel.play(options(book))
-        viewModel.starting.value shouldBe true
+        viewModel.presence.value.starting shouldBe true
         loading.complete(Unit)
         runCurrent()
 
-        viewModel.starting.value shouldBe false
+        viewModel.presence.value.starting shouldBe false
     }
 
     @Test
@@ -162,12 +162,12 @@ class AudiobookPlayerViewModelTest {
         val viewModel = viewModel()
 
         viewModel.play(options(book))
-        viewModel.starting.value shouldBe true
+        viewModel.presence.value.starting shouldBe true
 
         // The service tells of the book asked for
         controller.playing(AudiobookTrack(id = book.toString(), title = "Book", durationMs = 0L))
         runCurrent()
-        viewModel.starting.value shouldBe false
+        viewModel.presence.value.starting shouldBe false
     }
 
     @Test
@@ -178,7 +178,38 @@ class AudiobookPlayerViewModelTest {
         viewModel.play(options(book))
 
         viewModel.startFailures.first()
-        viewModel.starting.value shouldBe true
+        viewModel.presence.value.starting shouldBe true
+    }
+
+    @Test
+    fun `a book that never comes to play stops starting after a while, so the screen can go`() = runTest {
+        controller.playsLater = true
+        val viewModel = viewModel()
+
+        viewModel.play(options(book))
+        advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS - 1)
+        viewModel.presence.value.starting shouldBe true
+
+        advanceTimeBy(2)
+        viewModel.presence.value shouldBe PlayerPresence(hasBook = false, starting = false)
+    }
+
+    @Test
+    fun `the book arriving is seen at once with its starting over, never as nothing to show`() = runTest {
+        controller.playsLater = true
+        val viewModel = viewModel()
+        val seen = mutableListOf<PlayerPresence>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.presence.collect { seen += it } }
+
+        viewModel.play(options(book))
+        controller.playing(AudiobookTrack(id = book.toString(), title = "Book", durationMs = 0L))
+        runCurrent()
+
+        seen shouldBe listOf(
+            PlayerPresence(hasBook = false, starting = false),
+            PlayerPresence(hasBook = false, starting = true),
+            PlayerPresence(hasBook = true, starting = false),
+        )
     }
 
     // --- Transport ----------------------------------------------------------------------------------

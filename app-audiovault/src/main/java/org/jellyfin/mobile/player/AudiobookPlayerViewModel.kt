@@ -6,12 +6,16 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
@@ -66,14 +70,19 @@ class AudiobookPlayerViewModel(
     /** Counts the books asked for, so a start that's been overtaken keeps its failure to itself. */
     private var request = 0
 
-    private val _starting = MutableStateFlow(false)
+    /** The book asked for and not yet playing; null when there's none. */
+    private val _starting = MutableStateFlow<Starting?>(null)
 
     /**
-     * True from a book being asked for until it's the one playing; it stays so if it fails, until
-     * another is asked for, as the player screen leaves on the failure itself. The screen, showing
-     * no book and none starting (as it's restored with the app's process gone), has nothing to show.
+     * Whether there's a book to show, and whether one asked for isn't playing yet: worked out from
+     * one look at both, so the book arriving and its starting being over are seen together.
+     * A book is starting until it's the one playing, or for [START_TIMEOUT_MS] at most (the service
+     * never coming up, or stopped first); one that fails stays starting until another is asked for,
+     * as the player screen leaves on the failure itself. The screen, showing no book and none
+     * starting (as it's restored with the app's process gone), has nothing to show.
      */
-    val starting: StateFlow<Boolean> = _starting.asStateFlow()
+    val presence: StateFlow<PlayerPresence> = combine(playback.state, _starting, ::presenceOf)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, presenceOf(playback.state.value, null))
 
     /** Where playback is, about 4 times a second while followed: the player has no event for it moving. */
     val progress: Flow<PlayerProgress> = flow {
@@ -92,16 +101,17 @@ class AudiobookPlayerViewModel(
      */
     fun play(options: PlayOptions) {
         val asked = nextRequest()
-        _starting.value = true
+        _starting.value = Starting.Loading
         viewModelScope.launch {
             val started = start(options)
             if (asked != request) return@launch
             started.fold(
                 onSuccess = { trackId ->
+                    _starting.value = Starting.Playing(trackId)
                     // The service tells of it playing a moment after it's asked, perhaps after
                     // still telling of the book that was playing
-                    playback.state.first { it.currentTrack?.id == trackId }
-                    if (asked == request) _starting.value = false
+                    withTimeoutOrNull(START_TIMEOUT_MS) { playback.state.first { it.currentTrack?.id == trackId } }
+                    if (asked == request) _starting.value = null
                 },
                 onFailure = { _startFailures.send(it as PlayerException) },
             )
@@ -111,7 +121,7 @@ class AudiobookPlayerViewModel(
     /** The player screen's been left: why a book couldn't start is no longer for anyone to hear. */
     fun forgetStartFailures() {
         nextRequest()
-        _starting.value = false
+        _starting.value = null
     }
 
     private fun nextRequest(): Int {
@@ -168,11 +178,31 @@ class AudiobookPlayerViewModel(
         playback.stop()
     }
 
-    private companion object {
-        const val MS_PER_MINUTE = 60_000L
-        const val PROGRESS_INTERVAL_MS = 250L
+    internal companion object {
+        /** How long a book that's been started may take to be the one playing. */
+        const val START_TIMEOUT_MS = 15_000L
+        private const val MS_PER_MINUTE = 60_000L
+        private const val PROGRESS_INTERVAL_MS = 250L
     }
 }
+
+/** Whether the player screen has a book to show, and whether one asked for is still on its way. */
+data class PlayerPresence(val hasBook: Boolean, val starting: Boolean)
+
+/** A book asked for: still [Loading] (or failed), or sent to the service to play from [Playing.trackId]. */
+private sealed interface Starting {
+    data object Loading : Starting
+    data class Playing(val trackId: String) : Starting
+}
+
+private fun presenceOf(state: AudiobookPlaybackState, starting: Starting?) = PlayerPresence(
+    hasBook = state.currentTrack != null,
+    starting = when (starting) {
+        null -> false
+        Starting.Loading -> true
+        is Starting.Playing -> state.currentTrack?.id != starting.trackId
+    },
+)
 
 /** Where playback is in the current track, and how long the track is (0 until known). */
 data class PlayerProgress(val positionMs: Long, val durationMs: Long)
