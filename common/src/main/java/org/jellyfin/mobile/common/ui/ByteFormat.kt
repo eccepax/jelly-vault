@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.ui
+package org.jellyfin.mobile.common.ui
 
 import java.util.Locale
 

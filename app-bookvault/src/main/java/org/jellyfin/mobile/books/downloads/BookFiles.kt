@@ -5,6 +5,10 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.common.downloads.FileDownloader
 import org.jellyfin.mobile.common.downloads.ItemDownloads
@@ -24,10 +28,28 @@ class BookFiles(
     private val dataSourceFactory: DataSource.Factory,
     private val uriOf: (bookId: String) -> String,
 ) {
+    private val copies = File(cacheDir, "books")
+    private val copiesChanged = MutableStateFlow(0)
+
+    /** Space the copies fetched for reading take, so Settings counts them with the downloads. */
+    val copiesBytes: Flow<Long> = copiesChanged.map {
+        withContext(Dispatchers.IO) { copies.walk().filter { it.isFile }.sumOf { it.length() } }
+    }
+
     /** [bookId]'s whole file; throws an IOException if it can't be fetched. */
     suspend fun fileFor(bookId: String): File = downloads.fileFor(bookId) ?: withContext(Dispatchers.IO) {
-        val copy = File(File(cacheDir, "books"), downloadFileName(bookId))
-        FileDownloader(Uri.parse(uriOf(bookId)), copy, dataSourceFactory.createDataSource()).download(null)
+        val copy = File(copies, downloadFileName(bookId))
+        try {
+            FileDownloader(Uri.parse(uriOf(bookId)), copy, dataSourceFactory.createDataSource()).download(null)
+        } finally {
+            copiesChanged.update { it + 1 }
+        }
         copy
+    }
+
+    /** Deletes every copy fetched for reading; a book opened again is fetched again. */
+    suspend fun removeCopies() {
+        withContext(Dispatchers.IO) { copies.deleteRecursively() }
+        copiesChanged.update { it + 1 }
     }
 }

@@ -154,7 +154,7 @@ class SettingsScreenTest {
 
     @Test
     fun `shows the space used, and removing all asks first`() {
-        show(signedIn.copy(downloadBytes = 1_500_000_000L))
+        show(signedIn.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
 
         composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
