@@ -37,4 +37,36 @@ class ChapterTitleTest {
     fun `an empty table of contents gives no title`() {
         chapterTitleAt(emptyList(), 3).shouldBeNull()
     }
+
+    // --- several chapters in one file ------------------------------------------------------------
+
+    private val shared = listOf(
+        EpubTocEntry("Chapter I", 1, "ch1"),
+        EpubTocEntry("Chapter II", 2, "ch2"),
+        EpubTocEntry("Chapter III", 2, "ch3"),
+        EpubTocEntry("Chapter IV", 2, "ch4"),
+        EpubTocEntry("Chapter V", 3, "ch5"),
+    )
+
+    @Test
+    fun `a file holding several chapters is read from its first`() {
+        tocEntryAt(shared, spineIndex = 2, chosen = null) shouldBe 1
+        chapterTitleAt(shared, 2) shouldBe "Chapter II"
+    }
+
+    @Test
+    fun `a chapter chosen from the contents is the one being read, in a file it shares`() {
+        tocEntryAt(shared, spineIndex = 2, chosen = shared[2]) shouldBe 2
+    }
+
+    @Test
+    fun `a chapter chosen once is forgotten on reaching another file`() {
+        tocEntryAt(shared, spineIndex = 3, chosen = shared[2]) shouldBe 4
+    }
+
+    @Test
+    fun `a file between entries is read as part of the entry before it`() {
+        tocEntryAt(toc, spineIndex = 12, chosen = null) shouldBe 2
+        tocEntryAt(toc, spineIndex = 0, chosen = null) shouldBe -1
+    }
 }

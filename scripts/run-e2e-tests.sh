@@ -17,13 +17,15 @@
 #     (any extra args are passed straight through to the gradlew invocation, e.g. to isolate one test)
 #   E2E_MODULE=app-tunevault E2E_SUITE=smoke scripts/run-e2e-tests.sh   # app-tunevault, critical paths only
 #   E2E_SUITE=playback scripts/run-e2e-tests.sh                 # app-audiovault, the player's tests only
+#   E2E_MODULE=app-bookvault E2E_SUITE=reading scripts/run-e2e-tests.sh  # app-bookvault, the reader's tests only
 #
 # Env vars:
 #   E2E_MODULE            Which app module to test: app-audiovault (default), app-bookvault, app-tunevault
 #                         or app-livevault
-#   E2E_SUITE             Part of the suite to run (app-tunevault and app-audiovault; tags in each
-#                           one's e2e/E2ESuites.kt): full (default), smoke (~2 min), or one area:
-#                           browse, playback, account, downloads (the slowest), and in app-tunevault
+#   E2E_SUITE             Part of the suite to run (app-tunevault, app-audiovault and app-bookvault;
+#                           tags in each one's e2e/E2ESuites.kt): full (default), smoke (~2 min), or
+#                           one area: browse, account, downloads (the slowest), playback (not in
+#                           app-bookvault), reading (app-bookvault's), and in app-tunevault
 #                           collections (favorites/playlists)
 #   E2E_AVD_NAME         AVD to boot if none is already running (default: A52ish)
 #   E2E_START_SERVER      1 to bring up (and seed) the test server first, with test-server/up.sh
@@ -127,20 +129,27 @@ log "Disabling animations (required by Espresso; resets on every emulator boot)"
 SUITE_ARGS=()
 if [ "$SUITE" != "full" ]; then
     case "$MODULE" in
-        app-tunevault | app-audiovault) ;;
-        *) die "E2E_SUITE is only set up for app-tunevault and app-audiovault; other modules run in full." ;;
+        app-tunevault | app-audiovault | app-bookvault) ;;
+        *) die "E2E_SUITE is only set up for app-tunevault, app-audiovault and app-bookvault; other modules run in full." ;;
     esac
     case "$SUITE" in
         smoke) TAG="Smoke" ;;
         browse) TAG="BrowseArea" ;;
-        playback) TAG="PlaybackArea" ;;
+        playback)
+            [ "$MODULE" != "app-bookvault" ] || die "app-bookvault has no playback; its reader's tests are E2E_SUITE=reading."
+            TAG="PlaybackArea"
+            ;;
+        reading)
+            [ "$MODULE" = "app-bookvault" ] || die "E2E_SUITE=reading is app-bookvault's (the reader)."
+            TAG="ReadingArea"
+            ;;
         collections)
             [ "$MODULE" = "app-tunevault" ] || die "E2E_SUITE=collections is app-tunevault's (favorites/playlists)."
             TAG="CollectionsArea"
             ;;
         account) TAG="AccountArea" ;;
         downloads) TAG="DownloadsArea" ;;
-        *) die "unknown E2E_SUITE '$SUITE' — expected full, smoke, browse, playback, collections, account or downloads" ;;
+        *) die "unknown E2E_SUITE '$SUITE' — expected full, smoke, browse, playback, reading, collections, account or downloads" ;;
     esac
     SUITE_ARGS=(-Pandroid.testInstrumentationRunnerArguments.annotation="$E2E_PACKAGE.$TAG")
 fi

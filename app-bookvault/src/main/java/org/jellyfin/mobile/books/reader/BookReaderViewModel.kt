@@ -35,6 +35,13 @@ class BookReaderViewModel(
     private val _currentPage = MutableStateFlow(0)
     val currentPage: StateFlow<Int> get() = _currentPage
 
+    /**
+     * The contents entry last chosen, while its chapter's file is open: several chapters can share
+     * a file, and this says which of them is being read (and where in the file to open it).
+     */
+    private val _chosenTocEntry = MutableStateFlow<EpubTocEntry?>(null)
+    val chosenTocEntry: StateFlow<EpubTocEntry?> get() = _chosenTocEntry
+
     private val _totalPages = MutableStateFlow(0)
     val totalPages: StateFlow<Int> get() = _totalPages
 
@@ -123,11 +130,21 @@ class BookReaderViewModel(
     /** Real chapter titles for the currently-loaded EPUB, or empty for PDF/before loading. */
     fun getTableOfContents(): List<EpubTocEntry> = epubRenderer.getTableOfContents()
 
-    fun getChapterTitle(chapterIndex: Int): String? = epubRenderer.chapterTitleAt(chapterIndex)
+    /** The title of the chapter being read in the file at [chapterIndex]: the one chosen from the contents, if it's there. */
+    fun getChapterTitle(chapterIndex: Int): String? =
+        _chosenTocEntry.value?.takeIf { it.spineIndex == chapterIndex }?.title ?: epubRenderer.chapterTitleAt(chapterIndex)
+
+    /** Goes to [entry]'s chapter, at the place in its file where it starts. */
+    fun openTocEntry(entry: EpubTocEntry) {
+        _chosenTocEntry.value = entry
+        setPage(entry.spineIndex)
+    }
 
     fun setPage(pageIndex: Int) {
         val total = _totalPages.value
         val clampedIndex = if (total > 0) pageIndex.coerceIn(0, total - 1) else pageIndex
+        // A chapter chosen from the contents is left behind with its file
+        if (_chosenTocEntry.value?.spineIndex != clampedIndex) _chosenTocEntry.value = null
         if (clampedIndex == _currentPage.value) return
         _currentPage.value = clampedIndex
         val itemId = currentBookItemId ?: return
@@ -153,7 +170,9 @@ class BookReaderViewModel(
     }
 
     private fun bookmarkLabel(page: Int): String =
-        epubRenderer.getTableOfContents().firstOrNull { it.spineIndex == page }?.title ?: "Page ${page + 1}"
+        _chosenTocEntry.value?.takeIf { it.spineIndex == page }?.title
+            ?: epubRenderer.getTableOfContents().firstOrNull { it.spineIndex == page }?.title
+            ?: "Page ${page + 1}"
 
     fun deleteBookmark(id: Long) {
         viewModelScope.launch { bookBookmarkDao.delete(id) }

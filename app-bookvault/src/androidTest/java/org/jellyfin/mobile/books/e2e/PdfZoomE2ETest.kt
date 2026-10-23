@@ -22,6 +22,7 @@ import org.jellyfin.mobile.common.R as CommonR
  * A PDF (the first book by title on the test server) zooms with a real two-finger pinch, and offers
  * no text settings: its pages are pictures.
  */
+@ReadingArea
 class PdfZoomE2ETest : LoggedInE2ETest() {
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()

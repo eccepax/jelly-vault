@@ -3,6 +3,7 @@ package org.jellyfin.mobile.books.reader
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -96,6 +97,7 @@ class BookReaderFragment : Fragment() {
                 refreshAdapters()
             },
             onGoTo = viewModel::setPage,
+            onOpenTocEntry = viewModel::openTocEntry,
             onFontScale = { changeTextSettings { appPreferences.epubFontScale = it } },
             onFontFamily = { changeTextSettings { appPreferences.epubFontFamily = it } },
             onLineSpacing = { changeTextSettings { appPreferences.epubLineSpacing = it } },
@@ -131,10 +133,11 @@ class BookReaderFragment : Fragment() {
         val chapterCount by viewModel.totalPages.collectAsState()
         val nightMode by viewModel.nightMode.collectAsState()
         val bookmarks by viewModel.bookmarks.collectAsState()
+        val chosenTocEntry by viewModel.chosenTocEntry.collectAsState()
         // Only a loaded EPUB has contents and chapter names
         val epubReady = bookType == BookType.EPUB && !loading
         val tableOfContents = remember(epubReady) { if (epubReady) viewModel.getTableOfContents() else emptyList() }
-        val chapterTitle = remember(epubReady, chapter) {
+        val chapterTitle = remember(epubReady, chapter, chosenTocEntry) {
             if (bookType == BookType.EPUB) viewModel.getChapterTitle(chapter) else null
         }
         return BookReaderUiState(
@@ -146,6 +149,7 @@ class BookReaderFragment : Fragment() {
             chapterCount = chapterCount,
             chapterTitle = chapterTitle,
             tableOfContents = tableOfContents,
+            chosenTocEntry = chosenTocEntry,
             bookmarks = bookmarks,
             textSettings = textSettings,
         )
@@ -282,11 +286,16 @@ class BookReaderFragment : Fragment() {
         val adapter = EpubChapterAdapter(
             chapterCount = { viewModel.totalPages.value },
             getChapterFile = { viewModel.getChapterFile(it) },
+            anchorAt = { position -> viewModel.chosenTocEntry.value?.takeIf { it.spineIndex == position }?.anchor },
             bookDir = { viewModel.getBookDir() },
             nightMode = { viewModel.nightMode.value },
             textSettings = { textSettings },
         )
         pages.viewPager.adapter = adapter
+        // A chapter chosen from the contents opens at its place in its file, even the file already open
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.chosenTocEntry.collect { entry -> entry?.let { adapter.notifyItemChanged(it.spineIndex) } }
+        }
         // Scroll mode: no swipe (the chapter bar moves between chapters). Page flip: swipe between chapters.
         pages.viewPager.isUserInputEnabled = !isScrollMode
 
@@ -427,6 +436,8 @@ private class PdfPageAdapter(
 private class EpubChapterAdapter(
     private val chapterCount: () -> Int,
     private val getChapterFile: (Int) -> File?,
+    /** Where in its file to open the chapter at a position: the element id a contents entry starts at. */
+    private val anchorAt: (Int) -> String?,
     private val bookDir: () -> File?,
     private val nightMode: () -> Boolean,
     private val textSettings: () -> EpubTextSettings,
@@ -441,7 +452,7 @@ private class EpubChapterAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         // EPUBs are untrusted: no scripts, and nothing but the book's own files (see readerWebView)
-        val wv = readerWebView(parent.context, bookDir).apply {
+        val wv = readerWebView(parent.context, bookDir, chapterPage = ::styledPage).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -456,8 +467,6 @@ private class EpubChapterAdapter(
         val dir = bookDir() ?: return
         if (!isReaderRequestAllowed(file.toURI().toString(), dir)) return
         val isNight = nightMode()
-        val baseUrl = "file://${file.parentFile!!.absolutePath}/"
-        val html = try { file.readText() } catch (e: IOException) { return }
 
         // Set the WebView's own canvas color up front so there's no white flash/gap before the
         // page (or its CSS filter, for night mode) paints — and while short chapters that don't
@@ -470,8 +479,14 @@ private class EpubChapterAdapter(
             null,
         )
 
-        // The text settings and night mode come with the page, as a stylesheet: no scripts needed
-        val page = styledChapterHtml(html, textSettings().toCssText(), isNight)
-        holder.webView.loadDataWithBaseURL(baseUrl, page, "text/html", "UTF-8", null)
+        // Opened by its own URL, so an anchor opens it at that element; the page comes from styledPage
+        val anchor = anchorAt(position)?.let { "#" + Uri.encode(it) }.orEmpty()
+        holder.webView.loadUrl(Uri.fromFile(file).toString() + anchor)
+    }
+
+    /** [file] as the reader shows it: the text settings and night mode come with it, as a stylesheet (no scripts needed). */
+    private fun styledPage(file: File): String? {
+        val html = try { file.readText() } catch (e: IOException) { return null }
+        return styledChapterHtml(html, textSettings().toCssText(), nightMode())
     }
 }

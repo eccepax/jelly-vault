@@ -23,11 +23,34 @@ class ReaderWebViewTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val book = File(context.cacheDir, "epub_1").apply { mkdirs() }
-    private val webView = readerWebView(context, bookDir = { book })
+    private val chapter = File(book, "chapter2.xhtml")
+    private val webView = readerWebView(
+        context,
+        bookDir = { book },
+        chapterPage = { file -> "<html>styled ${file.name}</html>".takeIf { file == chapter } },
+    )
 
-    private fun request(url: String) = mockk<WebResourceRequest> {
+    private fun request(url: String, mainFrame: Boolean = false) = mockk<WebResourceRequest> {
         every { this@mockk.url } returns Uri.parse(url)
-        every { isForMainFrame } returns false
+        every { isForMainFrame } returns mainFrame
+    }
+
+    @Test
+    fun `a chapter opened at a place in it is answered with the styled page, so it opens there without scripts`() {
+        val client = shadowOf(webView).webViewClient.shouldNotBeNull()
+        val url = Uri.fromFile(chapter).toString() + "#ch5"
+
+        val page = client.shouldInterceptRequest(webView, request(url, mainFrame = true)).shouldNotBeNull()
+
+        page.mimeType shouldBe "text/html"
+        page.data.readBytes().decodeToString() shouldBe "<html>styled chapter2.xhtml</html>"
+    }
+
+    @Test
+    fun `only the page itself is restyled, not what it loads`() {
+        val client = shadowOf(webView).webViewClient.shouldNotBeNull()
+
+        client.shouldInterceptRequest(webView, request(Uri.fromFile(chapter).toString())).shouldBeNull()
     }
 
     @Test
