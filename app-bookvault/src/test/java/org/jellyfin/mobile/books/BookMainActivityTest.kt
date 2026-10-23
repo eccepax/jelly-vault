@@ -1,28 +1,38 @@
 package org.jellyfin.mobile.books
 
 import android.app.Application
-import androidx.fragment.app.Fragment
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
-import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
+import androidx.test.core.app.ApplicationProvider
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
-import org.jellyfin.mobile.books.library.BookLibraryFragment
+import org.jellyfin.mobile.books.app.EpubFontFamily
+import org.jellyfin.mobile.books.app.LibraryViewMode
 import org.jellyfin.mobile.books.library.BookLibraryViewModel
 import org.jellyfin.mobile.books.library.BookSortOption
 import org.jellyfin.mobile.books.library.ProgressFilter
-import org.jellyfin.mobile.books.setup.BookConnectFragment
+import org.jellyfin.mobile.books.reader.BookReaderViewModel
+import org.jellyfin.mobile.books.reader.BookType
+import org.jellyfin.mobile.books.settings.BookSettingsViewModel
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.data.entity.ServerEntity
-import org.jellyfin.mobile.common.setup.LoginFragment
 import org.jellyfin.mobile.common.setup.LoginViewModel
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
+import org.jellyfin.sdk.model.ClientInfo
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.startKoin
@@ -31,24 +41,27 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.UUID
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
- * Rotating the device on a non-Library screen (reader, settings, ...) must not send the user back
- * to the Library. [BookMainActivity] re-subscribes to [MainViewModel.serverState] on every
- * recreation and gets the cached `ServerState.Available` replayed, so it must only navigate to the
- * Library when first entering the signed-in area, not on a replay.
+ * BookVault's one activity: sign-in, then the library with the reader and settings over it.
+ * Rotating on a non-Library screen (reader, settings) must not send the user back to the Library,
+ * though [MainViewModel.serverState] replays its cached value to every recreated activity.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class BookMainActivityTest {
 
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
+
+    private val context = ApplicationProvider.getApplicationContext<Application>()
     private val mainViewModel = mockk<MainViewModel>(relaxed = true)
     private val appPreferences = mockk<BookAppPreferences>(relaxed = true)
-
-    // BookLibraryFragment resolves its own ViewModel once it's actually started (not just placed
-    // in the container) — needed so the fragment reached by the navigation fix under test doesn't
-    // itself crash with a NoDefinitionFoundException.
     private val libraryViewModel = mockk<BookLibraryViewModel>(relaxed = true)
+    private val readerViewModel = mockk<BookReaderViewModel>(relaxed = true)
+    private val dune = BaseItemDto(id = UUID.randomUUID(), type = BaseItemKind.BOOK, name = "Dune")
     private val serverStateFlow = MutableStateFlow<ServerState>(
         ServerState.Available(ServerEntity(hostname = "jellyfin.example.com")),
     )
@@ -57,7 +70,11 @@ class BookMainActivityTest {
     fun setUp() {
         every { mainViewModel.serverState } returns serverStateFlow
         every { appPreferences.currentUserId } returns 1L
-        every { libraryViewModel.filteredBooks } returns MutableStateFlow(emptyList())
+        every { appPreferences.getLibraryViewMode(any()) } returns LibraryViewMode.LIST
+        every { appPreferences.epubFontScale } returns 1.0f
+        every { appPreferences.epubFontFamily } returns EpubFontFamily.SERIF
+        every { appPreferences.epubLineSpacing } returns 1.0f
+        every { libraryViewModel.filteredBooks } returns MutableStateFlow(listOf(dune))
         every { libraryViewModel.loading } returns MutableStateFlow(false)
         every { libraryViewModel.error } returns MutableStateFlow(null)
         every { libraryViewModel.downloadedIds } returns MutableStateFlow(emptySet())
@@ -66,17 +83,34 @@ class BookMainActivityTest {
         every { libraryViewModel.sortOption } returns MutableStateFlow(BookSortOption.TITLE)
         every { libraryViewModel.progressFilter } returns MutableStateFlow(ProgressFilter.ALL)
         every { libraryViewModel.tagFilter } returns MutableStateFlow(null)
+        every { readerViewModel.bookType } returns MutableStateFlow(BookType.EPUB)
+        every { readerViewModel.loading } returns MutableStateFlow(false)
+        every { readerViewModel.currentPage } returns MutableStateFlow(6)
+        every { readerViewModel.totalPages } returns MutableStateFlow(19)
+        every { readerViewModel.error } returns MutableStateFlow(null)
+        every { readerViewModel.nightMode } returns MutableStateFlow(false)
+        every { readerViewModel.bookmarks } returns MutableStateFlow(emptyList())
+        every { readerViewModel.chosenTocEntry } returns MutableStateFlow(null)
+        every { readerViewModel.getChapterTitle(6) } returns "Introduction"
 
         startKoin {
             modules(
                 module {
                     viewModel { mainViewModel }
                     viewModel { libraryViewModel }
+                    viewModel { readerViewModel }
+                    viewModel {
+                        BookSettingsViewModel(
+                            appPreferences,
+                            FakeDownloadSettings(),
+                            {},
+                            ClientInfo("BookVault", "9.9.9"),
+                        )
+                    }
                     single { appPreferences }
-                    // Needed once BookConnectFragment's ComposeView actually renders (ServerSelection
-                    // resolves it directly via Koin) — not otherwise exercised by this test.
+                    // The connect screen resolves it directly via Koin
                     single { mockk<ApiClientController>(relaxed = true) }
-                    // The sign-in screen's, once LoginFragment is shown
+                    // The sign-in screen's
                     viewModel { LoginViewModel(mockk(), mockk(), mockk(relaxed = true), mockk(relaxed = true)) }
                     single { VaultBrand.BookVault }
                 },
@@ -89,89 +123,60 @@ class BookMainActivityTest {
         stopKoin()
     }
 
+    private fun launch() = ActivityScenario.launch(BookMainActivity::class.java)
+
+    private fun openSettings() {
+        composeRule.onNodeWithContentDescription(context.getString(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings)).performClick()
+    }
+
     @Test
     fun `fresh launch with an available server and a signed-in user shows the Library`() {
-        ActivityScenario.launch(BookMainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.supportFragmentManager.findFragmentById(R.id.fragment_container)
-                    .shouldBeInstanceOf<BookLibraryFragment>()
-            }
+        launch().use {
+            composeRule.onNodeWithText("Dune").assertIsDisplayed()
         }
     }
 
     @Test
-    fun `a fragment already shown after login is replaced with the Library once signed in`() {
+    fun `signing in shows the Library`() {
         every { appPreferences.currentUserId } returns null
 
-        ActivityScenario.launch(BookMainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.supportFragmentManager.findFragmentById(R.id.fragment_container)
-                    .shouldBeInstanceOf<LoginFragment>()
-            }
+        launch().use {
+            composeRule.onNodeWithText("Dune").assertDoesNotExist()
 
-            // Simulates a completed login: currentUserId becomes set and the ViewModel emits a
-            // fresh (distinct) Available instance, the same way LoginFragment's real
-            // `mainViewModel.refreshState()` call does.
+            // A completed sign-in: the user is saved and the ViewModel emits a fresh Available,
+            // as the sign-in screen's `mainViewModel.refreshState()` does.
             every { appPreferences.currentUserId } returns 1L
             serverStateFlow.value = ServerState.Available(ServerEntity(hostname = "jellyfin.example.com"))
 
-            scenario.onActivity { activity ->
-                activity.supportFragmentManager.findFragmentById(R.id.fragment_container)
-                    .shouldBeInstanceOf<BookLibraryFragment>()
-            }
+            composeRule.onNodeWithText("Dune").assertIsDisplayed()
         }
     }
 
     @Test
-    fun `rotating while a non-Library screen is showing does not kick back to the Library`() {
-        ActivityScenario.launch(BookMainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                // A minimal stand-in for any already-signed-in screen (reader, settings, ...) —
-                // the Activity-level navigation policy under test cares only about fragment
-                // *type*, not behavior, so a marker fragment keeps this test isolated from
-                // BookReaderFragment's own (separately tested) concerns.
-                activity.supportFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, MarkerFragment())
-                    .commit()
-                activity.supportFragmentManager.executePendingTransactions()
-            }
+    fun `rotating on the settings stays on the settings, and back still returns to the Library`() {
+        launch().use { scenario ->
+            openSettings()
+            composeRule.onNodeWithText("BookVault 9.9.9").assertExists()
 
             scenario.recreate()
 
-            scenario.onActivity { activity ->
-                activity.supportFragmentManager.findFragmentById(R.id.fragment_container)
-                    .shouldBeInstanceOf<MarkerFragment>()
-            }
+            composeRule.onNodeWithText("BookVault 9.9.9").assertExists()
+            composeRule.onNodeWithContentDescription(context.getString(CommonR.string.vault_back)).performClick()
+            composeRule.onNodeWithText("Dune").assertIsDisplayed()
         }
     }
 
-    // --- shouldNavigateToLibrary (pure function; no Activity/FragmentManager needed) -----------------
-    //
-    // BookConnectFragment's real render pulls in a deep Compose dependency chain (ApiClientController,
-    // ConnectionHelper, ...) unrelated to this decision, so its "should navigate away" case is tested
-    // directly against the extracted pure function instead of through a rendered Activity screen —
-    // the three tests above already cover the parts of this logic that genuinely need a real
-    // Activity + FragmentManager (initial launch, the post-login transition, and the rotation fix).
-
     @Test
-    fun `shouldNavigateToLibrary is true with no fragment restored yet`() {
-        shouldNavigateToLibrary(null) shouldBe true
-    }
+    fun `rotating in a book stays in it, at its page`() {
+        launch().use { scenario ->
+            composeRule.onNodeWithText("Dune").performClick()
+            composeRule.onNodeWithText("Introduction").assertIsDisplayed()
 
-    @Test
-    fun `shouldNavigateToLibrary is true while still on the login screen`() {
-        shouldNavigateToLibrary(LoginFragment()) shouldBe true
-    }
+            scenario.recreate()
 
-    @Test
-    fun `shouldNavigateToLibrary is true while still on the connect screen`() {
-        shouldNavigateToLibrary(BookConnectFragment()) shouldBe true
-    }
-
-    @Test
-    fun `shouldNavigateToLibrary is false for any other already-signed-in screen`() {
-        shouldNavigateToLibrary(MarkerFragment()) shouldBe false
+            composeRule.onNodeWithText("Introduction").assertIsDisplayed()
+            composeRule.onNodeWithText("Chapter 7 of 19").assertIsDisplayed()
+        }
     }
 }
-
-class MarkerFragment : Fragment()

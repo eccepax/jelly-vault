@@ -75,7 +75,7 @@ class BookReaderViewModel(
     @Suppress("TooGenericExceptionCaught")
     fun loadBook(bookItemId: String, initialNightMode: Boolean) {
         val sameBook = bookItemId == currentBookItemId
-        // The fragment asks again each time it's recreated (rotation): the book is already open,
+        // The reader asks again each time it's recreated (rotation): the book is already open,
         // as the reader left it, night mode and all. Only a book that failed to open is tried again.
         if (sameBook && _error.value == null) return
         if (!sameBook) {
@@ -92,7 +92,7 @@ class BookReaderViewModel(
             try {
                 val cachedFile = bookFiles.fileFor(bookItemId)
                 val type = detectBookType(cachedFile)
-                // Populate totalPages/currentPage BEFORE publishing bookType — the Fragment's
+                // Populate totalPages/currentPage BEFORE publishing bookType — the reader's
                 // bookType collector builds the pager adapter as soon as it sees the new type, and
                 // nothing re-triggers that build later, so a premature emission leaves it stuck
                 // showing zero pages (a blank screen) until the reader mode is manually toggled.
@@ -207,6 +207,8 @@ class BookReaderViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        // The book's closed: its place goes to the server
+        sendProgress()
         pdfCore.close()
         epubRenderer.close()
     }

@@ -8,7 +8,7 @@ import org.jellyfin.mobile.testing.VaultFixtures.Books
 import org.junit.Test
 
 /**
- * Tapping a library item opens `BookReaderFragment`, which downloads the book (if not already
+ * Tapping a library item opens the reader (`BookReaderRoute`), which downloads the book (if not already
  * cached — see `BookReaderViewModel.loadBook`), sniffs its format, and renders it. The library
  * sorts by title (`BookSortOption.TITLE` is the default), and on the test server the
  * alphabetically-first book is a PDF ([Books.FIRST_BY_TITLE_PDF]), so this
