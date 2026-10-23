@@ -399,6 +399,21 @@ class BookReaderViewModelTest {
         viewModel.chosenTocEntry.value shouldBe null
     }
 
+    @Test
+    fun `choosing the entry already open goes back to where it starts`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        val entry = EpubTocEntry("Chapter Two", spineIndex = 1, anchor = "ch2")
+
+        viewModel.tocJumps.test {
+            viewModel.openTocEntry(entry)
+            awaitItem() shouldBe entry
+            // Scrolled on in the chapter, then chosen again from the contents
+            viewModel.openTocEntry(entry)
+            awaitItem() shouldBe entry
+        }
+    }
+
     // --- setPage bounds clamping ------------------------------------------------------------------
 
     @Test

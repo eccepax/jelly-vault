@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
@@ -89,6 +90,7 @@ class BookVaultScreenshotTest {
             every { nightMode } returns MutableStateFlow(true)
             every { bookmarks } returns MutableStateFlow(emptyList())
             every { chosenTocEntry } returns MutableStateFlow(null)
+            every { tocJumps } returns MutableSharedFlow()
             every { getChapterTitle(6) } returns "Introduction"
         }
         capture("reader-scroll-mode") {

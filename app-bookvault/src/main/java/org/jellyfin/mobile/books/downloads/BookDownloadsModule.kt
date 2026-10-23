@@ -12,7 +12,9 @@ import androidx.media3.exoplayer.offline.DownloadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.shareIn
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.bookVaultSignOut
 import org.jellyfin.mobile.books.data.BookDatabase
@@ -93,11 +95,17 @@ val bookDownloadsModule = module {
     single<DownloadSettings> {
         val downloads = get<BookDownloads>()
         val files = get<BookFiles>()
+        // Measured once for both, as they're watched: measuring walks every copy
+        val copiesBytes = files.copiesBytes.shareIn(
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+            replay = 1,
+        )
         Media3DownloadSettings(
             manager = get(),
             savedWifiOnly = get<BookAppPreferences>()::downloadOnWifiOnly,
-            bytesUsed = combine(downloads.bytesUsed, files.copiesBytes) { downloaded, copies -> downloaded + copies },
-            hasDownloads = combine(downloads.hasDownloads, files.copiesBytes) { has, copies -> has || copies > 0L },
+            bytesUsed = combine(downloads.bytesUsed, copiesBytes) { downloaded, copies -> downloaded + copies },
+            hasDownloads = combine(downloads.hasDownloads, copiesBytes) { has, copies -> has || copies > 0L },
             removeAll = {
                 downloads.removeAll()
                 files.removeCopies()
@@ -108,9 +116,10 @@ val bookDownloadsModule = module {
         val apiClient = get<ApiClient>()
         BookFiles(get(), androidContext().cacheDir, get(), uriOf = apiClient::bookUri)
     }
-    // Signing out sends the places read here, then forgets them; downloads stay unless the user asked otherwise in Settings
+    // Signing out sends the places read here, then forgets them; downloads (and the copies fetched
+    // for reading, which Settings counts with them) stay unless the user asked otherwise in Settings
     single<SignOut> {
-        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<BookDownloads>()::removeAll)
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<DownloadSettings>()::removeAll)
         val progressSync = get<BookProgressSync>()
         bookVaultSignOut(
             session = get(),

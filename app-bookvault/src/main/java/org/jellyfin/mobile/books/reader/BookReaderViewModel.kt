@@ -6,7 +6,9 @@ import android.view.WindowManager
 import androidx.core.content.getSystemService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
@@ -41,6 +43,14 @@ class BookReaderViewModel(
      */
     private val _chosenTocEntry = MutableStateFlow<EpubTocEntry?>(null)
     val chosenTocEntry: StateFlow<EpubTocEntry?> get() = _chosenTocEntry
+
+    /**
+     * Each time an entry is chosen from the contents, even the one already being read (to go back to
+     * where it starts): the chapter is opened there again. Not replayed, so coming back to the
+     * reader leaves the chapter where it was scrolled to.
+     */
+    private val _tocJumps = MutableSharedFlow<EpubTocEntry>(extraBufferCapacity = 1)
+    val tocJumps: SharedFlow<EpubTocEntry> get() = _tocJumps
 
     private val _totalPages = MutableStateFlow(0)
     val totalPages: StateFlow<Int> get() = _totalPages
@@ -138,6 +148,7 @@ class BookReaderViewModel(
     fun openTocEntry(entry: EpubTocEntry) {
         _chosenTocEntry.value = entry
         setPage(entry.spineIndex)
+        _tocJumps.tryEmit(entry)
     }
 
     fun setPage(pageIndex: Int) {

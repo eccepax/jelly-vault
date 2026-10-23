@@ -38,8 +38,9 @@ class Navigator(
  * process death, and each level keeps its own saved state (scroll position) while covered.
  * Modeled on AudioVault's AudioVaultNavigation.
  *
- * A book's reader gets view models of its own, kept across rotation and let go once the book is
- * closed: an open book holds its file, so it mustn't stay open behind the library.
+ * A book's reader and the settings get view models of their own, kept across rotation and let go
+ * once closed: an open book holds its file, so it mustn't stay open behind the library, and the
+ * settings watch the space downloads take, which is no use once they're closed.
  *
  * Everything over home belongs to whoever's signed in ([rootScreen], as home shows it): it waits
  * while that's still being read (restored after the app's process went), and closes once there's
@@ -58,14 +59,19 @@ fun BookVaultNavigation(
 
     // Keyed by depth too, so the same page opened at two depths keeps separate state.
     fun keyAt(depth: Int) = "$depth:${stack.getOrNull(depth - 1) ?: HOME}"
-    val pop: () -> Unit = {
+    // A second back, or a second tap, can land before the screen has changed: each acts once
+    val pop: () -> Unit = pop@{
+        if (stack.isEmpty()) return@pop
         val key = keyAt(stack.size)
         savedStates.removeState(key)
         stack.removeAt(stack.lastIndex)
     }
+    fun open(page: String) {
+        if (stack.lastOrNull() != page) stack += page
+    }
     val navigator = Navigator(
-        openBook = { stack += READER + it },
-        openSettings = { stack += SETTINGS },
+        openBook = { open(READER + it) },
+        openSettings = { open(SETTINGS) },
     )
 
     val signedIn = rootScreen == RootScreen.SignedIn
@@ -84,11 +90,11 @@ fun BookVaultNavigation(
     val key = keyAt(showing.size)
     val top = showing.lastOrNull()
     savedStates.SaveableStateProvider(key) {
-        when {
-            top == null -> home(navigator)
-            top == SETTINGS -> settings(pop)
-            else -> CompositionLocalProvider(LocalViewModelStoreOwner provides viewModelStores.owner(key)) {
-                reader(top.removePrefix(READER), pop)
+        if (top == null) {
+            home(navigator)
+        } else {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides viewModelStores.owner(key)) {
+                if (top == SETTINGS) settings(pop) else reader(top.removePrefix(READER), pop)
             }
         }
     }

@@ -25,6 +25,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.BookAppPreferences
@@ -67,6 +68,7 @@ class BookReaderRouteTest {
         every { readerViewModel.nightMode } returns MutableStateFlow(false)
         every { readerViewModel.bookmarks } returns MutableStateFlow(emptyList())
         every { readerViewModel.chosenTocEntry } returns MutableStateFlow(null)
+        every { readerViewModel.tocJumps } returns MutableSharedFlow()
         every { readerViewModel.getTableOfContents() } returns emptyList()
 
         every { appPreferences.epubFontScale } returns 1.0f

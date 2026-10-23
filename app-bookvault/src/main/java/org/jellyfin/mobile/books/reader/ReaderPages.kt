@@ -3,7 +3,6 @@ package org.jellyfin.mobile.books.reader
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -68,8 +67,8 @@ internal class ReaderPages(
         launch { observeCurrentPage() }
         // A chapter chosen from the contents opens at its place in its file, even the file already open
         launch {
-            viewModel.chosenTocEntry.collect { entry ->
-                entry?.let { (pages.viewPager.adapter as? EpubChapterAdapter)?.notifyItemChanged(it.spineIndex) }
+            viewModel.tocJumps.collect { entry ->
+                (pages.viewPager.adapter as? EpubChapterAdapter)?.notifyItemChanged(entry.spineIndex)
             }
         }
     }
@@ -307,6 +306,9 @@ private class EpubChapterAdapter(
 
     inner class Holder(val webView: WebView) : RecyclerView.ViewHolder(webView)
 
+    /** Loads so far, giving each its own address (see [chapterUrl]). */
+    private var loads = 0
+
     override fun getItemCount() = chapterCount()
 
     // Unique view type per position prevents recycling stale WebView content
@@ -342,8 +344,7 @@ private class EpubChapterAdapter(
         )
 
         // Opened by its own URL, so an anchor opens it at that element; the page comes from styledPage
-        val anchor = anchorAt(position)?.let { "#" + Uri.encode(it) }.orEmpty()
-        holder.webView.loadUrl(Uri.fromFile(file).toString() + anchor)
+        holder.webView.loadUrl(chapterUrl(file, anchorAt(position), ++loads))
     }
 
     /** [file] as the reader shows it: the text settings and night mode come with it, as a stylesheet (no scripts needed). */

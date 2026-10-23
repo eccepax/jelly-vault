@@ -10,6 +10,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
@@ -91,6 +92,7 @@ class BookMainActivityTest {
         every { readerViewModel.nightMode } returns MutableStateFlow(false)
         every { readerViewModel.bookmarks } returns MutableStateFlow(emptyList())
         every { readerViewModel.chosenTocEntry } returns MutableStateFlow(null)
+        every { readerViewModel.tocJumps } returns MutableSharedFlow()
         every { readerViewModel.getChapterTitle(6) } returns "Introduction"
 
         startKoin {

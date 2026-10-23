@@ -40,6 +40,17 @@ class BookVaultNavigationTest {
     /** Each reader's view model, in the order they were made. */
     private val readers = mutableListOf<ReaderProbe>()
 
+    /** Each settings page's view model, in the order they were made. */
+    private val settingsPages = mutableListOf<SettingsProbe>()
+
+    class SettingsProbe : ViewModel() {
+        var cleared = false
+
+        override fun onCleared() {
+            cleared = true
+        }
+    }
+
     class ReaderProbe(val bookId: String) : ViewModel() {
         var cleared = false
 
@@ -57,14 +68,22 @@ class BookVaultNavigationTest {
                 Column {
                     Button(onClick = { taps++ }) { Text("Home taps: $taps") }
                     Button(onClick = { navigator.openBook("dune") }) { Text("Open Dune") }
+                    // Two taps landing before the screen has changed
+                    Button(onClick = { repeat(2) { navigator.openBook("dune") } }) { Text("Open Dune twice") }
                     Button(onClick = navigator.openSettings) { Text("Open settings") }
                 }
             },
             reader = { bookId, onBack ->
                 val probe = viewModel { ReaderProbe(bookId).also { readers += it } }
-                Button(onClick = onBack) { Text("Reading ${probe.bookId}") }
+                Column {
+                    Button(onClick = onBack) { Text("Reading ${probe.bookId}") }
+                    Button(onClick = { repeat(2) { onBack() } }) { Text("Back twice") }
+                }
             },
-            settings = { onBack -> Button(onClick = onBack) { Text("Settings page") } },
+            settings = { onBack ->
+                viewModel { SettingsProbe().also { settingsPages += it } }
+                Button(onClick = onBack) { Text("Settings page") }
+            },
         )
     }
 
@@ -154,6 +173,40 @@ class BookVaultNavigationTest {
         readers.size shouldBe 2
         readers.last().cleared shouldBe false
         readers.last() shouldBeSameInstanceAs readers[1]
+    }
+
+    @Test
+    fun `back pressed twice before the screen changes only goes back once, without crashing`() {
+        composeRule.setContent(content)
+        tap("Open Dune")
+
+        tap("Back twice")
+
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a book tapped twice opens once`() {
+        composeRule.setContent(content)
+
+        tap("Open Dune twice")
+        composeRule.waitForIdle()
+        systemBack()
+
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+        readers.size shouldBe 1
+    }
+
+    @Test
+    fun `closing settings lets its view model go`() {
+        composeRule.setContent(content)
+        tap("Open settings")
+        composeRule.waitForIdle()
+
+        systemBack()
+        composeRule.waitForIdle()
+
+        settingsPages.single().cleared shouldBe true
     }
 
     // --- Signed out ---------------------------------------------------------------------------------
