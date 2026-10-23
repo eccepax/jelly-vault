@@ -18,27 +18,27 @@ internal class EpubTocParser {
             item.getAttribute("properties").split(' ').contains("nav")
         }?.getAttribute("href")
 
-        val rawEntries: List<Pair<String, File>> = if (navHref != null) {
+        // (title, href) pairs, and the file each href is relative to
+        val (rawEntries, sourceFile) = if (navHref != null) {
             val navFile = resolveEpubHref(opfDir, navHref)
-            parseNavToc(navFile).map { (title, href) -> title to resolveHref(navFile, href) }
+            parseNavToc(navFile) to navFile
         } else {
             val ncxId = opfRoot.findDescendant("spine")?.getAttribute("toc")?.takeIf { it.isNotEmpty() }
             val ncxHref = manifestItems.firstOrNull { it.getAttribute("id") == ncxId }?.getAttribute("href")
-            ncxHref?.let { href ->
-                val ncxFile = resolveEpubHref(opfDir, href)
-                parseNcxToc(ncxFile).map { (title, entryHref) -> title to resolveHref(ncxFile, entryHref) }
-            }.orEmpty()
+            val ncxFile = ncxHref?.let { resolveEpubHref(opfDir, it) }
+            ncxFile?.let(::parseNcxToc).orEmpty() to ncxFile
         }
 
-        return rawEntries.mapNotNull { (title, file) -> resolveTocEntry(title, file, spineFiles) }
+        val source = sourceFile ?: return emptyList()
+        return rawEntries.mapNotNull { (title, href) -> resolveTocEntry(title, source, href, spineFiles) }
     }
 
-    /** Resolves a TOC entry's `href` relative to its own source file. */
-    private fun resolveHref(sourceFile: File, href: String): File = resolveEpubHref(sourceFile.parentFile, href)
-
-    private fun resolveTocEntry(title: String, targetFile: File, spineFiles: List<File>): EpubTocEntry? {
+    /** The entry [href] (relative to its own [sourceFile]) leads to, if it's one of the book's [spineFiles]. */
+    private fun resolveTocEntry(title: String, sourceFile: File, href: String, spineFiles: List<File>): EpubTocEntry? {
+        val targetFile = resolveEpubHref(sourceFile.parentFile, href)
         val spineIndex = spineFiles.indexOfFirst { it.canonicalFile == targetFile.canonicalFile }
-        return if (spineIndex >= 0) EpubTocEntry(title, spineIndex) else null
+        val anchor = href.substringAfter('#', "").takeIf { it.isNotEmpty() }
+        return if (spineIndex >= 0) EpubTocEntry(title, spineIndex, anchor) else null
     }
 
     /** Parses an EPUB3 nav document's `<nav epub:type="toc">` into (title, href) pairs, in order. */

@@ -183,6 +183,8 @@ class EpubRendererTest {
         val toc = renderer.getTableOfContents()
         toc.map { it.title } shouldBe listOf("Prologue", "Chapter One")
         toc.map { it.spineIndex } shouldBe listOf(0, 1)
+        // Where in its file each starts: several chapters can share one
+        toc.map { it.anchor } shouldBe listOf(null, "top")
     }
 
     @Test
@@ -391,7 +393,7 @@ class EpubRendererTest {
         val renderer = EpubRenderer(app)
         renderer.openFile(epub, "book-encoded-toc")
 
-        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0))
+        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0, anchor = "start"))
     }
 
     @Test

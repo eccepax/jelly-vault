@@ -99,6 +99,7 @@ class BookVaultScreenshotTest {
             every { error } returns MutableStateFlow(null)
             every { nightMode } returns MutableStateFlow(true)
             every { bookmarks } returns MutableStateFlow(emptyList())
+            every { chosenTocEntry } returns MutableStateFlow(null)
             every { getChapterTitle(6) } returns "Introduction"
         }
         startKoin {

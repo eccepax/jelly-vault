@@ -357,6 +357,31 @@ class BookReaderViewModelTest {
         coVerify { progressSync.sendSoon() }
     }
 
+    // --- contents ---------------------------------------------------------------------------------
+
+    @Test
+    fun `choosing a contents entry goes to its chapter and remembers it`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        val entry = EpubTocEntry("Chapter Two", spineIndex = 1, anchor = "ch2")
+
+        viewModel.openTocEntry(entry)
+
+        viewModel.currentPage.value shouldBe 1
+        viewModel.chosenTocEntry.value shouldBe entry
+    }
+
+    @Test
+    fun `turning to another chapter forgets the entry chosen`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        viewModel.openTocEntry(EpubTocEntry("Chapter Two", spineIndex = 1, anchor = "ch2"))
+
+        viewModel.setPage(0)
+
+        viewModel.chosenTocEntry.value shouldBe null
+    }
+
     // --- setPage bounds clamping ------------------------------------------------------------------
 
     @Test
