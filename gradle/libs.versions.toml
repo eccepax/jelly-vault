@@ -27,7 +27,6 @@ androidx-lifecycle = "2.9.4"
 # UI
 androidx-constraintlayout = "2.2.1"
 google-material = "1.13.0"
-androidx-viewpager2 = "1.1.0"
 
 # Compose
 compose = "1.9.4"
@@ -111,7 +110,6 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 # UI
 google-material = { group = "com.google.android.material", name = "material", version.ref = "google-material" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidx-constraintlayout" }
-androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "androidx-viewpager2" }
 
 # Compose
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "compose" }
@@ -169,7 +167,6 @@ org-json = { group = "org.json", name = "json", version.ref = "org-json" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidx-test-runner" }
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidx-test-runner" }
 androidx-test-espresso = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-test-espresso" }
-androidx-test-espresso-contrib = { group = "androidx.test.espresso", name = "espresso-contrib", version.ref = "androidx-test-espresso" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 

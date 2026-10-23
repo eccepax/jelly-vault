@@ -1,9 +1,5 @@
 package org.jellyfin.mobile.books.e2e
 
-import androidx.test.espresso.matcher.ViewMatchers.hasMinimumChildCount
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import org.hamcrest.Matchers.allOf
-import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.testing.VaultFixtures.Books
 import org.junit.Test
 
@@ -25,6 +21,6 @@ class LibraryOpenBookE2ETest : LoggedInE2ETest() {
 
         openBookAtPosition(0)
 
-        waitForView(allOf(withId(R.id.recycler_view), hasMinimumChildCount(1)))
+        waitForPdfPage()
     }
 }

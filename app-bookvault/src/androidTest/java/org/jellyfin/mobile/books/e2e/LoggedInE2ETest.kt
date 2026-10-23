@@ -143,6 +143,15 @@ abstract class LoggedInE2ETest : SignedInE2ETest<BookMainActivity>(BookMainActiv
         }
     }
 
+    /** Waits until a PDF's page [page] (from 1) has been drawn, not just made room for. */
+    protected fun waitForPdfPage(page: Int = 1, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
+        val description = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getString(R.string.pdf_page, page)
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            screenShows { composeRule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
+        }
+    }
+
     private companion object {
         const val RESET_DEVICE_ID = "vault-e2e-bookvault-reset"
     }
