@@ -12,6 +12,9 @@ class BookDownloads(private val groups: DownloadGroups) {
     /** Books whose file is fully on the device. */
     val downloadedIds: Flow<Set<String>> = groups.downloadedItemIds
 
+    /** How much space the books' files take. */
+    val bytesUsed: Flow<Long> = groups.bytesUsed
+
     fun status(bookId: String): Flow<GroupStatus> = groups.status(bookId)
 
     /** Downloads [bookId], or tries again if an earlier download failed. */

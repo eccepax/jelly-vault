@@ -11,9 +11,9 @@ import org.jellyfin.mobile.music.app.FakePlaybackPreferences
 import org.jellyfin.mobile.music.catalog.Account
 import org.jellyfin.mobile.music.catalog.AccountInfo
 import org.jellyfin.mobile.music.domain.StreamingQuality
-import org.jellyfin.mobile.music.downloads.FakeDownloadSettings
 import org.jellyfin.mobile.music.playback.SetVolumeLevelling
 import org.jellyfin.mobile.music.playback.ShowSleepTimer
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.sdk.model.ClientInfo
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

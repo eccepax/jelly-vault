@@ -13,7 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.Media3DownloadSettings
 import org.jellyfin.mobile.common.downloads.Media3ItemDownloads
 import org.jellyfin.mobile.common.downloads.downloadRequirements
 import org.jellyfin.mobile.common.downloads.fileDownloadManager
@@ -70,5 +72,8 @@ val downloadsModule = module {
     }
     single { DownloadRepository(get(), get<TuneDatabase>().downloadDao) }
     single<CollectionDownloads> { get<DownloadRepository>() }
-    single<DownloadSettings> { Media3DownloadSettings(get(), get()) }
+    single<DownloadSettings> {
+        val repository = get<DownloadRepository>()
+        Media3DownloadSettings(get(), repository.bytesUsed, repository::removeAll)
+    }
 }

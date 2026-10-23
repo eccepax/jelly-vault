@@ -21,6 +21,8 @@ import io.mockk.mockk
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.downloads.DownloadSettings
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.sdk.model.ClientInfo
 import org.junit.After
 import org.junit.Before
@@ -45,6 +47,7 @@ class BookSettingsFragmentTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val mainViewModel = mockk<MainViewModel>(relaxed = true)
+    private val downloads = FakeDownloadSettings()
 
     @Before
     fun setUp() {
@@ -53,6 +56,7 @@ class BookSettingsFragmentTest {
                 module {
                     single { BookAppPreferences(context) }
                     single { ClientInfo("BookVault", "9.9.9") }
+                    single<DownloadSettings> { downloads }
                     viewModel { mainViewModel }
                 },
             )
@@ -111,6 +115,31 @@ class BookSettingsFragmentTest {
         }
 
         BookAppPreferences(context).removeDownloadsOnSignOut shouldBe true
+    }
+
+    @Test
+    fun `switching off wi-fi only saves it and lets waiting downloads use mobile data`() {
+        launch().use {
+            composeRule.onNodeWithText("Download over Wi-Fi only").performScrollTo().performClick()
+            composeRule.waitForIdle()
+        }
+
+        BookAppPreferences(context).downloadOnWifiOnly shouldBe false
+        downloads.events shouldBe listOf("wifiOnly false")
+    }
+
+    @Test
+    fun `shows the space downloads take, and removing them all empties it`() {
+        downloads.bytesUsed.value = 32_400_000L
+
+        launch().use {
+            composeRule.onNodeWithText("Downloads use 32 MB").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+            composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+            composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        }
+        downloads.events shouldBe listOf("removeAll")
     }
 
     @Test

@@ -1,4 +1,4 @@
-package org.jellyfin.mobile.music.ui
+package org.jellyfin.mobile.common.ui
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test

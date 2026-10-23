@@ -1,6 +1,7 @@
-package org.jellyfin.mobile.music.downloads
+package org.jellyfin.mobile.testing.downloads
 
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jellyfin.mobile.common.downloads.DownloadSettings
 
 class FakeDownloadSettings : DownloadSettings {
     override val bytesUsed = MutableStateFlow(0L)

@@ -14,6 +14,11 @@ class BookAppPreferences(context: Context) : AppPreferences(context) {
         sharedPreferences.edit().putString("view_mode_$libraryId", mode.name).apply()
     }
 
+    /** Books download over Wi-Fi (any unmetered network) only, unless the user allows mobile data. */
+    var downloadOnWifiOnly: Boolean
+        get() = sharedPreferences.getBoolean("download_wifi_only", true)
+        set(value) = sharedPreferences.edit().putBoolean("download_wifi_only", value).apply()
+
     // --- EPUB text customization: global (applies to every book), not per-library/per-book -----
 
     var epubFontScale: Float

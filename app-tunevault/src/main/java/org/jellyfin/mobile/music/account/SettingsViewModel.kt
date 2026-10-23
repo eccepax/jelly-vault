@@ -8,11 +8,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.catalog.Account
 import org.jellyfin.mobile.music.catalog.AccountInfo
 import org.jellyfin.mobile.music.domain.StreamingQuality
-import org.jellyfin.mobile.music.downloads.DownloadSettings
 import org.jellyfin.mobile.music.playback.SetVolumeLevelling
 import org.jellyfin.mobile.music.playback.ShowSleepTimer
 import org.jellyfin.sdk.model.ClientInfo

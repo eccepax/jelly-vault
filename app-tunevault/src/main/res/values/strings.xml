@@ -81,12 +81,6 @@
     <string name="settings_downloads">Downloads</string>
     <string name="download_quality">Download quality</string>
     <string name="download_quality_note">For new downloads. Separate from streaming, so data saver never shrinks what you keep.</string>
-    <string name="download_wifi_only">Download over Wi-Fi only</string>
-    <string name="nothing_downloaded">Nothing downloaded</string>
-    <string name="downloads_use">Downloads use %1$s</string>
-    <string name="remove_all_downloads">Remove all downloads</string>
-    <string name="remove_all_confirm">Remove every download from this device?</string>
-    <string name="remove_all_yes">Yes, remove all</string>
     <string name="sign_out_removes_downloads">Downloads on this device will be removed.</string>
     <string name="settings_account">Account</string>
     <string name="account_server">%1$s · %2$s</string>
