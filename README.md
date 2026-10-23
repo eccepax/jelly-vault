@@ -31,6 +31,7 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Sleep timer, including end of chapter
 - 10 s back / 30 s forward skips, chapter markers, and a track list for multi-file books
 - Playback speed control, with hold-to-speed-up
+- Keeps playing in the background, with lock-screen and Bluetooth controls, and pauses when headphones are unplugged
 - Offline downloads
 
 ## BookVault
@@ -38,10 +39,11 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - EPUB and PDF reading
 - Scroll mode and paginated mode
 - Dark mode with a properly inverted reading background
-- Adjustable EPUB text size and line spacing
+- Adjustable EPUB text size, font and line spacing
+- Pinch or double-tap to zoom PDF pages
 - Tap-to-jump table of contents, and bookmarks
-- Reading progress synced with Jellyfin
-- Offline downloads
+- Reading progress synced with Jellyfin, so a book opens where you left it on your other devices too
+- Offline downloads, optionally over Wi-Fi only
 
 ## TuneVault
 
