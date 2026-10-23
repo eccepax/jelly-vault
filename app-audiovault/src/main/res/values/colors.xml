@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher icon background -->
-    <color name="ic_launcher_background">#880015</color>
-
-    <!-- Splash logo color for API < 24. API >= 24 will have the default gradient. -->
-    <color name="splash_fill">#fafafa</color>
-
     <!-- The app's accent (VaultBrand.AudioVault), from common -->
     <color name="vault_accent">@color/vault_accent_audiovault</color>
 </resources>

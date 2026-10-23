@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.fragment)
+    implementation(libs.androidx.core.splashscreen)
     coreLibraryDesugaring(libs.androiddesugarlibs)
 
     // Lifecycle
