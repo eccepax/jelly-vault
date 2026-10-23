@@ -19,7 +19,9 @@ import org.jellyfin.mobile.data.JellyfinDatabase
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.ui.PlayerTags
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
+import org.jellyfin.mobile.testing.endtoend.SuiteAreaRule
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
+import org.junit.Rule
 import org.jellyfin.mobile.common.R as CommonR
 
 /**
@@ -28,6 +30,9 @@ import org.jellyfin.mobile.common.R as CommonR
  * [QuickConnectE2ETest] exercise signing in, so nothing here may sign in before a test (no @Before).
  */
 abstract class LoggedInE2ETest : SignedInE2ETest<MainActivity>(MainActivity::class.java) {
+
+    @get:Rule
+    val suiteArea = SuiteAreaRule(SUITE_AREAS)
 
     override fun clearAppState() {
         // The playback service outlives each test's activity: a book left playing would carry on

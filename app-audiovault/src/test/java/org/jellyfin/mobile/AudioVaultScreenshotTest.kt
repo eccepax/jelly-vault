@@ -16,7 +16,6 @@ import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.library.LibraryItem
 import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.library.SortOption
-import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.settings.SettingsFragment
@@ -135,7 +134,6 @@ class AudioVaultScreenshotTest {
                     single { preferences }
                     single { mockk<DownloadManager>(relaxed = true) }
                     single { ClientInfo(name = "AudioVault", version = "1.0.0") }
-                    single { mockk<AudiobookPlaybackController>(relaxed = true) }
                 },
             )
         }

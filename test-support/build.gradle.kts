@@ -11,8 +11,4 @@ dependencies {
     implementation(libs.androidx.core)
     implementation(libs.robolectric)
     implementation(libs.roborazzi)
-
-    testImplementation(libs.junit.api)
-    testRuntimeOnly(libs.junit.engine)
-    testImplementation(libs.bundles.kotest)
 }
