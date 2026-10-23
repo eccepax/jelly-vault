@@ -76,9 +76,9 @@ class AudiobookPlayerViewModel(
     /**
      * Whether there's a book to show, and whether one asked for isn't playing yet: worked out from
      * one look at both, so the book arriving and its starting being over are seen together.
-     * A book is starting until it's the one playing, or for [START_TIMEOUT_MS] at most (the service
-     * never coming up, or stopped first); one that fails stays starting until another is asked for,
-     * as the player screen leaves on the failure itself. The screen, showing no book and none
+     * A book is starting until it's the one playing; one that fails (or doesn't come to play within
+     * [START_TIMEOUT_MS]) stays starting until another is asked for, as the player screen leaves on
+     * the failure itself. The screen, showing no book and none
      * starting (as it's restored with the app's process gone), has nothing to show.
      */
     val presence: StateFlow<PlayerPresence> = combine(playback.state, _starting, ::presenceOf)
@@ -106,15 +106,29 @@ class AudiobookPlayerViewModel(
             val started = start(options)
             if (asked != request) return@launch
             started.fold(
-                onSuccess = { trackId ->
-                    _starting.value = Starting.Playing(trackId)
-                    // The service tells of it playing a moment after it's asked, perhaps after
-                    // still telling of the book that was playing
-                    withTimeoutOrNull(START_TIMEOUT_MS) { playback.state.first { it.currentTrack?.id == trackId } }
-                    if (asked == request) _starting.value = null
-                },
+                onSuccess = { trackId -> awaitPlaying(asked, trackId) },
                 onFailure = { _startFailures.send(it as PlayerException) },
             )
+        }
+    }
+
+    /**
+     * Waits for the book sent to the service to be the one playing, for [START_TIMEOUT_MS] at most.
+     * One that doesn't come to play by then is given up on, stopped so it can't start later with no
+     * screen left to show it, and said to have failed: the player screen leaves on that, as on any.
+     */
+    private suspend fun awaitPlaying(asked: Int, trackId: String) {
+        _starting.value = Starting.Playing(trackId)
+        // The service tells of it playing a moment after it's asked, perhaps after still telling of
+        // the book that was playing
+        val playing = withTimeoutOrNull(START_TIMEOUT_MS) { playback.state.first { it.currentTrack?.id == trackId } }
+        if (asked != request) return
+        if (playing != null) {
+            _starting.value = null
+        } else {
+            // Still connecting, the stop is sent after the book, so the service never plays it
+            playback.stop()
+            _startFailures.send(PlayerException.StartTimedOut())
         }
     }
 
@@ -179,7 +193,7 @@ class AudiobookPlayerViewModel(
     }
 
     internal companion object {
-        /** How long a book that's been started may take to be the one playing. */
+        /** How long a book sent to the service may take to be the one playing (the service coming up). */
         const val START_TIMEOUT_MS = 15_000L
         private const val MS_PER_MINUTE = 60_000L
         private const val PROGRESS_INTERVAL_MS = 250L

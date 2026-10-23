@@ -182,16 +182,46 @@ class AudiobookPlayerViewModelTest {
     }
 
     @Test
-    fun `a book that never comes to play stops starting after a while, so the screen can go`() = runTest {
+    fun `a book that never comes to play is given up on after a while, stopped, and said why`() = runTest {
         controller.playsLater = true
         val viewModel = viewModel()
 
         viewModel.play(options(book))
         advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS - 1)
-        viewModel.presence.value.starting shouldBe true
+        controller.commands shouldBe listOf("play $book from 0 at 0")
 
         advanceTimeBy(2)
-        viewModel.presence.value shouldBe PlayerPresence(hasBook = false, starting = false)
+        controller.commands shouldBe listOf("play $book from 0 at 0", "stop")
+        viewModel.startFailures.first().shouldBeInstanceOf<PlayerException.StartTimedOut>()
+        // The screen leaves on the failure, once heard, not on there being nothing to show
+        viewModel.presence.value shouldBe PlayerPresence(hasBook = false, starting = true)
+    }
+
+    @Test
+    fun `a book that comes to play in time isn't given up on`() = runTest {
+        controller.playsLater = true
+        val viewModel = viewModel()
+
+        viewModel.play(options(book))
+        advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS - 1)
+        controller.playing(AudiobookTrack(id = book.toString(), title = "Book", durationMs = 0L))
+        advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS)
+
+        controller.commands shouldBe listOf("play $book from 0 at 0")
+        withTimeoutOrNull(1.seconds) { viewModel.startFailures.first() } shouldBe null
+    }
+
+    @Test
+    fun `a book overtaken by another isn't given up on for it`() = runTest {
+        controller.playsLater = true
+        val viewModel = viewModel()
+        viewModel.play(options(book))
+        advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS / 2)
+
+        viewModel.forgetStartFailures()
+        advanceTimeBy(AudiobookPlayerViewModel.START_TIMEOUT_MS)
+
+        controller.commands shouldBe listOf("play $book from 0 at 0")
     }
 
     @Test

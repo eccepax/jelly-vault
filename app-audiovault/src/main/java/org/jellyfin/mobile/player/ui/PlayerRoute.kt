@@ -164,6 +164,7 @@ private val PlayerException.messageRes: Int
         is PlayerException.InvalidPlayOptions -> R.string.player_error_invalid_play_options
         is PlayerException.NetworkFailure -> R.string.player_error_network_failure
         is PlayerException.UnsupportedContent -> R.string.player_error_unsupported_content
+        is PlayerException.StartTimedOut -> R.string.player_error_start_timed_out
     }
 
 /** What the screen shows of [playback] and where it is; the rest comes from the view model as it is. */
