@@ -7,9 +7,9 @@
     <color name="theme_background">#101010</color>
 
     <!-- Each app's accent; they match VaultBrand. An app picks its own by overriding vault_accent -->
-    <color name="vault_accent_audiovault">#ff5c72</color>
-    <color name="vault_accent_bookvault">#26a69a</color>
-    <color name="vault_accent_tunevault">#7986cb</color>
-    <color name="vault_accent_livevault">#00a4dc</color>
+    <color name="vault_accent_audiovault">#ff8c1a</color>
+    <color name="vault_accent_bookvault">#16b08a</color>
+    <color name="vault_accent_tunevault">#f75f6d</color>
+    <color name="vault_accent_livevault">#b470ff</color>
     <color name="vault_accent">@color/jellyfin_accent</color>
 </resources>
