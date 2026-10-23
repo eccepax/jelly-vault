@@ -44,7 +44,9 @@ data class BookSettingsState(
     val removeDownloadsOnSignOut: Boolean,
     val downloadOnWifiOnly: Boolean,
     /** Space the downloaded books take. */
-    val downloadBytes: Long,
+    val downloadBytes: Long = 0L,
+    /** Anything to remove, even books waiting for Wi-Fi that take no space yet. */
+    val hasDownloads: Boolean = false,
     /** For About: the name as the bug form lists it, and the version. */
     val appName: String,
     val appVersion: String,
@@ -111,7 +113,7 @@ fun BookSettingsScreen(state: BookSettingsState, actions: BookSettingsActions) {
 private fun DownloadsSection(state: BookSettingsState, actions: BookSettingsActions) {
     SettingsSectionHeader(stringResource(R.string.pref_category_downloads))
     SettingsSwitchRow(
-        label = stringResource(CommonR.string.pref_download_wifi_only),
+        label = stringResource(CommonR.string.vault_pref_download_wifi_only),
         checked = state.downloadOnWifiOnly,
         onCheckedChange = actions.onWifiOnly,
     )
@@ -121,7 +123,7 @@ private fun DownloadsSection(state: BookSettingsState, actions: BookSettingsActi
         checked = state.removeDownloadsOnSignOut,
         onCheckedChange = actions.onRemoveDownloadsOnSignOut,
     )
-    DownloadsSpaceSetting(state.downloadBytes, actions.onRemoveAllDownloads)
+    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAllDownloads)
 }
 
 @Composable

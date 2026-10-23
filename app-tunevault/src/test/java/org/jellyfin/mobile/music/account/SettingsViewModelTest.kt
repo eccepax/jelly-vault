@@ -162,7 +162,7 @@ class SettingsViewModelTest {
 
         viewModel.setDownloadOnWifiOnly(false)
 
-        preferences.downloadOnWifiOnly shouldBe false
+        downloads.wifiOnly shouldBe false
         downloads.events shouldBe listOf("wifiOnly false")
         viewModel.state.value.downloadOnWifiOnly shouldBe false
     }
@@ -176,6 +176,16 @@ class SettingsViewModelTest {
 
         downloads.events shouldBe listOf("removeAll")
         viewModel.state.value.downloadBytes shouldBe 0L
+    }
+
+    @Test
+    fun `downloads waiting for wi-fi can be removed though they take no space yet`() {
+        downloads.queued.value = true
+
+        val state = viewModel().state.value
+
+        state.downloadBytes shouldBe 0L
+        state.hasDownloads shouldBe true
     }
 
     @Test

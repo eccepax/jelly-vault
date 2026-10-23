@@ -44,12 +44,12 @@ class BookAppPreferencesTest {
     // --- downloads ------------------------------------------------------------------------------
 
     @Test
-    fun `books download over Wi-Fi only until the user allows mobile data`() {
-        preferences.downloadOnWifiOnly shouldBe true
+    fun `books download on any network unless the user asks for Wi-Fi only`() {
+        preferences.downloadOnWifiOnly shouldBe false
 
-        preferences.downloadOnWifiOnly = false
+        preferences.downloadOnWifiOnly = true
 
-        BookAppPreferences(context).downloadOnWifiOnly shouldBe false
+        BookAppPreferences(context).downloadOnWifiOnly shouldBe true
     }
 
     @Test

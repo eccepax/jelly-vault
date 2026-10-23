@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.offline.DownloadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.bookVaultSignOut
 import org.jellyfin.mobile.books.data.BookDatabase
@@ -88,9 +89,20 @@ val bookDownloadsModule = module {
         DownloadGroups(get(), get<BookDatabase>().downloadGroupDao, uriOf = apiClient::bookUri)
     }
     single { BookDownloads(get()) }
+    // Copies fetched for reading take space like downloads, so Settings counts and removes them too
     single<DownloadSettings> {
         val downloads = get<BookDownloads>()
-        Media3DownloadSettings(get(), downloads.bytesUsed, downloads::removeAll)
+        val files = get<BookFiles>()
+        Media3DownloadSettings(
+            manager = get(),
+            savedWifiOnly = get<BookAppPreferences>()::downloadOnWifiOnly,
+            bytesUsed = combine(downloads.bytesUsed, files.copiesBytes) { downloaded, copies -> downloaded + copies },
+            hasDownloads = combine(downloads.hasDownloads, files.copiesBytes) { has, copies -> has || copies > 0L },
+            removeAll = {
+                downloads.removeAll()
+                files.removeCopies()
+            },
+        )
     }
     single {
         val apiClient = get<ApiClient>()

@@ -30,6 +30,8 @@ data class SettingsUiState(
     val downloadOnWifiOnly: Boolean = true,
     val removeDownloadsOnSignOut: Boolean = false,
     val downloadBytes: Long = 0L,
+    /** Anything to remove, even downloads waiting for Wi-Fi that take no space yet. */
+    val hasDownloads: Boolean = false,
     val showSleepTimer: Boolean = true,
     val volumeLevelling: Boolean = true,
 )
@@ -50,7 +52,7 @@ class SettingsViewModel(
             appName = app.name,
             appVersion = app.version,
             downloadQuality = preferences.downloadQuality,
-            downloadOnWifiOnly = preferences.downloadOnWifiOnly,
+            downloadOnWifiOnly = downloads.wifiOnly,
             removeDownloadsOnSignOut = preferences.removeDownloadsOnSignOut,
             showSleepTimer = preferences.showSleepTimer,
             volumeLevelling = preferences.volumeLevelling,
@@ -72,6 +74,9 @@ class SettingsViewModel(
                     )
                 }
             }
+        }
+        viewModelScope.launch {
+            downloads.hasDownloads.collect { has -> _state.update { it.copy(hasDownloads = has) } }
         }
         viewModelScope.launch {
             try {
@@ -101,8 +106,7 @@ class SettingsViewModel(
     }
 
     fun setDownloadOnWifiOnly(wifiOnly: Boolean) {
-        preferences.downloadOnWifiOnly = wifiOnly
-        downloads.applyWifiOnly(wifiOnly)
+        downloads.wifiOnly = wifiOnly
         _state.update { it.copy(downloadOnWifiOnly = wifiOnly) }
     }
 

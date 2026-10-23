@@ -122,7 +122,7 @@ class BookSettingsScreenTest {
 
     @Test
     fun `shows the space books take, and removing them all asks first`() {
-        show(defaults.copy(downloadBytes = 1_500_000_000L))
+        show(defaults.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
 
         composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()

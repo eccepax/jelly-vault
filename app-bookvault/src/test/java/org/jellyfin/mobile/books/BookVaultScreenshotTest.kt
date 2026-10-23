@@ -50,7 +50,6 @@ class BookVaultScreenshotTest {
         every { epubFontScale } returns 1.0f
         every { epubFontFamily } returns EpubFontFamily.SERIF
         every { epubLineSpacing } returns 1.0f
-        every { downloadOnWifiOnly } returns true
     }
 
     @After

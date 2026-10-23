@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.media3.datasource.DefaultHttpDataSource
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -76,5 +77,20 @@ class BookFilesTest {
 
         server.enqueue(MockResponse().setBody(book))
         files.fileFor("b1").readText() shouldBe book
+    }
+
+    @Test
+    fun `copies fetched for reading count toward the space used, and can be removed`() = runTest {
+        files.copiesBytes.first() shouldBe 0L
+        server.enqueue(MockResponse().setBody(book))
+        files.fileFor("b1")
+        files.copiesBytes.first() shouldBe book.length.toLong()
+
+        files.removeCopies()
+
+        files.copiesBytes.first() shouldBe 0L
+        server.enqueue(MockResponse().setBody(book))
+        files.fileFor("b1").readText() shouldBe book
+        server.requestCount shouldBe 2
     }
 }

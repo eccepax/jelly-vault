@@ -157,20 +157,26 @@ fun InlineConfirm(
     }
 }
 
-/** How much space downloads take, and removing them all after asking in place ([InlineConfirm]). */
+/**
+ * How much space downloads take, and removing them all after asking in place ([InlineConfirm]).
+ * [hasDownloads] rather than [bytes] says whether there's anything to remove: downloads waiting for
+ * Wi-Fi take no space yet, but can still be removed.
+ */
 @Composable
-fun DownloadsSpaceSetting(bytes: Long, onRemoveAll: () -> Unit) {
+fun DownloadsSpaceSetting(bytes: Long, hasDownloads: Boolean, onRemoveAll: () -> Unit) {
     var confirming by rememberSaveable { mutableStateOf(false) }
     val textModifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small)
-    if (bytes == 0L) {
-        Text(stringResource(R.string.downloads_nothing), modifier = textModifier)
+    if (!hasDownloads) {
+        // Removed elsewhere while asking: don't ask again, unprompted, once something downloads
+        LaunchedEffect(Unit) { confirming = false }
+        Text(stringResource(R.string.vault_downloads_nothing), modifier = textModifier)
         return
     }
-    Text(stringResource(R.string.downloads_use, formatBytes(bytes)), modifier = textModifier)
+    Text(stringResource(R.string.vault_downloads_use, formatBytes(bytes)), modifier = textModifier)
     if (confirming) {
         InlineConfirm(
-            message = stringResource(R.string.downloads_remove_all_confirm),
-            confirmLabel = stringResource(R.string.downloads_remove_all_yes),
+            message = stringResource(R.string.vault_downloads_remove_all_confirm),
+            confirmLabel = stringResource(R.string.vault_downloads_remove_all_yes),
             onConfirm = {
                 confirming = false
                 onRemoveAll()
@@ -183,7 +189,7 @@ fun DownloadsSpaceSetting(bytes: Long, onRemoveAll: () -> Unit) {
             onClick = { confirming = true },
             modifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small),
         ) {
-            Text(stringResource(R.string.downloads_remove_all))
+            Text(stringResource(R.string.vault_downloads_remove_all))
         }
     }
 }

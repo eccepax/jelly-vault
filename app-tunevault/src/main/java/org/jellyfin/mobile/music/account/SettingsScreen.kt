@@ -128,13 +128,13 @@ private fun DownloadsSection(state: SettingsUiState, actions: DownloadSettingsAc
     )
     Note(R.string.download_quality_note)
     QualityOptions(state.downloadQuality, actions.onQuality)
-    SwitchRow(CommonR.string.pref_download_wifi_only, state.downloadOnWifiOnly, actions.onWifiOnly)
+    SwitchRow(CommonR.string.vault_pref_download_wifi_only, state.downloadOnWifiOnly, actions.onWifiOnly)
     SwitchRow(
         CommonR.string.pref_remove_downloads_on_sign_out,
         state.removeDownloadsOnSignOut,
         actions.onRemoveOnSignOut,
     )
-    DownloadsSpaceSetting(state.downloadBytes, actions.onRemoveAll)
+    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAll)
 }
 
 /** A setting that's on or off: the whole row toggles it. */

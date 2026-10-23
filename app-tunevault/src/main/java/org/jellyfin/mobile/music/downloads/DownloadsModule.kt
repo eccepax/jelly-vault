@@ -74,6 +74,12 @@ val downloadsModule = module {
     single<CollectionDownloads> { get<DownloadRepository>() }
     single<DownloadSettings> {
         val repository = get<DownloadRepository>()
-        Media3DownloadSettings(get(), repository.bytesUsed, repository::removeAll)
+        Media3DownloadSettings(
+            manager = get(),
+            savedWifiOnly = get<PlaybackPreferences>()::downloadOnWifiOnly,
+            bytesUsed = repository.bytesUsed,
+            hasDownloads = repository.hasDownloads,
+            removeAll = repository::removeAll,
+        )
     }
 }

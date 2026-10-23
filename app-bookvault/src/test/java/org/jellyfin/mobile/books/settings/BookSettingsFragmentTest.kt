@@ -3,6 +3,8 @@ package org.jellyfin.mobile.books.settings
 import android.app.Application
 import android.os.Looper
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -118,14 +120,29 @@ class BookSettingsFragmentTest {
     }
 
     @Test
-    fun `switching off wi-fi only saves it and lets waiting downloads use mobile data`() {
+    fun `switching wi-fi only goes through the download settings, which save and apply it`() {
+        downloads.wifiOnly = false
+        downloads.events.clear()
+
         launch().use {
-            composeRule.onNodeWithText("Download over Wi-Fi only").performScrollTo().performClick()
-            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Download over Wi-Fi only").performScrollTo().assertIsOff().performClick()
+            composeRule.onNodeWithText("Download over Wi-Fi only").assertIsOn()
         }
 
-        BookAppPreferences(context).downloadOnWifiOnly shouldBe false
-        downloads.events shouldBe listOf("wifiOnly false")
+        downloads.events shouldBe listOf("wifiOnly true")
+    }
+
+    @Test
+    fun `downloads waiting for wi-fi can be removed though they take no space yet`() {
+        downloads.queued.value = true
+
+        launch().use {
+            composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+            composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+            composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        }
+        downloads.events shouldBe listOf("removeAll")
     }
 
     @Test
