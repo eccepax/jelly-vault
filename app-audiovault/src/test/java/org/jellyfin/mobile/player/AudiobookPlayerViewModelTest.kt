@@ -155,6 +155,22 @@ class AudiobookPlayerViewModelTest {
     }
 
     @Test
+    fun `with another book playing, a book is starting until it's the one playing`() = runTest {
+        val other = AudiobookTrack(id = "other", title = "Other", durationMs = 60_000L)
+        controller.playing(other)
+        controller.playsLater = true
+        val viewModel = viewModel()
+
+        viewModel.play(options(book))
+        viewModel.starting.value shouldBe true
+
+        // The service tells of the book asked for
+        controller.playing(AudiobookTrack(id = book.toString(), title = "Book", durationMs = 0L))
+        runCurrent()
+        viewModel.starting.value shouldBe false
+    }
+
+    @Test
     fun `a book that fails stays starting, the player screen leaving on the failure itself`() = runTest {
         onServer.clear()
         val viewModel = viewModel()

@@ -3,11 +3,14 @@ package org.jellyfin.mobile.navigation
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.MainViewModel
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
+import org.jellyfin.mobile.common.ui.resolveRootScreen
 import org.jellyfin.mobile.common.ui.screens.connect.StyledTextButton
 import org.jellyfin.mobile.common.ui.startOver
 import org.jellyfin.mobile.downloads.DownloadsRoute
@@ -22,17 +25,21 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * AudioVault: connect to a server and sign in, then the library, with the player, downloads and
  * settings opened over it. The downloads can be opened before signing in too, from the connect
- * screen: one back stack either way.
+ * screen: one back stack either way, with the settings in it only while someone's signed in.
  */
 @Composable
 fun AudioVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences) {
     val playerViewModel: AudiobookPlayerViewModel = koinViewModel()
     val activity = LocalActivity.current
+    // Worked out as VaultRoot does, which shows the matching screen at home
+    val serverState by mainViewModel.serverState.collectAsState()
+    val rootScreen = resolveRootScreen(serverState, appPreferences.currentUserId)
     fun play(navigator: Navigator): (PlayOptions) -> Unit = { options ->
         playerViewModel.play(options)
         navigator.openPlayer()
     }
     AudioVaultNavigation(
+        rootScreen = rootScreen,
         home = { navigator ->
             VaultRoot(
                 mainViewModel,

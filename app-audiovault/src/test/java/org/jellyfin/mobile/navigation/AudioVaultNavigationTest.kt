@@ -8,6 +8,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.ui.RootScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,9 +31,13 @@ class AudioVaultNavigationTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
+    /** Where signing in has got to, as the connect screen and sign-in would have it. */
+    private var root by mutableStateOf(RootScreen.SignedIn)
+
     /** Stand-in screens; home has saveable state (like a scroll position) to keep while covered. */
     private val content: @Composable () -> Unit = {
         AudioVaultNavigation(
+            rootScreen = root,
             home = { navigator ->
                 var taps by rememberSaveable { mutableIntStateOf(0) }
                 Column {
@@ -111,6 +117,7 @@ class AudioVaultNavigationTest {
         var openPlayer: () -> Unit = {}
         composeRule.setContent {
             AudioVaultNavigation(
+                rootScreen = RootScreen.SignedIn,
                 home = { navigator ->
                     openPlayer = navigator.openPlayer
                     Text("Home")
@@ -159,5 +166,49 @@ class AudioVaultNavigationTest {
         composeRule.onNodeWithText("Player page").assertIsDisplayed()
         systemBack()
         composeRule.onNodeWithText("Downloads page").assertIsDisplayed()
+    }
+
+    // --- Signed out ---------------------------------------------------------------------------------
+
+    @Test
+    fun `before signing in, the downloads and a download playing open and go back as ever`() {
+        root = RootScreen.Connect
+        composeRule.setContent(content)
+
+        tap("Open downloads")
+        tap("Play a download")
+        composeRule.onNodeWithText("Player page").assertIsDisplayed()
+
+        systemBack()
+        composeRule.onNodeWithText("Downloads page").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the settings close once there's no one signed in, and don't come back on signing in`() {
+        composeRule.setContent(content)
+        tap("Open settings")
+
+        root = RootScreen.Connect
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+        composeRule.activity.onBackPressedDispatcher.hasEnabledCallbacks() shouldBe false
+
+        root = RootScreen.SignedIn
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+    }
+
+    /** As after the app's process has gone: who's signed in is read again before the settings can show. */
+    @Test
+    fun `settings restored before it's known who's signed in wait for it`() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent(content)
+        tap("Open settings")
+
+        root = RootScreen.Splash
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithText("Settings page").assertDoesNotExist()
+
+        root = RootScreen.SignedIn
+        composeRule.onNodeWithText("Settings page").assertIsDisplayed()
     }
 }

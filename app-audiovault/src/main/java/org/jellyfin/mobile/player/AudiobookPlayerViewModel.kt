@@ -69,9 +69,9 @@ class AudiobookPlayerViewModel(
     private val _starting = MutableStateFlow(false)
 
     /**
-     * True from a book being asked for until it's playing; it stays so if it fails, until another
-     * is asked for, as the player screen leaves on the failure itself. The screen, showing no
-     * book and none starting (as it's restored with the app's process gone), has nothing to show.
+     * True from a book being asked for until it's the one playing; it stays so if it fails, until
+     * another is asked for, as the player screen leaves on the failure itself. The screen, showing
+     * no book and none starting (as it's restored with the app's process gone), has nothing to show.
      */
     val starting: StateFlow<Boolean> = _starting.asStateFlow()
 
@@ -94,15 +94,17 @@ class AudiobookPlayerViewModel(
         val asked = nextRequest()
         _starting.value = true
         viewModelScope.launch {
-            val failure = start(options)
+            val started = start(options)
             if (asked != request) return@launch
-            if (failure != null) {
-                _startFailures.send(failure)
-            } else {
-                // The service tells of the book playing a moment after it's asked
-                playback.state.first { it.currentTrack != null }
-                if (asked == request) _starting.value = false
-            }
+            started.fold(
+                onSuccess = { trackId ->
+                    // The service tells of it playing a moment after it's asked, perhaps after
+                    // still telling of the book that was playing
+                    playback.state.first { it.currentTrack?.id == trackId }
+                    if (asked == request) _starting.value = false
+                },
+                onFailure = { _startFailures.send(it as PlayerException) },
+            )
         }
     }
 
@@ -117,12 +119,13 @@ class AudiobookPlayerViewModel(
         return ++request
     }
 
-    private suspend fun start(options: PlayOptions): PlayerException? = loader.load(options).fold(
+    /** Plays what [options] ask for, giving the id of the track it starts on, or why it can't. */
+    private suspend fun start(options: PlayOptions): Result<String> = loader.load(options).fold(
         onSuccess = { queue ->
             playback.play(queue.tracks, queue.startIndex, queue.startPositionMs)
-            null
+            Result.success(queue.tracks[queue.startIndex].id)
         },
-        onFailure = { it as? PlayerException ?: PlayerException.NetworkFailure(it) },
+        onFailure = { Result.failure(it as? PlayerException ?: PlayerException.NetworkFailure(it)) },
     )
 
     fun togglePlayPause() = playback.togglePlayPause()

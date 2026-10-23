@@ -2,12 +2,14 @@ package org.jellyfin.mobile.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
+import org.jellyfin.mobile.common.ui.RootScreen
 
 private const val PLAYER = "player"
 private const val DOWNLOADS = "downloads"
@@ -31,9 +33,14 @@ class Navigator(
  * home → downloads → player. Back pops one level. Only names are saved, so the stack survives
  * rotation and process death, and each level keeps its own saved state (scroll position) while
  * covered. Modeled on TuneVault's LibraryNavigation.
+ *
+ * The settings belong to whoever's signed in ([rootScreen], as home shows it): they wait while
+ * that's still being read (restored after the app's process went), and close once there's no one.
+ * The downloads, and the player on them, work signed out too.
  */
 @Composable
 fun AudioVaultNavigation(
+    rootScreen: RootScreen,
     home: @Composable (navigator: Navigator) -> Unit,
     player: @Composable (onBack: () -> Unit) -> Unit,
     downloads: @Composable (onBack: () -> Unit, navigator: Navigator) -> Unit,
@@ -59,10 +66,20 @@ fun AudioVaultNavigation(
         openSettings = { open(SETTINGS) },
     )
 
-    BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
+    val signedIn = rootScreen == RootScreen.SignedIn
+    LaunchedEffect(rootScreen) {
+        if (!signedIn && rootScreen != RootScreen.Splash) {
+            val settingsAt = stack.indexOf(SETTINGS)
+            if (settingsAt >= 0) while (stack.size > settingsAt) pop()
+        }
+    }
+    // What can show now: a prefix of the stack, so its keys are the stack's
+    val showing = if (signedIn) stack else stack.takeWhile { it != SETTINGS }
 
-    savedStates.SaveableStateProvider(keyAt(stack.size)) {
-        when (stack.lastOrNull()) {
+    BackHandler(enabled = showing.isNotEmpty(), onBack = pop)
+
+    savedStates.SaveableStateProvider(keyAt(showing.size)) {
+        when (showing.lastOrNull()) {
             null -> home(navigator)
             PLAYER -> player(pop)
             DOWNLOADS -> downloads(pop, navigator)
