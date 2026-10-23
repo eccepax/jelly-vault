@@ -56,6 +56,9 @@ class BookProgressContractTest {
         }
     }
 
+    /** One book's place, asked for the way BookVault asks for all its books' at once. */
+    private suspend fun progress(id: UUID) = server.progress(listOf(id)).getValue(id)
+
     private suspend fun book(searchTerm: String): UUID = apiClient.itemsApi.getItems(
         includeItemTypes = listOf(BaseItemKind.BOOK),
         recursive = true,
@@ -64,17 +67,17 @@ class BookProgressContractTest {
 
     @Test
     fun `the server counts a PDF's pages, so a page is a position in it`() = runBlocking<Unit> {
-        server.progress(pdf).runTimeTicks shouldBe AARDVARK_PAGES * PDF_TICKS_PER_PAGE
+        progress(pdf).runTimeTicks shouldBe AARDVARK_PAGES * PDF_TICKS_PER_PAGE
     }
 
     @Test
     fun `a chapter sent to the server comes back as that chapter, as of when it was read`() = runBlocking<Unit> {
-        val runTime = server.progress(epub).runTimeTicks.shouldNotBeNull()
+        val runTime = progress(epub).runTimeTicks.shouldNotBeNull()
         val readAt = Instant.now().minus(JavaDuration.ofHours(2))
 
         server.record(epub, pageTicks(page = 4, totalPages = 10, runTime).ticks, finished = false, at = readAt)
 
-        val progress = server.progress(epub)
+        val progress = progress(epub)
         progress.page(totalPages = 10) shouldBe 4
         val knownAt = progress.knownAt.shouldNotBeNull()
         JavaDuration.between(readAt, knownAt).abs().toMillis() shouldBeLessThan 60_000L
@@ -82,18 +85,40 @@ class BookProgressContractTest {
 
     @Test
     fun `a PDF page sent to the server comes back as that page`() = runBlocking<Unit> {
-        val runTime = server.progress(pdf).runTimeTicks.shouldNotBeNull()
+        val runTime = progress(pdf).runTimeTicks.shouldNotBeNull()
 
         server.record(pdf, pageTicks(page = 1, totalPages = 3, runTime).ticks, finished = false, at = Instant.now())
 
-        server.progress(pdf).page(totalPages = 3) shouldBe 1
+        progress(pdf).page(totalPages = 3) shouldBe 1
     }
 
     @Test
-    fun `a book finished comes back at its last page`() = runBlocking<Unit> {
-        server.record(epub, 0L.ticks, finished = true, at = Instant.now())
+    fun `a book finished comes back at its last page, finished`() = runBlocking<Unit> {
+        val runTime = progress(epub).runTimeTicks.shouldNotBeNull()
 
-        server.progress(epub).page(totalPages = 10) shouldBe 9
+        server.record(epub, pageTicks(page = 9, totalPages = 10, runTime).ticks, finished = true, at = Instant.now())
+
+        val progress = progress(epub)
+        progress.page(totalPages = 10) shouldBe 9
+        progress.state shouldBe ReadingState.FINISHED
+    }
+
+    @Test
+    fun `a finished book read again from the start comes back unread`() = runBlocking<Unit> {
+        val runTime = progress(epub).runTimeTicks.shouldNotBeNull()
+        val finishedAt = Instant.now().minus(JavaDuration.ofHours(2))
+        server.record(epub, pageTicks(page = 9, totalPages = 10, runTime).ticks, finished = true, at = finishedAt)
+
+        server.record(epub, 0L.ticks, finished = false, at = Instant.now())
+
+        val progress = progress(epub)
+        progress.page(totalPages = 10) shouldBe 0
+        progress.state shouldBe ReadingState.UNREAD
+    }
+
+    @Test
+    fun `every book's place comes back from one question`() = runBlocking<Unit> {
+        server.progress(listOf(epub, pdf)).keys shouldBe setOf(epub, pdf)
     }
 
     private companion object {

@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.books.progress
 
+import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import java.time.Instant
 
 /*
@@ -15,6 +16,26 @@ internal fun pageTicks(page: Int, totalPages: Int, runTimeTicks: Long): Long =
 /** The page of [totalPages] that [ticks] of [runTimeTicks] is on. */
 internal fun pageAt(ticks: Long, runTimeTicks: Long, totalPages: Int): Int =
     (ticks * totalPages / runTimeTicks).toInt().coerceIn(0, totalPages - 1)
+
+/** How far into a book the reader is, as the library filters it. */
+enum class ReadingState { UNREAD, IN_PROGRESS, FINISHED }
+
+/**
+ * How far into a book [page] of [totalPages] is: finished on the last page (or EPUB chapter). Opening
+ * a one-page book isn't finishing it, and a book whose length isn't known yet is unread.
+ */
+fun readingState(page: Int, totalPages: Int): ReadingState = when {
+    page <= 0 || totalPages <= 0 -> ReadingState.UNREAD
+    page >= totalPages - 1 -> ReadingState.FINISHED
+    else -> ReadingState.IN_PROGRESS
+}
+
+/** How far into the book the reader is, by whichever place was read most recently: [local] or [server]'s. */
+fun readingState(local: BookProgressEntity?, server: ServerBookProgress): ReadingState = when {
+    server.isNewerThan(local) -> server.state
+    local != null -> readingState(local.pageNumber, local.totalPages)
+    else -> ReadingState.UNREAD
+}
 
 /** The reader's place in a book as the server keeps it. */
 data class ServerBookProgress(
@@ -33,6 +54,24 @@ data class ServerBookProgress(
 
     /** When the reader was last at [page], or null if the server knows nothing usable. */
     val knownAt: Instant? get() = lastPlayed.takeIf { usable }
+
+    /**
+     * Whether this place wins over [local]: the newest place wins, here or on another device.
+     * Compared to the millisecond, as places are saved here, so one taken from the server isn't newer
+     * than itself.
+     */
+    fun isNewerThan(local: BookProgressEntity?): Boolean {
+        val at = knownAt ?: return false
+        return local == null || at.toEpochMilli() > local.lastUpdated
+    }
+
+    /** How far into the book the server has the reader. A finished book keeps its place at the end. */
+    val state: ReadingState
+        get() = when {
+            played -> ReadingState.FINISHED
+            positionTicks > 0 -> ReadingState.IN_PROGRESS
+            else -> ReadingState.UNREAD
+        }
 
     /**
      * The page of [totalPages] the server has the reader on, or null if it knows nothing usable. A

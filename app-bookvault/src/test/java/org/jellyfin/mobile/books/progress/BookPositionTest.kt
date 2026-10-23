@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.books.progress
 
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -77,6 +78,74 @@ class BookPositionTest {
     fun `a usable position is known as of when it was last read`() {
         progress(positionTicks = 4_000_000L).knownAt shouldBe NOON
     }
+
+    // --- how far into a book --------------------------------------------------------------------
+
+    @Test
+    fun `a book at its first page is unread, at its last finished, and between in progress`() {
+        readingState(page = 0, totalPages = 10) shouldBe ReadingState.UNREAD
+        readingState(page = 4, totalPages = 10) shouldBe ReadingState.IN_PROGRESS
+        readingState(page = 9, totalPages = 10) shouldBe ReadingState.FINISHED
+    }
+
+    @Test
+    fun `opening a one-page book isn't finishing it`() {
+        readingState(page = 0, totalPages = 1) shouldBe ReadingState.UNREAD
+    }
+
+    @Test
+    fun `a book whose length isn't known yet is unread`() {
+        readingState(page = 5, totalPages = 0) shouldBe ReadingState.UNREAD
+    }
+
+    @Test
+    fun `the server has a book as finished once played, and in progress with a place in it`() {
+        progress(positionTicks = 0, played = true).state shouldBe ReadingState.FINISHED
+        progress(positionTicks = 9_000_000L, played = true).state shouldBe ReadingState.FINISHED
+        progress(positionTicks = 4_000_000L).state shouldBe ReadingState.IN_PROGRESS
+        progress(positionTicks = 0).state shouldBe ReadingState.UNREAD
+    }
+
+    // --- the newest place wins ----------------------------------------------------------------
+
+    @Test
+    fun `the server's place wins over one read here before it`() {
+        progress(positionTicks = 4_000_000L).isNewerThan(here(at = NOON.toEpochMilli() - 1)) shouldBe true
+    }
+
+    @Test
+    fun `the server's place loses to one read here since`() {
+        progress(positionTicks = 4_000_000L).isNewerThan(here(at = NOON.toEpochMilli() + 1)) shouldBe false
+    }
+
+    @Test
+    fun `the server's place wins when there's none here`() {
+        progress(positionTicks = 4_000_000L).isNewerThan(null) shouldBe true
+    }
+
+    @Test
+    fun `a place taken from the server isn't newer than itself`() {
+        // The server keeps finer time than a saved place's milliseconds
+        val fine = ServerBookProgress(4_000_000L, epub, played = false, lastPlayed = NOON.plusNanos(500_000))
+
+        fine.isNewerThan(here(at = NOON.toEpochMilli())) shouldBe false
+    }
+
+    @Test
+    fun `a place the server can't give usably never wins`() {
+        progress(positionTicks = 400_000_000L).isNewerThan(null) shouldBe false
+    }
+
+    @Test
+    fun `a book's reading state is the newest place's`() {
+        val server = progress(positionTicks = 4_000_000L)
+
+        readingState(here(at = NOON.toEpochMilli() - 1, page = 9), server) shouldBe ReadingState.IN_PROGRESS
+        readingState(here(at = NOON.toEpochMilli() + 1, page = 9), server) shouldBe ReadingState.FINISHED
+        readingState(null, progress(positionTicks = 400_000_000L)) shouldBe ReadingState.UNREAD
+    }
+
+    private fun here(at: Long, page: Int = 2) = BookProgressEntity("book", page, totalPages = 10, lastUpdated = at)
 
     private fun progress(positionTicks: Long, played: Boolean = false, runTimeTicks: Long? = epub) =
         ServerBookProgress(positionTicks, runTimeTicks, played, lastPlayed = NOON)

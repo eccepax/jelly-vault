@@ -82,14 +82,16 @@ val bookDownloadsModule = module {
         val apiClient = get<ApiClient>()
         BookFiles(get(), androidContext().cacheDir, get(), uriOf = apiClient::bookUri)
     }
-    // Signing out sends the places read here, and keeps downloads unless the user asked otherwise in Settings
+    // Signing out sends the places read here, then forgets them; downloads stay unless the user asked otherwise in Settings
     single<SignOut> {
         val downloadsOnSignOut = DownloadsOnSignOut(get(), get<BookDownloads>()::removeAll)
+        val progressSync = get<BookProgressSync>()
         bookVaultSignOut(
             session = get(),
             logout = get<ApiClientController>()::logoutUser,
-            syncProgress = get<BookProgressSync>()::sync,
+            syncProgress = progressSync::sync,
             forgetAccount = { downloadsOnSignOut() },
+            forgetPlaces = progressSync::forget,
         )
     }
 }

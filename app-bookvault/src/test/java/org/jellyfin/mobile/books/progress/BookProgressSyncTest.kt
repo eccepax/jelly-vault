@@ -4,9 +4,17 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.jellyfin.mobile.books.data.BookDatabase
+import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.exception.TimeoutException
@@ -19,6 +27,7 @@ import org.robolectric.annotation.Config
 import java.time.Instant
 import java.util.UUID
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = android.app.Application::class)
@@ -32,7 +41,9 @@ class BookProgressSyncTest {
         .build()
     private val dao = database.bookProgressDao
     private val server = FakeServer()
-    private val sync = BookProgressSync(dao, server)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private var clock = 0L
+    private val sync = BookProgressSync(dao, server, scope, now = { clock })
 
     private val book = UUID.fromString("3b832b64-bc56-ccf9-15d9-c608962c3acd")
     private val bookId = book.toString()
@@ -40,7 +51,10 @@ class BookProgressSyncTest {
     private val noon = Instant.parse("2026-10-21T12:00:00Z")
 
     @After
-    fun tearDown() = database.close()
+    fun tearDown() {
+        scope.cancel()
+        database.close()
+    }
 
     // --- where a book opens -----------------------------------------------------------------------
 
@@ -136,13 +150,75 @@ class BookProgressSyncTest {
     }
 
     @Test
-    fun `reaching the last page is sent as finished`() = runTest {
+    fun `reaching the last page is sent as finished, at that page`() = runTest {
         saved(page = 9, at = noon)
         server.progress[book] = onServer(positionTicks = 0, at = null)
 
         sync.sync()
 
-        server.recorded.single().finished shouldBe true
+        server.recorded.single() shouldBe Recorded(book, 9_000_000L.ticks, finished = true, at = noon)
+    }
+
+    @Test
+    fun `opening a one-page book isn't sent as finishing it`() = runTest {
+        saved(page = 0, at = noon, total = 1)
+        server.progress[book] = onServer(positionTicks = 0, at = null)
+
+        sync.sync()
+
+        server.recorded.single().finished shouldBe false
+    }
+
+    // --- saving ------------------------------------------------------------------------------------
+
+    @Test
+    fun `a page saved here waits to be sent, as of when it was turned`() = runTest {
+        clock = noon.toEpochMilli()
+
+        sync.save(bookId, page = 3, totalPages = 10).join()
+
+        dao.getPending() shouldBe listOf(BookProgressEntity(bookId, 3, 10, noon.toEpochMilli(), pendingSync = true))
+    }
+
+    @Test
+    fun `forgetting the places leaves none for the next account, even one being saved`() = runTest {
+        saved(page = 4, at = noon)
+        val writing = CompletableDeferred<Unit>()
+        val slowDao = object : BookProgressDao by dao {
+            override suspend fun upsertProgress(entity: BookProgressEntity) {
+                writing.await()
+                dao.upsertProgress(entity)
+            }
+        }
+        val sync = BookProgressSync(slowDao, server, scope, now = { clock })
+        sync.save("96ac955d-ea41-d4a5-5448-c0beaedb5608", page = 5, totalPages = 10)
+
+        val forgetting = scope.async { sync.forget() }
+        writing.complete(Unit)
+        forgetting.await()
+
+        dao.getAllProgress().shouldBeEmpty()
+    }
+
+    @Test
+    fun `leaving a book right after turning a page sends that page`() = runTest {
+        clock = noon.toEpochMilli()
+        server.progress[book] = onServer(positionTicks = 0, at = null)
+        val writing = CompletableDeferred<Unit>()
+        val slowDao = object : BookProgressDao by dao {
+            override suspend fun upsertProgress(entity: BookProgressEntity) {
+                writing.await()
+                dao.upsertProgress(entity)
+            }
+        }
+        val sync = BookProgressSync(slowDao, server, scope, now = { clock })
+
+        sync.save(bookId, page = 5, totalPages = 10)
+        val sending = sync.sendSoon()
+        writing.complete(Unit)
+        sending.join()
+
+        server.recorded.single().position shouldBe 5_000_000L.ticks
     }
 
     @Test
@@ -185,6 +261,7 @@ class BookProgressSyncTest {
 
         sync.sync()
 
+        dao.getPending().map { it.pageNumber } shouldBe listOf(4)
         server.unreachable = false
         server.progress[book] = onServer(positionTicks = 0, at = null)
         sync.sync()
@@ -192,14 +269,86 @@ class BookProgressSyncTest {
     }
 
     @Test
-    fun `a server that refuses it isn't asked again`() = runTest {
+    fun `a server that refuses it for good isn't asked again`() = runTest {
         saved(page = 4, at = noon)
         server.progress[book] = onServer(positionTicks = 0, at = null)
-        server.refuses = true
+        server.recordFails = 400
 
         sync.sync()
 
         dao.getPending().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a server that isn't ready for it takes it next time`() = runTest {
+        // Jellyfin restarting behind a proxy, overloaded, or the sign-in run out
+        for (status in listOf(401, 403, 429, 500, 502, 503)) {
+            saved(page = 4, at = noon)
+            server.progress[book] = onServer(positionTicks = 0, at = null)
+            server.recordFails = status
+
+            sync.sync()
+
+            dao.getPending().map { it.pageNumber } shouldBe listOf(4)
+            server.recordFails = null
+            sync.sync()
+            dao.getPending().shouldBeEmpty()
+        }
+    }
+
+    @Test
+    fun `a server that never answers doesn't hold the places up`() = runTest(timeout = 30.seconds) {
+        saved(page = 4, at = noon)
+        server.onAsk = { awaitCancellation() }
+
+        sync.sync()
+
+        dao.getPending().map { it.pageNumber } shouldBe listOf(4)
+    }
+
+    @Test
+    fun `a book the server doesn't know the length of yet waits until it does`() = runTest {
+        saved(page = 4, at = noon)
+        server.progress[book] = ServerBookProgress(0, runTimeTicks = null, played = false, lastPlayed = null)
+
+        sync.sync()
+
+        server.recorded.shouldBeEmpty()
+        dao.getPending().map { it.pageNumber } shouldBe listOf(4)
+        server.progress[book] = onServer(positionTicks = 0, at = null)
+        sync.sync()
+        server.recorded.single().position shouldBe 4_000_000L.ticks
+    }
+
+    @Test
+    fun `a book gone from the server is let go`() = runTest {
+        saved(page = 4, at = noon)
+
+        sync.sync()
+
+        server.recorded.shouldBeEmpty()
+        dao.getPending().shouldBeEmpty()
+    }
+
+    @Test
+    fun `every place waiting is looked up with one question to the server`() = runTest {
+        val other = UUID.fromString("96ac955d-ea41-d4a5-5448-c0beaedb5608")
+        saved(page = 4, at = noon)
+        saved(page = 2, at = morning, id = other.toString())
+        server.progress[book] = onServer(positionTicks = 0, at = null)
+        server.progress[other] = onServer(positionTicks = 0, at = null)
+
+        sync.sync()
+
+        server.asks shouldBe 1
+        server.recorded.size shouldBe 2
+    }
+
+    @Test
+    fun `nothing waiting, nothing asked`() = runTest {
+        sync.sync()
+
+        server.asks shouldBe 0
     }
 
     @Test
@@ -242,19 +391,22 @@ class BookProgressSyncTest {
         val recorded = mutableListOf<Recorded>()
         var unreachable = false
         var refuses = false
+        var recordFails: Int? = null
         var onAsk: suspend () -> Unit = {}
+        var asks = 0
 
-        override suspend fun progress(bookId: UUID): ServerBookProgress {
+        override suspend fun progress(bookIds: Collection<UUID>): Map<UUID, ServerBookProgress> {
+            asks++
             if (unreachable) throw TimeoutException("Vault unreachable")
             if (refuses) throw InvalidStatusException(500)
             onAsk()
-            return progress.getValue(bookId)
+            return progress.filterKeys { it in bookIds }
         }
 
         override suspend fun lastPlayed(itemId: UUID): Instant? = progress[itemId]?.lastPlayed
 
         override suspend fun record(itemId: UUID, position: Duration, finished: Boolean, at: Instant) {
-            if (refuses) throw InvalidStatusException(400)
+            recordFails?.let { throw InvalidStatusException(it) }
             recorded += Recorded(itemId, position, finished, at)
         }
     }

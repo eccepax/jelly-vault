@@ -105,13 +105,11 @@ class BookLibraryFilterTest {
     }
 
     @Test
-    fun `totalPages of zero with a nonzero pageNumber matches neither IN_PROGRESS nor FINISHED`() {
-        // Edge case: a contradictory progress row (some page reached, but zero known total pages)
-        // falls through every filter except ALL — documents current behavior, not a requirement.
+    fun `a place in a book whose length isn't known yet counts as UNREAD`() {
         val b = book()
         val progress =
             mapOf(requireNotNull(b.id).toString() to progress(b.id.toString(), pageNumber = 5, totalPages = 0))
-        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldBe emptyList()
+        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
         filter(listOf(b), progress, progressFilter = ProgressFilter.IN_PROGRESS) shouldBe emptyList()
         filter(listOf(b), progress, progressFilter = ProgressFilter.FINISHED) shouldBe emptyList()
         filter(listOf(b), progress, progressFilter = ProgressFilter.ALL) shouldContainExactly listOf(b)
@@ -124,6 +122,15 @@ class BookLibraryFilterTest {
             mapOf(requireNotNull(b.id).toString() to progress(b.id.toString(), pageNumber = 9, totalPages = 10))
         filter(listOf(b), progress, progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
         filter(listOf(b), progress, progressFilter = ProgressFilter.IN_PROGRESS) shouldBe emptyList()
+    }
+
+    @Test
+    fun `a one-page book opened is UNREAD, not FINISHED`() {
+        val b = book()
+        val progress =
+            mapOf(requireNotNull(b.id).toString() to progress(b.id.toString(), pageNumber = 0, totalPages = 1))
+        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
+        filter(listOf(b), progress, progressFilter = ProgressFilter.FINISHED) shouldBe emptyList()
     }
 
     @Test
@@ -151,6 +158,20 @@ class BookLibraryFilterTest {
     fun `a book finished on another device is FINISHED here too`() {
         val b = readOnServer(positionTicks = 0, played = true)
         filter(listOf(b), progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
+    }
+
+    @Test
+    fun `a book finished on another device at its last page is FINISHED here too`() {
+        val b = readOnServer(positionTicks = 9_000_000L, played = true)
+        filter(listOf(b), progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
+        filter(listOf(b), progressFilter = ProgressFilter.IN_PROGRESS) shouldBe emptyList()
+    }
+
+    @Test
+    fun `a book read again from the start on another device is UNREAD here too`() {
+        val b = readOnServer(positionTicks = 0, played = false)
+        val finishedHere = mapOf(b.id.toString() to progress(b.id.toString(), 9, 10))
+        filter(listOf(b), finishedHere, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
     }
 
     @Test

@@ -10,9 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
-import org.jellyfin.mobile.books.data.dao.BookProgressDao
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
-import org.jellyfin.mobile.books.data.entity.BookProgressEntity
 import org.jellyfin.mobile.books.downloads.BookFiles
 import org.jellyfin.mobile.books.progress.BookProgressSync
 import timber.log.Timber
@@ -24,7 +22,6 @@ enum class BookType { PDF, EPUB, UNKNOWN }
 class BookReaderViewModel(
     app: Application,
     private val progressSync: BookProgressSync,
-    private val bookProgressDao: BookProgressDao,
     private val bookFiles: BookFiles,
     private val bookBookmarkDao: BookBookmarkDao,
 ) : AndroidViewModel(app) {
@@ -134,16 +131,8 @@ class BookReaderViewModel(
         if (clampedIndex == _currentPage.value) return
         _currentPage.value = clampedIndex
         val itemId = currentBookItemId ?: return
-        viewModelScope.launch {
-            bookProgressDao.upsertProgress(
-                BookProgressEntity(
-                    bookItemId = itemId,
-                    pageNumber = clampedIndex,
-                    totalPages = total,
-                    lastUpdated = System.currentTimeMillis(),
-                ),
-            )
-        }
+        // Saved where leaving the book can't cut it off, ahead of the send that leaving starts
+        progressSync.save(itemId, clampedIndex, total)
     }
 
     /** Bookmarks the current position. Auto-labels from the chapter title (EPUB) or page number (PDF). */

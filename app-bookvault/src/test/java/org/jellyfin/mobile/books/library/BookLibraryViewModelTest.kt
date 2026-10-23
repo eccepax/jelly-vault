@@ -149,21 +149,17 @@ class BookLibraryViewModelTest {
     }
 
     @Test
-    fun `places read here are sent before the books load, so other devices' reading comes back with them`() =
-        runBlocking<Unit> {
-            val order = mutableListOf<String>()
-            syncProgress = { order += "sync" }
-            coEvery { getItems() } answers {
-                order += "load"
-                Response(BaseItemDtoQueryResult(items = emptyList(), totalRecordCount = 0, startIndex = 0), 200, emptyMap())
-            }
+    fun `loading the books sends the places read here too, without waiting for them`() = runBlocking<Unit> {
+        var sent = 0
+        sendProgress = { sent++ }
 
-            loadedViewModel()
+        val viewModel = loadedViewModel()
 
-            order shouldBe listOf("sync", "load")
-        }
+        sent shouldBe 1
+        viewModel.filteredBooks.shouldBecome(listOf(dune, emma, ubik))
+    }
 
-    private var syncProgress: suspend () -> Unit = {}
+    private var sendProgress: () -> Unit = {}
 
     private suspend fun loadedViewModel(libraryId: String? = null) = BookLibraryViewModel(
         apiClient = apiClient,
@@ -171,7 +167,7 @@ class BookLibraryViewModelTest {
         bookProgressDao = mockk<BookProgressDao> { coEvery { getAllProgress() } returns emptyList() },
         bookDownloads = bookDownloads,
         libraryId = libraryId,
-        syncProgress = syncProgress,
+        sendProgress = sendProgress,
     ).also { viewModel -> withTimeout(5.seconds) { viewModel.loading.first { !it } } }
 
     /** The filters run through a combine, so they land a moment after the input that changed them. */

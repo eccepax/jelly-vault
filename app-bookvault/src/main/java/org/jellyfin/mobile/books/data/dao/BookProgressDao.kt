@@ -23,4 +23,8 @@ interface BookProgressDao {
     /** Marks the place saved at [lastUpdated] as sent, unless a newer one has been saved since. */
     @Query("UPDATE book_progress SET pendingSync = 0 WHERE bookItemId = :bookItemId AND lastUpdated = :lastUpdated")
     suspend fun markSent(bookItemId: String, lastUpdated: Long)
+
+    /** Forgets every place, as the places here are the signed-in account's. */
+    @Query("DELETE FROM book_progress")
+    suspend fun deleteAll()
 }

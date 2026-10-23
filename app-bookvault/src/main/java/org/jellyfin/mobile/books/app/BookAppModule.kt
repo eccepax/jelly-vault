@@ -19,22 +19,16 @@ val bookAppModule = module {
     single { BookAppPreferences(androidApplication()) }
     single<AppPreferences> { get<BookAppPreferences>() }
     single { ImageLoader(androidApplication()) }
-    // Sends from a scope of its own, so leaving the reader doesn't cut a send off
+    // Saves and sends from a scope of its own, so leaving the reader doesn't cut them off
     single {
         BookProgressSync(get(), JellyfinBookProgressServer(get()), CoroutineScope(SupervisorJob() + Dispatchers.IO))
     }
 
     // ViewModels
     viewModel { (libraryId: String?) ->
-        BookLibraryViewModel(get(), get(), get<BookProgressDao>(), get(), libraryId, get<BookProgressSync>()::sync)
+        BookLibraryViewModel(get(), get(), get<BookProgressDao>(), get(), libraryId, get<BookProgressSync>()::sendSoon)
     }
     viewModel {
-        BookReaderViewModel(
-            androidApplication(),
-            get<BookProgressSync>(),
-            get<BookProgressDao>(),
-            get(),
-            get<BookBookmarkDao>(),
-        )
+        BookReaderViewModel(androidApplication(), get<BookProgressSync>(), get(), get<BookBookmarkDao>())
     }
 }
