@@ -69,6 +69,7 @@ class BookReaderFragmentTest {
         every { readerViewModel.error } returns MutableStateFlow(null)
         every { readerViewModel.nightMode } returns MutableStateFlow(false)
         every { readerViewModel.bookmarks } returns MutableStateFlow(emptyList())
+        every { readerViewModel.chosenTocEntry } returns MutableStateFlow(null)
         every { readerViewModel.getTableOfContents() } returns emptyList()
 
         every { appPreferences.epubFontScale } returns 1.0f
@@ -284,7 +285,7 @@ class BookReaderFragmentTest {
             composeRule.onNodeWithText("Chapter One").performClick()
         }
 
-        verify { readerViewModel.setPage(1) }
+        verify { readerViewModel.openTocEntry(EpubTocEntry("Chapter One", 1)) }
     }
 
     @Test

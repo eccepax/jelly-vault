@@ -10,7 +10,23 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 /** One entry in an EPUB's table of contents — a human-readable [title] and the spine chapter it opens. */
-data class EpubTocEntry(val title: String, val spineIndex: Int)
+/**
+ * A table-of-contents entry: its chapter's file ([spineIndex]), and where in that file it starts
+ * ([anchor], the element id after the link's `#`), as several chapters can share one file.
+ */
+data class EpubTocEntry(val title: String, val spineIndex: Int, val anchor: String? = null)
+
+/**
+ * The index in [toc] of the entry being read in the file at [spineIndex]: [chosen] from the contents
+ * while still in its file, else the file's first entry, else the entry before it (a part's title
+ * page or a chapter's continuation file has none of its own). -1 before the first entry.
+ */
+internal fun tocEntryAt(toc: List<EpubTocEntry>, spineIndex: Int, chosen: EpubTocEntry?): Int {
+    val chosenHere = chosen?.takeIf { it.spineIndex == spineIndex }?.let(toc::indexOf) ?: -1
+    if (chosenHere >= 0) return chosenHere
+    val first = toc.indexOfFirst { it.spineIndex == spineIndex }
+    return if (first >= 0) first else toc.indexOfLast { it.spineIndex < spineIndex }
+}
 
 /**
  * The title for the spine item at [spineIndex]: the closest table-of-contents entry at or before it,

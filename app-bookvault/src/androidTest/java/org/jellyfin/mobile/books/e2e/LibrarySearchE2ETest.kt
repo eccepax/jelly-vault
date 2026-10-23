@@ -19,11 +19,13 @@ import org.junit.Test
  * trip. Searches for a word from one fixture book's title rather than a
  * generic term, and checks the library showed other books first, so the list narrowing isn't luck.
  */
+@BrowseArea
 class LibrarySearchE2ETest : LoggedInE2ETest() {
 
     private val otherBooks = hasTestTag(VaultTestTags.LIBRARY_ITEM) and
         !hasText(QUERY, substring = true, ignoreCase = true)
 
+    @Smoke
     @Test
     fun searchingFiltersTheLibraryList() {
         loginAndWaitForLibrary()

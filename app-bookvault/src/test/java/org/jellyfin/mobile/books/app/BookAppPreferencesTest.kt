@@ -41,6 +41,17 @@ class BookAppPreferencesTest {
 
     // --- EPUB text customization (global, not per-book/per-library) ---------------------------
 
+    // --- downloads ------------------------------------------------------------------------------
+
+    @Test
+    fun `books download on any network unless the user asks for Wi-Fi only`() {
+        preferences.downloadOnWifiOnly shouldBe false
+
+        preferences.downloadOnWifiOnly = true
+
+        BookAppPreferences(context).downloadOnWifiOnly shouldBe true
+    }
+
     @Test
     fun `epubFontScale defaults to 1_0`() {
         preferences.epubFontScale shouldBe 1.0f

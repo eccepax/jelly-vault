@@ -183,6 +183,8 @@ class EpubRendererTest {
         val toc = renderer.getTableOfContents()
         toc.map { it.title } shouldBe listOf("Prologue", "Chapter One")
         toc.map { it.spineIndex } shouldBe listOf(0, 1)
+        // Where in its file each starts: several chapters can share one
+        toc.map { it.anchor } shouldBe listOf(null, "top")
     }
 
     @Test
@@ -360,7 +362,7 @@ class EpubRendererTest {
     }
 
     @Test
-    fun `TOC hrefs are URL-decoded`() = runTest {
+    fun `TOC hrefs are URL-decoded, their anchors too`() = runTest {
         val opfWithNav = """
             <?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
@@ -377,7 +379,7 @@ class EpubRendererTest {
             <?xml version="1.0"?>
             <html xmlns:epub="http://www.idpf.org/2007/ops">
                 <body>
-                    <nav epub:type="toc"><ol><li><a href="chapter%201.xhtml#start">Prologue</a></li></ol></nav>
+                    <nav epub:type="toc"><ol><li><a href="chapter%201.xhtml#st%C3%A4rt">Prologue</a></li></ol></nav>
                 </body>
             </html>
         """.trimIndent()
@@ -391,7 +393,8 @@ class EpubRendererTest {
         val renderer = EpubRenderer(app)
         renderer.openFile(epub, "book-encoded-toc")
 
-        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0))
+        // The anchor is the element's id itself: the reader encodes it once when opening the chapter
+        renderer.getTableOfContents() shouldBe listOf(EpubTocEntry("Prologue", 0, anchor = "stärt"))
     }
 
     @Test

@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.music.account
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
@@ -28,7 +25,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.Choice
+import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.InlineConfirm
 import org.jellyfin.mobile.common.ui.components.SecondaryText
 import org.jellyfin.mobile.common.ui.components.SettingsNote
@@ -44,10 +41,10 @@ import org.jellyfin.mobile.common.ui.components.SettingsRadioGroup
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.components.bringIntoViewWhenShown
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.StreamingQuality
-import org.jellyfin.mobile.music.ui.formatBytes
 import org.koin.compose.viewmodel.koinViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
@@ -123,7 +120,6 @@ private fun Note(text: Int) {
 
 @Composable
 private fun DownloadsSection(state: SettingsUiState, actions: DownloadSettingsActions) {
-    var confirmingRemoveAll by rememberSaveable { mutableStateOf(false) }
     SectionHeader(R.string.settings_downloads)
     Text(
         stringResource(R.string.download_quality),
@@ -132,39 +128,13 @@ private fun DownloadsSection(state: SettingsUiState, actions: DownloadSettingsAc
     )
     Note(R.string.download_quality_note)
     QualityOptions(state.downloadQuality, actions.onQuality)
-    SwitchRow(R.string.download_wifi_only, state.downloadOnWifiOnly, actions.onWifiOnly)
+    SwitchRow(CommonR.string.vault_pref_download_wifi_only, state.downloadOnWifiOnly, actions.onWifiOnly)
     SwitchRow(
         CommonR.string.pref_remove_downloads_on_sign_out,
         state.removeDownloadsOnSignOut,
         actions.onRemoveOnSignOut,
     )
-    if (state.downloadBytes == 0L) {
-        Text(stringResource(R.string.nothing_downloaded), modifier = Modifier.padding(SettingsTextPadding))
-        return
-    }
-    Text(
-        stringResource(R.string.downloads_use, formatBytes(state.downloadBytes)),
-        modifier = Modifier.padding(SettingsTextPadding),
-    )
-    if (confirmingRemoveAll) {
-        InlineConfirm(
-            message = stringResource(R.string.remove_all_confirm),
-            confirmLabel = stringResource(R.string.remove_all_yes),
-            onConfirm = {
-                confirmingRemoveAll = false
-                actions.onRemoveAll()
-            },
-            onCancel = { confirmingRemoveAll = false },
-            modifier = Modifier.bringIntoViewWhenShown(),
-        )
-    } else {
-        OutlinedButton(
-            onClick = { confirmingRemoveAll = true },
-            modifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small),
-        ) {
-            Text(stringResource(R.string.remove_all_downloads))
-        }
-    }
+    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAll)
 }
 
 /** A setting that's on or off: the whole row toggles it. */
@@ -248,13 +218,4 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
             onRemoveAll = viewModel::removeAllDownloads,
         ),
     )
-}
-
-/** A confirmation opened near the bottom would otherwise appear below the fold, buttons unseen. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun Modifier.bringIntoViewWhenShown(): Modifier {
-    val requester = remember { BringIntoViewRequester() }
-    LaunchedEffect(Unit) { requester.bringIntoView() }
-    return bringIntoViewRequester(requester)
 }

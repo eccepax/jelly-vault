@@ -84,8 +84,15 @@ object VaultFixtures {
     /** E-books. The first by title is a PDF. */
     object Books {
         const val FIRST_BY_TITLE_PDF = "Aardvark Atlas (Test PDF)"
+        const val FIRST_BY_TITLE_PDF_PAGES = 3
 
-        /** Matches one book and not the others. */
+        /** An EPUB with a table of contents and many chapters; [SEARCH_TERM] matches it alone. */
+        const val EPUB = "Pride and Prejudice"
+
+        /** Another EPUB, to read while [EPUB] isn't. */
+        const val OTHER_EPUB = "The Time Machine"
+
+        /** Matches one book ([EPUB]) and not the others. */
         const val SEARCH_TERM = "Pride"
     }
 

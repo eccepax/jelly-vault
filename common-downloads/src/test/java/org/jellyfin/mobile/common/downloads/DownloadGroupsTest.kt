@@ -193,6 +193,20 @@ class DownloadGroupsTest {
     }
 
     @Test
+    fun `a group waiting for wi-fi counts as something to remove, though it takes no space yet`() = runTest {
+        val groups = groups()
+        groups.hasDownloads.first() shouldBe false
+
+        groups.save("album", listOf("a"))
+        downloads.set("a", State.WAITING)
+
+        groups.bytesUsed.first() shouldBe 0L
+        groups.hasDownloads.first() shouldBe true
+        groups.removeAll()
+        groups.hasDownloads.first() shouldBe false
+    }
+
+    @Test
     fun `removing everything deletes every item, even ones no group knows`() = runTest {
         val groups = groups()
         groups.save("album", listOf("a"))

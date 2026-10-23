@@ -18,6 +18,8 @@ import org.jellyfin.mobile.books.reader.BookReaderViewModel
 import org.jellyfin.mobile.books.reader.BookType
 import org.jellyfin.mobile.books.settings.BookSettingsFragment
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.downloads.DownloadSettings
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
@@ -99,6 +101,7 @@ class BookVaultScreenshotTest {
             every { error } returns MutableStateFlow(null)
             every { nightMode } returns MutableStateFlow(true)
             every { bookmarks } returns MutableStateFlow(emptyList())
+            every { chosenTocEntry } returns MutableStateFlow(null)
             every { getChapterTitle(6) } returns "Introduction"
         }
         startKoin {
@@ -123,6 +126,7 @@ class BookVaultScreenshotTest {
                 module {
                     single { preferences }
                     single { ClientInfo("BookVault", "1.0.0") }
+                    single<DownloadSettings> { FakeDownloadSettings().apply { bytesUsed.value = 32_400_000L } }
                     viewModel { mockk<MainViewModel>(relaxed = true) }
                 },
             )

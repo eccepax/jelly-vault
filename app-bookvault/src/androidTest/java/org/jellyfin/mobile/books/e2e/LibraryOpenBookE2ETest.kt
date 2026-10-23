@@ -15,8 +15,10 @@ import org.junit.Test
  * exercises the `BookType.PDF` / `PdfRendererCore` path end to end — a real download, a real
  * `PdfRenderer` page render, not just a UI-state check.
  */
+@ReadingArea
 class LibraryOpenBookE2ETest : LoggedInE2ETest() {
 
+    @Smoke
     @Test
     fun openingALibraryItemRendersItInTheReader() {
         loginAndWaitForLibrary()

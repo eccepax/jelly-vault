@@ -28,6 +28,7 @@ import org.jellyfin.mobile.books.reader.TextSettingActions
 import org.jellyfin.mobile.books.reader.TextSettingPicker
 import org.jellyfin.mobile.books.reader.TextSettingRows
 import org.jellyfin.mobile.common.ui.components.AboutSettings
+import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutSetting
@@ -35,12 +36,17 @@ import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.common.R as CommonR
 
-/** What the settings screen shows: the reading settings every EPUB uses, and the account's. */
+/** What the settings screen shows: the reading settings every EPUB uses, downloads, and the account's. */
 data class BookSettingsState(
     val fontScale: Float,
     val fontFamily: EpubFontFamily,
     val lineSpacing: Float,
     val removeDownloadsOnSignOut: Boolean,
+    val downloadOnWifiOnly: Boolean,
+    /** Space the downloaded books take. */
+    val downloadBytes: Long = 0L,
+    /** Anything to remove, even books waiting for Wi-Fi that take no space yet. */
+    val hasDownloads: Boolean = false,
     /** For About: the name as the bug form lists it, and the version. */
     val appName: String,
     val appVersion: String,
@@ -55,6 +61,8 @@ data class BookSettingsActions(
     val onFontFamily: (EpubFontFamily) -> Unit = {},
     val onLineSpacing: (Float) -> Unit = {},
     val onRemoveDownloadsOnSignOut: (Boolean) -> Unit = {},
+    val onWifiOnly: (Boolean) -> Unit = {},
+    val onRemoveAllDownloads: () -> Unit = {},
     val onSignOut: () -> Unit = {},
 )
 
@@ -82,6 +90,8 @@ fun BookSettingsScreen(state: BookSettingsState, actions: BookSettingsActions) {
                 SettingsSectionHeader(stringResource(R.string.pref_category_reading))
                 TextSettingRows(state.textSettings) { picker = it }
                 Divider()
+                DownloadsSection(state, actions)
+                Divider()
                 AccountSection(state.removeDownloadsOnSignOut, actions)
                 Divider()
                 AboutSettings(appName = state.appName, version = state.appVersion)
@@ -98,15 +108,27 @@ fun BookSettingsScreen(state: BookSettingsState, actions: BookSettingsActions) {
     }
 }
 
+/** As TuneVault's: Wi-Fi only, what signing out does with downloads, and the space they take. */
 @Composable
-private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSettingsActions) {
-    SettingsSectionHeader(stringResource(R.string.pref_category_account))
+private fun DownloadsSection(state: BookSettingsState, actions: BookSettingsActions) {
+    SettingsSectionHeader(stringResource(R.string.pref_category_downloads))
+    SettingsSwitchRow(
+        label = stringResource(CommonR.string.vault_pref_download_wifi_only),
+        checked = state.downloadOnWifiOnly,
+        onCheckedChange = actions.onWifiOnly,
+    )
     SettingsSwitchRow(
         label = stringResource(CommonR.string.pref_remove_downloads_on_sign_out),
         summary = stringResource(CommonR.string.pref_remove_downloads_on_sign_out_summary),
-        checked = removeDownloadsOnSignOut,
+        checked = state.removeDownloadsOnSignOut,
         onCheckedChange = actions.onRemoveDownloadsOnSignOut,
     )
+    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAllDownloads)
+}
+
+@Composable
+private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSettingsActions) {
+    SettingsSectionHeader(stringResource(R.string.pref_category_account))
     SignOutSetting(
         label = stringResource(R.string.pref_sign_out),
         confirmMessage = stringResource(R.string.sign_out_confirm),

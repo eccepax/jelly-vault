@@ -39,6 +39,8 @@ class DownloadRepository(
 
     val bytesUsed: Flow<Long> = groups.bytesUsed
 
+    val hasDownloads: Flow<Boolean> = groups.hasDownloads
+
     override val statuses: Flow<Map<String, GroupStatus>> = groups.statuses
 
     override fun status(collectionId: String): Flow<GroupStatus> = groups.status(collectionId)

@@ -68,6 +68,8 @@ data class BookReaderUiState(
     val chapterCount: Int = 0,
     val chapterTitle: String? = null,
     val tableOfContents: List<EpubTocEntry> = emptyList(),
+    /** The contents entry last chosen, while its chapter's file is open (see [tocEntryAt]). */
+    val chosenTocEntry: EpubTocEntry? = null,
     val bookmarks: List<BookBookmarkEntity> = emptyList(),
     val textSettings: EpubTextSettings = EpubTextSettings(),
 )
@@ -79,6 +81,8 @@ data class BookReaderActions(
     val onToggleNightMode: () -> Unit = {},
     /** Goes to a chapter (EPUB) or page (PDF), from 0. */
     val onGoTo: (Int) -> Unit = {},
+    /** Goes to an EPUB's contents entry, at the place in its file where it starts. */
+    val onOpenTocEntry: (EpubTocEntry) -> Unit = {},
     val onFontScale: (Float) -> Unit = {},
     val onFontFamily: (EpubFontFamily) -> Unit = {},
     val onLineSpacing: (Float) -> Unit = {},
@@ -113,7 +117,7 @@ fun BookReaderScreen(state: BookReaderUiState, actions: BookReaderActions, pages
             dialog = null
             textSetting = it
         }
-        ReaderDialog.CONTENTS -> ContentsDialog(state, actions.onGoTo, dismiss)
+        ReaderDialog.CONTENTS -> ContentsDialog(state, actions, dismiss)
         ReaderDialog.ADD_BOOKMARK -> TextFieldDialog(
             title = stringResource(R.string.add_bookmark_title),
             label = stringResource(R.string.add_bookmark_note_hint),
@@ -240,7 +244,7 @@ private fun TextSettingsDialog(settings: EpubTextSettings, onDismiss: () -> Unit
 
 /** An EPUB's chapters, marking the one being read; a PDF asks for a page instead. */
 @Composable
-private fun ContentsDialog(state: BookReaderUiState, onGoTo: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun ContentsDialog(state: BookReaderUiState, actions: BookReaderActions, onDismiss: () -> Unit) {
     when (state.bookType) {
         BookType.EPUB -> if (state.tableOfContents.isEmpty()) {
             NoticeDialog(
@@ -250,13 +254,11 @@ private fun ContentsDialog(state: BookReaderUiState, onGoTo: (Int) -> Unit, onDi
             )
         } else {
             val toc = state.tableOfContents
-            // The entry being read is the last that starts at or before the current chapter
-            val current = toc.indexOfLast { it.spineIndex <= state.chapter }
             ChoiceDialog(
                 title = stringResource(R.string.contents_title),
                 choices = toc.mapIndexed { index, entry -> Choice(index, entry.title) },
-                selected = current,
-                onSelect = { onGoTo(toc[it].spineIndex) },
+                selected = tocEntryAt(toc, state.chapter, state.chosenTocEntry),
+                onSelect = { actions.onOpenTocEntry(toc[it]) },
                 onDismiss = onDismiss,
             )
         }
@@ -265,7 +267,11 @@ private fun ContentsDialog(state: BookReaderUiState, onGoTo: (Int) -> Unit, onDi
             label = stringResource(R.string.go_to_page_hint),
             confirmLabel = stringResource(R.string.go),
             onConfirm = { typed ->
-                typed.trim().toIntOrNull()?.let { page -> onGoTo((page - 1).coerceIn(0, state.chapterCount - 1)) }
+                typed.trim().toIntOrNull()?.let { page ->
+                    actions.onGoTo(
+                        (page - 1).coerceIn(0, state.chapterCount - 1),
+                    )
+                }
             },
             onDismiss = onDismiss,
             keyboardType = KeyboardType.Number,
