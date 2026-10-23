@@ -9,10 +9,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.downloads.DownloadRequests
@@ -55,38 +59,43 @@ fun LibraryRoute(
     }
     ReloadWhenPlaybackStops(viewModel, playerViewModel)
 
-    val opener = ItemOpener(viewModel, scope) { queue -> onPlay(queue.toPlayOptions()) }
-    val menus = ItemMenus(context, viewModel, downloads, scope) { itemMenu = it }
-    LibraryScreen(
-        state = libraryState(viewModel, playerViewModel, itemMenu) { coverUrl(it, coverSize) },
-        actions = LibraryActions(
+    // Made once, not on each recomposition (each change in playback), so the list isn't redrawn for them
+    val play by rememberUpdatedState(onPlay)
+    val openPlayer by rememberUpdatedState(onOpenPlayer)
+    val openSettings by rememberUpdatedState(onOpenSettings)
+    val cover = remember(coverUrl, coverSize) { { id: UUID -> coverUrl(id, coverSize) } }
+    val actions = remember(context, viewModel, playerViewModel, downloads, scope, cover) {
+        val opener = ItemOpener(viewModel, scope) { queue -> play(queue.toPlayOptions()) }
+        val menus = ItemMenus(context, viewModel, downloads, scope) { itemMenu = it }
+        LibraryActions(
             onUp = { viewModel.goUp() },
             onQueryChange = viewModel::setFilterQuery,
             onSort = viewModel::setSortOption,
             onDownloadedOnly = { viewModel.showDownloadedOnly.value = it },
             onShowHidden = { viewModel.showHiddenItems.value = it },
-            onSettings = onOpenSettings,
+            onSettings = { openSettings() },
             onRefresh = { viewModel.refresh(force = true) },
             onOpen = opener::open,
             onLongPress = menus::open,
             onDismissMenu = { itemMenu = null },
-            onOpenPlayer = onOpenPlayer,
+            onOpenPlayer = { openPlayer() },
             onPlayPause = playerViewModel::togglePlayPause,
             onStop = playerViewModel::stop,
-            coverUrl = { coverUrl(it, coverSize) },
-        ),
-    )
+            coverUrl = cover,
+        )
+    }
+    LibraryScreen(state = libraryState(viewModel, playerViewModel, canGoUp, itemMenu, cover), actions = actions)
 }
 
 @Composable
 private fun libraryState(
     viewModel: LibraryViewModel,
     playerViewModel: AudiobookPlayerViewModel,
+    canGoUp: Boolean,
     itemMenu: ItemMenu?,
     coverUrl: (UUID) -> String?,
 ): LibraryUiState {
     val title by viewModel.title.collectAsState()
-    val canGoUp by viewModel.canGoUp.collectAsState()
     val items by viewModel.items.collectAsState()
     val loading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -117,13 +126,16 @@ private fun libraryState(
     )
 }
 
-/** Listening moves resume positions on, so once a book stops the list is loaded again. */
+/**
+ * Listening moves resume positions on, so once a book stops the list is loaded again. Whether there
+ * was a book is saved, so one that stopped while the library was covered (by the player) is still
+ * seen to have, once it's back.
+ */
 @Composable
 private fun ReloadWhenPlaybackStops(viewModel: LibraryViewModel, playerViewModel: AudiobookPlayerViewModel) {
+    var hadBook by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(viewModel, playerViewModel) {
-        var hadBook = false
-        playerViewModel.state.collect { playback ->
-            val hasBook = playback.currentTrack != null
+        playerViewModel.state.map { it.currentTrack != null }.distinctUntilChanged().collect { hasBook ->
             if (hadBook && !hasBook) viewModel.onPlaybackStopped()
             hadBook = hasBook
         }

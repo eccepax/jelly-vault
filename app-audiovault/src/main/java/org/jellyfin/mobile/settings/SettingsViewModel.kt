@@ -3,14 +3,19 @@ package org.jellyfin.mobile.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.exoplayer.offline.DownloadManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.downloads.applyDownloadMethod
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.sdk.model.ClientInfo
+import timber.log.Timber
 
 /** AudioVault's settings: each change is saved, then shown by reading the settings back. */
 class SettingsViewModel(
@@ -28,6 +33,11 @@ class SettingsViewModel(
 
     /** Becomes true once signed out; the app then starts over at sign-in. */
     val signedOut: StateFlow<Boolean> = _signedOut.asStateFlow()
+
+    private val _signOutFailures = Channel<Unit>(Channel.CONFLATED)
+
+    /** Each sign out that failed, to say so; signing out can be tried again. */
+    val signOutFailures: Flow<Unit> = _signOutFailures.receiveAsFlow()
 
     private var signingOut = false
 
@@ -61,8 +71,16 @@ class SettingsViewModel(
         if (signingOut) return
         signingOut = true
         viewModelScope.launch {
-            signOut.invoke()
-            _signedOut.value = true
+            try {
+                signOut.invoke()
+                _signedOut.value = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Timber.e(e, "Couldn't sign out")
+                signingOut = false
+                _signOutFailures.send(Unit)
+            }
         }
     }
 

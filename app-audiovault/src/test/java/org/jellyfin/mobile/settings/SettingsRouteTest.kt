@@ -25,6 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import org.jellyfin.mobile.common.R as CommonR
 
 /** Settings as AudioVault shows them: each choice is saved where the app reads it. */
@@ -41,6 +42,7 @@ class SettingsRouteTest {
     private val playback = FakeAudiobookController()
     private val signingOut = CompletableDeferred<Unit>()
     private var signOuts = 0
+    private var signOutFails = false
     private var backs = 0
     private var signedOut = 0
 
@@ -51,6 +53,7 @@ class SettingsRouteTest {
             playback = playback,
             signOut = {
                 signOuts++
+                if (signOutFails) error("Couldn't forget the account")
                 signingOut.await()
             },
             app = ClientInfo("AudioVault", "9.9.9"),
@@ -150,5 +153,26 @@ class SettingsRouteTest {
         composeRule.onNodeWithContentDescription(context.getString(CommonR.string.vault_back)).performClick()
 
         backs shouldBe 1
+    }
+
+    @Test
+    fun `a sign out that fails says so, and can be tried again`() {
+        signOutFails = true
+        show()
+        click(R.string.pref_sign_out)
+        click(R.string.sign_out_yes)
+        composeRule.waitForIdle()
+
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(R.string.sign_out_failed)
+        signedOut shouldBe 0
+
+        signOutFails = false
+        signingOut.complete(Unit)
+        click(R.string.pref_sign_out)
+        click(R.string.sign_out_yes)
+        composeRule.waitForIdle()
+
+        signOuts shouldBe 2
+        signedOut shouldBe 1
     }
 }

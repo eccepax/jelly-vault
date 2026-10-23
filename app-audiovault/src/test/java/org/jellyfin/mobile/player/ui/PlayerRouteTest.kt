@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.core.view.children
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
@@ -115,6 +116,18 @@ class PlayerRouteTest {
         show()
 
         tap(CommonR.string.vault_back)
+
+        backs shouldBe 1
+    }
+
+    @Test
+    fun `back tapped as the book stops goes back once`() {
+        controller.playing(book)
+        show()
+
+        tap(CommonR.string.vault_back)
+        controller.stop()
+        idle()
 
         backs shouldBe 1
     }
@@ -292,6 +305,22 @@ class PlayerRouteTest {
         controller.playing(book)
         show(playerViewModel(controller, holdToSpeedUp = false))
 
+        composeRule.onNodeWithContentDescription(string(R.string.player_fast_forward)).performTouchInput { longClick() }
+
+        controller.commands.none { it.startsWith("speed") } shouldBe true
+    }
+
+    /** As when the setting's changed with the app in the background, the player screen left open. */
+    @Test
+    fun `hold to speed up turned off while the screen's away is followed once it's back`() {
+        var holdToSpeedUp = true
+        controller.playing(book)
+        show(playerViewModel(controller, holdToSpeedUpNow = { holdToSpeedUp }))
+
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        holdToSpeedUp = false
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        idle()
         composeRule.onNodeWithContentDescription(string(R.string.player_fast_forward)).performTouchInput { longClick() }
 
         controller.commands.none { it.startsWith("speed") } shouldBe true

@@ -47,6 +47,10 @@ class LibraryNavigationTest {
             artistDetail = { artistId, onBack, browse ->
                 Column {
                     Button(onClick = onBack) { Text("Artist $artistId") }
+                    Button(onClick = {
+                        onBack()
+                        onBack()
+                    }) { Text("Leave twice") }
                     Button(onClick = { browse.openAlbum("damn") }) { Text("Open Damn") }
                 }
             },
@@ -81,6 +85,19 @@ class LibraryNavigationTest {
         target shouldBe null
         systemBack()
         composeRule.onNodeWithText("Home").assertIsDisplayed()
+    }
+
+    /** A page's back can be reached twice before the screen redraws (a double tap): it closes that page only. */
+    @Test
+    fun `a page leaving twice at once goes back once`() {
+        composeRule.setContent(content)
+
+        composeRule.onNodeWithText("Open Kendrick").performClick()
+        composeRule.onNodeWithText("Open Damn").performClick()
+        systemBack()
+        composeRule.onNodeWithText("Leave twice").performClick()
+
+        composeRule.onNodeWithText("Open Purple Bird").assertIsDisplayed()
     }
 
     @Test

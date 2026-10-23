@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import org.jellyfin.mobile.R
@@ -37,7 +38,8 @@ import org.koin.compose.viewmodel.koinViewModel
 fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinViewModel()) {
     val context = LocalContext.current
     val goBack by rememberUpdatedState(onBack)
-    // Once: a book that can't start can stop the one playing too, and each would leave
+    // Once: a book that can't start can stop the one playing too, and back can be tapped as the
+    // book stops; each would leave
     var left by remember { mutableStateOf(false) }
     val leave = {
         if (!left) {
@@ -46,12 +48,12 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
         }
     }
     val playback by viewModel.state.collectAsState()
-    val presence by viewModel.presence.collectAsState()
+    val presence by viewModel.presence.collectAsState(viewModel.presenceNow)
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
     val progress = rememberProgress(viewModel)
-    val holdToSpeedUp = remember(viewModel) { viewModel.holdToSpeedUp }
+    val holdToSpeedUp = rememberHoldToSpeedUp(viewModel)
 
     LeaveWhenStartFails(viewModel) { leave() }
     LeaveWhenStopped(presence) { leave() }
@@ -71,7 +73,7 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     PlayerScreen(
         state,
         PlayerActions(
-            onBack = onBack,
+            onBack = leave,
             onPlayPause = viewModel::togglePlayPause,
             onRewind = viewModel::rewind,
             onFastForward = viewModel::fastForward,
@@ -98,6 +100,17 @@ private fun rememberProgress(viewModel: AudiobookPlayerViewModel): PlayerProgres
         }
     }
     return progress
+}
+
+/** The "Hold to speed up" setting, read again each time the screen's back in front: it may have changed meanwhile. */
+@Composable
+private fun rememberHoldToSpeedUp(viewModel: AudiobookPlayerViewModel): Boolean {
+    var holdToSpeedUp by remember(viewModel) { mutableStateOf(viewModel.holdToSpeedUp) }
+    LifecycleResumeEffect(viewModel) {
+        holdToSpeedUp = viewModel.holdToSpeedUp
+        onPauseOrDispose {}
+    }
+    return holdToSpeedUp
 }
 
 /**

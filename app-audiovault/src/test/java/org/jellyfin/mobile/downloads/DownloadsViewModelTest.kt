@@ -25,6 +25,7 @@ class DownloadsViewModelTest {
     private val removed = mutableListOf<String>()
     private var repairs = 0
     private val repairing = CompletableDeferred<Unit>()
+    private var repairFails = false
 
     private val viewModel by lazy {
         DownloadsViewModel(
@@ -33,6 +34,7 @@ class DownloadsViewModelTest {
             removeTrack = { removed += it },
             repairDownloads = {
                 repairs++
+                if (repairFails) error("Server unreachable")
                 repairing.await()
             },
         )
@@ -78,5 +80,16 @@ class DownloadsViewModelTest {
         viewModel.repairOnce()
 
         repairs shouldBe 1
+    }
+
+    @Test
+    fun `a repair that fails runs again when next asked`() {
+        repairFails = true
+        viewModel.repairOnce()
+        repairFails = false
+
+        viewModel.repairOnce()
+
+        repairs shouldBe 2
     }
 }

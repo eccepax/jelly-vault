@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.MainViewModel
+import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.ui.VaultRoot
 import org.jellyfin.mobile.common.ui.resolveRootScreen
@@ -34,6 +35,8 @@ fun AudioVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences)
     // Worked out as VaultRoot does, which shows the matching screen at home
     val serverState by mainViewModel.serverState.collectAsState()
     val rootScreen = resolveRootScreen(serverState, appPreferences.currentUserId)
+    val downloads: DownloadsViewModel = koinViewModel()
+    RepairDownloadsOnceThereIsAServer(serverState, downloads::repairOnce)
     fun play(navigator: Navigator): (PlayOptions) -> Unit = { options ->
         playerViewModel.play(options)
         navigator.openPlayer()
@@ -48,7 +51,13 @@ fun AudioVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences)
                 connectActions = {
                     StyledTextButton(text = stringResource(R.string.view_downloads), onClick = navigator.openDownloads)
                 },
-            ) { SignedIn(navigator, play(navigator)) }
+            ) {
+                LibraryRoute(
+                    onPlay = play(navigator),
+                    onOpenPlayer = navigator.openPlayer,
+                    onOpenSettings = navigator.openSettings,
+                )
+            }
         },
         player = { onBack -> PlayerRoute(onBack = onBack, viewModel = playerViewModel) },
         downloads = { onBack, navigator -> DownloadsRoute(onBack = onBack, onPlay = play(navigator)) },
@@ -56,10 +65,12 @@ fun AudioVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences)
     )
 }
 
-/** The library, kept whole: downloaded tracks whose files have gone are fetched again, once. */
+/**
+ * Once there's a server, signed in or not (the downloads work signed out too), downloaded tracks
+ * whose files have gone are fetched again: [repair] is asked each time a server's there anew.
+ */
 @Composable
-private fun SignedIn(navigator: Navigator, play: (PlayOptions) -> Unit) {
-    val downloads: DownloadsViewModel = koinViewModel()
-    LaunchedEffect(downloads) { downloads.repairOnce() }
-    LibraryRoute(onPlay = play, onOpenPlayer = navigator.openPlayer, onOpenSettings = navigator.openSettings)
+internal fun RepairDownloadsOnceThereIsAServer(serverState: ServerState, repair: () -> Unit) {
+    val available = serverState is ServerState.Available
+    LaunchedEffect(available) { if (available) repair() }
 }

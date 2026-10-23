@@ -1,9 +1,5 @@
 package org.jellyfin.mobile.downloads
 
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,10 +8,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.exoplayer.offline.DownloadManager
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.common.ui.components.Choice
+import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.rememberAskForNotificationsOnce
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -78,22 +75,29 @@ fun rememberDownloadRequests(
     }
 }
 
-/** Asked before the first download: it must be answered, there's no download without it. */
+/**
+ * Asked before the first download, offering what the settings do: it must be answered (dismissing
+ * it does nothing), there's no download without it.
+ */
 @Composable
 private fun ChooseNetwork(onChoose: (Int) -> Unit) {
-    AlertDialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-        title = { Text(stringResource(R.string.network_title)) },
-        text = { Text(stringResource(R.string.network_message)) },
-        confirmButton = {
-            TextButton(onClick = { onChoose(DownloadMethod.WIFI_ONLY) }) { Text(stringResource(R.string.wifi_only)) }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = { onChoose(DownloadMethod.MOBILE_DATA) },
-            ) { Text(stringResource(R.string.mobile_data)) }
-        },
-        backgroundColor = MaterialTheme.colors.surface,
+    ChoiceDialog(
+        title = stringResource(R.string.network_title),
+        message = stringResource(R.string.network_message),
+        choices = downloadNetworks(),
+        selected = null,
+        onSelect = onChoose,
+        onDismiss = {},
     )
 }
+
+/** The networks downloads may use, as the settings and the first download offer them. */
+@Composable
+internal fun downloadNetworks() = listOf(
+    Choice(DownloadMethod.WIFI_ONLY, stringResource(R.string.wifi_only), stringResource(R.string.wifi_only_summary)),
+    Choice(
+        DownloadMethod.MOBILE_DATA,
+        stringResource(R.string.mobile_data),
+        stringResource(R.string.mobile_data_summary),
+    ),
+)
