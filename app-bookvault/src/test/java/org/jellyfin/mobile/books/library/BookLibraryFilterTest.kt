@@ -3,8 +3,10 @@ package org.jellyfin.mobile.books.library
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.books.data.entity.BookProgressEntity
+import org.jellyfin.mobile.common.server.toServerInstant
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.UserItemDataDto
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 import java.util.UUID
@@ -25,6 +27,21 @@ class BookLibraryFilterTest {
         albumArtist = albumArtist,
         dateCreated = dateCreated,
     )
+
+    /** A book as the server sends it: read elsewhere at [lastPlayed], an EPUB (1 s long). */
+    private fun readOnServer(positionTicks: Long, played: Boolean = false, lastPlayed: LocalDateTime = NOON) =
+        book().copy(
+            runTimeTicks = EPUB,
+            userData = UserItemDataDto(
+                playbackPositionTicks = positionTicks,
+                playCount = 0,
+                isFavorite = false,
+                played = played,
+                lastPlayedDate = lastPlayed,
+                key = "k",
+                itemId = UUID.randomUUID(),
+            ),
+        )
 
     private fun progress(bookItemId: String, pageNumber: Int, totalPages: Int) =
         BookProgressEntity(bookItemId = bookItemId, pageNumber = pageNumber, totalPages = totalPages, lastUpdated = 0L)
@@ -88,13 +105,11 @@ class BookLibraryFilterTest {
     }
 
     @Test
-    fun `totalPages of zero with a nonzero pageNumber matches neither IN_PROGRESS nor FINISHED`() {
-        // Edge case: a contradictory progress row (some page reached, but zero known total pages)
-        // falls through every filter except ALL — documents current behavior, not a requirement.
+    fun `a place in a book whose length isn't known yet counts as UNREAD`() {
         val b = book()
         val progress =
             mapOf(requireNotNull(b.id).toString() to progress(b.id.toString(), pageNumber = 5, totalPages = 0))
-        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldBe emptyList()
+        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
         filter(listOf(b), progress, progressFilter = ProgressFilter.IN_PROGRESS) shouldBe emptyList()
         filter(listOf(b), progress, progressFilter = ProgressFilter.FINISHED) shouldBe emptyList()
         filter(listOf(b), progress, progressFilter = ProgressFilter.ALL) shouldContainExactly listOf(b)
@@ -110,6 +125,15 @@ class BookLibraryFilterTest {
     }
 
     @Test
+    fun `a one-page book opened is UNREAD, not FINISHED`() {
+        val b = book()
+        val progress =
+            mapOf(requireNotNull(b.id).toString() to progress(b.id.toString(), pageNumber = 0, totalPages = 1))
+        filter(listOf(b), progress, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
+        filter(listOf(b), progress, progressFilter = ProgressFilter.FINISHED) shouldBe emptyList()
+    }
+
+    @Test
     fun `ALL includes every book regardless of progress`() {
         val unread = book(name = "Unread")
         val finished = book(name = "Finished")
@@ -119,6 +143,56 @@ class BookLibraryFilterTest {
             )
         filter(listOf(unread, finished), progress, progressFilter = ProgressFilter.ALL, sort = BookSortOption.TITLE)
             .shouldContainExactly(listOf(finished, unread))
+    }
+
+    // --- progress from other devices -----------------------------------------------------------
+
+    @Test
+    fun `a book read only on another device is IN_PROGRESS here too`() {
+        val b = readOnServer(positionTicks = 4_000_000L)
+        filter(listOf(b), progressFilter = ProgressFilter.IN_PROGRESS) shouldContainExactly listOf(b)
+        filter(listOf(b), progressFilter = ProgressFilter.UNREAD) shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `a book finished on another device is FINISHED here too`() {
+        val b = readOnServer(positionTicks = 0, played = true)
+        filter(listOf(b), progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
+    }
+
+    @Test
+    fun `a book finished on another device at its last page is FINISHED here too`() {
+        val b = readOnServer(positionTicks = 9_000_000L, played = true)
+        filter(listOf(b), progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
+        filter(listOf(b), progressFilter = ProgressFilter.IN_PROGRESS) shouldBe emptyList()
+    }
+
+    @Test
+    fun `a book read again from the start on another device is UNREAD here too`() {
+        val b = readOnServer(positionTicks = 0, played = false)
+        val finishedHere = mapOf(b.id.toString() to progress(b.id.toString(), 9, 10))
+        filter(listOf(b), finishedHere, progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
+    }
+
+    @Test
+    fun `reading here more recently wins over another device`() {
+        val b = readOnServer(positionTicks = 4_000_000L, lastPlayed = NOON)
+        val later = NOON.toServerInstant().toEpochMilli() + 1
+        val here = mapOf(b.id.toString() to progress(b.id.toString(), 9, 10).copy(lastUpdated = later))
+        filter(listOf(b), here, progressFilter = ProgressFilter.FINISHED) shouldContainExactly listOf(b)
+    }
+
+    @Test
+    fun `reading on another device more recently wins over here`() {
+        val b = readOnServer(positionTicks = 4_000_000L, lastPlayed = NOON)
+        val here = mapOf(b.id.toString() to progress(b.id.toString(), 0, 10))
+        filter(listOf(b), here, progressFilter = ProgressFilter.IN_PROGRESS) shouldContainExactly listOf(b)
+    }
+
+    @Test
+    fun `a position BookVault used to send says nothing about a book`() {
+        val b = readOnServer(positionTicks = 400_000_000L)
+        filter(listOf(b), progressFilter = ProgressFilter.UNREAD) shouldContainExactly listOf(b)
     }
 
     // --- tag filter ------------------------------------------------------------------------------
@@ -182,5 +256,10 @@ class BookLibraryFilterTest {
     fun `availableTags result is sorted`() {
         val books = listOf(book(tags = listOf("zebra", "apple")))
         availableTags(books) shouldContainExactly listOf("apple", "zebra")
+    }
+
+    private companion object {
+        const val EPUB = 10_000_000L
+        val NOON: LocalDateTime = LocalDateTime.of(2026, 10, 21, 12, 0)
     }
 }

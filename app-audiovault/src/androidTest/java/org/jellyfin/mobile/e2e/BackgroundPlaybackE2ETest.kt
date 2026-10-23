@@ -9,6 +9,7 @@ import org.junit.Test
  * A book plays in the playback service, not in the app's screens: closing them (swiping the app
  * away, or Back out of it) leaves it playing. Before the service, the player went with the screen.
  */
+@PlaybackArea
 class BackgroundPlaybackE2ETest : LoggedInE2ETest() {
 
     private val playback: AudiobookPlaybackController get() = koinGet()

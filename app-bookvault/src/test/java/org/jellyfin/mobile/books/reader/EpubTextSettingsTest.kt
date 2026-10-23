@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Pure-function coverage for [EpubTextSettings.toCssText] — kept independent of WebView/Robolectric
- * so the CSS the reader injects (see `EpubChapterAdapter`) is testable directly, the same way
- * `playbackStopPositionTicks` in `BookReaderViewModel` is a free function tested on its own.
+ * so the CSS the reader injects (see `EpubChapterAdapter`) is testable directly.
  */
 class EpubTextSettingsTest {
 

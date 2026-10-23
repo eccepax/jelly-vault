@@ -1,9 +1,7 @@
-package org.jellyfin.mobile.downloads
+package org.jellyfin.mobile.common.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jellyfin.mobile.common.server.toServerDateTime
-import org.jellyfin.mobile.common.server.toServerInstant
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto

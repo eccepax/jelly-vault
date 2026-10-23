@@ -10,22 +10,28 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.downloads.DownloadMethod
 import org.jellyfin.mobile.downloads.DownloadRequests
 import org.jellyfin.mobile.library.LibraryItem
 import org.jellyfin.mobile.library.LibraryRoute
 import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.library.SortOption
 import org.jellyfin.mobile.library.jellyfinCoverUrl
+import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.player.ui.PlayerRoute
 import org.jellyfin.mobile.robolectric.playerViewModel
+import org.jellyfin.mobile.settings.SettingsRoute
+import org.jellyfin.mobile.settings.SettingsViewModel
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.operations.ImageApi
+import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
@@ -100,6 +106,26 @@ class AudioVaultScreenshotTest {
     @Test
     fun player() {
         capture("player") { PlayerRoute(onBack = {}, viewModel = playerViewModel()) }
+    }
+
+    @Test
+    fun settings() {
+        val preferences = mockk<AudioVaultAppPreferences>(relaxed = true).apply {
+            every { exoPlayerAllowPressSpeedUp } returns true
+            every { skipSilenceEnabled } returns false
+            every { libraryGlobalFlattened } returns false
+            every { downloadMethod } returns DownloadMethod.WIFI_ONLY
+            every { removeDownloadsOnSignOut } returns true
+        }
+        val settings = SettingsViewModel(
+            preferences = preferences,
+            downloadManager = mockk(relaxed = true),
+            playback = FakeAudiobookController(),
+            signOut = {},
+            app = ClientInfo(name = "AudioVault", version = "1.0.0"),
+        )
+
+        capture("settings") { SettingsRoute(onBack = {}, onSignedOut = {}, viewModel = settings) }
     }
 
     private fun capture(name: String, screen: @Composable () -> Unit) {

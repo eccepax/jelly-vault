@@ -13,6 +13,7 @@ import org.junit.Test
  * Library toolbar overflow -> Settings -> "Skip silence" switch. Verified via [koinGet] rather than
  * re-opening Settings, so the test checks what playback actually reads.
  */
+@AccountArea
 class SkipSilenceSettingE2ETest : LoggedInE2ETest() {
 
     @Test

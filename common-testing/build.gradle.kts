@@ -26,4 +26,8 @@ dependencies {
     api(libs.androidx.test.rules)
     api(libs.compose.ui.test.junit4)
     implementation(libs.bundles.koin)
+
+    testImplementation(libs.junit.api)
+    testRuntimeOnly(libs.junit.engine)
+    testImplementation(libs.bundles.kotest)
 }

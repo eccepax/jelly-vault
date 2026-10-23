@@ -12,6 +12,7 @@ import org.junit.Test
  * Playback control buttons on the player (`PlayerRoute`), exercised against real audio actually playing
  * from the Vault (see [BaseE2ETest] / [LoggedInE2ETest.startPlaybackFromFirstLibraryItem]).
  */
+@PlaybackArea
 class PlaybackControlsE2ETest : LoggedInE2ETest() {
 
     private fun tap(description: Int) =

@@ -14,6 +14,7 @@ import org.junit.Test
  * so this confirms the choice closes the dialog and playback keeps running afterward. The timer
  * itself is tested in common's SleepTimerTest and AudiobookSleepTimerTargetTest.
  */
+@PlaybackArea
 class SleepTimerE2ETest : LoggedInE2ETest() {
 
     @Test

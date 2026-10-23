@@ -46,6 +46,22 @@ class BookDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `places saved before syncing are kept, waiting to be sent`() {
+        helper.createDatabase(DB, 5).use { db ->
+            db.execSQL(
+                "INSERT INTO book_progress (bookItemId, pageNumber, totalPages, lastUpdated) VALUES ('b1', 12, 300, 7)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(DB, 6, true).use { db ->
+            db.query("SELECT pageNumber, lastUpdated, pendingSync FROM book_progress WHERE bookItemId = 'b1'").use {
+                it.moveToFirst()
+                listOf(it.getInt(0), it.getLong(1), it.getInt(2)) shouldBe listOf(12, 7L, 1)
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test"
     }
