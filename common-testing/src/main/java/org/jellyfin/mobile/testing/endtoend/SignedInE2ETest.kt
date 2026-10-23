@@ -22,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matcher
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.authenticateUserByName
 import org.jellyfin.sdk.api.client.extensions.quickConnectApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
@@ -111,17 +112,22 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
      * Approves [code] as the e2e user, from a separate signed-in device, the way someone would from
      * their phone or the web client's profile page.
      */
-    protected fun approveQuickConnect(code: String) = runBlocking {
-        val approver = koinGet<Jellyfin>().createApi(
-            baseUrl = e2eHostname(),
-            deviceInfo = DeviceInfo("vault-e2e-quickconnect-approver", "e2e"),
-        )
-        val auth = approver.userApi.authenticateUserByName(e2eUsername(), e2ePassword()).content
-        approver.update(accessToken = auth.accessToken)
+    protected fun approveQuickConnect(code: String) {
+        asTestUserElsewhere("vault-e2e-quickconnect-approver") { it.quickConnectApi.authorizeQuickConnect(code) }
+    }
+
+    /**
+     * Runs [block] signed in as the e2e user on another device ([deviceId]), not through the app:
+     * what someone would do from their phone or the web client. Signs that device out afterwards.
+     */
+    protected fun <T> asTestUserElsewhere(deviceId: String, block: suspend (ApiClient) -> T): T = runBlocking {
+        val elsewhere = koinGet<Jellyfin>().createApi(baseUrl = e2eHostname(), deviceInfo = DeviceInfo(deviceId, "e2e"))
+        val auth = elsewhere.userApi.authenticateUserByName(e2eUsername(), e2ePassword()).content
+        elsewhere.update(accessToken = auth.accessToken)
         try {
-            approver.quickConnectApi.authorizeQuickConnect(code)
+            block(elsewhere)
         } finally {
-            approver.sessionApi.reportSessionEnded()
+            elsewhere.sessionApi.reportSessionEnded()
         }
     }
 

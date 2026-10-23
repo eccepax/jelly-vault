@@ -1,12 +1,14 @@
 package org.jellyfin.mobile.books.reader
 
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.net.URI
 
 /**
  * An EPUB is untrusted: anyone can make one. The reader shows a chapter with scripts off and lets
@@ -129,4 +131,22 @@ class ReaderPageTest {
 
     private infix fun Int.shouldBeAfter(other: Int) = (this > other && other >= 0) shouldBe true
     private infix fun Int.shouldBeBefore(other: Int) = (this in 0 until other) shouldBe true
+
+    @Test
+    fun `each load of a chapter has an address of its own, so it's read and styled afresh`() {
+        val chapter = File(book, "OEBPS/ch1.xhtml")
+
+        val first = chapterUrl(chapter, "ch 2", load = 1)
+        val again = chapterUrl(chapter, "ch 2", load = 2)
+
+        first shouldNotBe again
+        URI(first).path shouldBe chapter.toURI().path
+        URI(first).fragment shouldBe "ch 2"
+        isReaderRequestAllowed(first, book) shouldBe true
+    }
+
+    @Test
+    fun `a chapter opened at its start has no anchor`() {
+        URI(chapterUrl(File(book, "ch1.xhtml"), anchor = null, load = 1)).fragment shouldBe null
+    }
 }

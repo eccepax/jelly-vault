@@ -6,7 +6,9 @@ import android.view.WindowManager
 import androidx.core.content.getSystemService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.data.dao.BookBookmarkDao
@@ -34,6 +36,21 @@ class BookReaderViewModel(
 
     private val _currentPage = MutableStateFlow(0)
     val currentPage: StateFlow<Int> get() = _currentPage
+
+    /**
+     * The contents entry last chosen, while its chapter's file is open: several chapters can share
+     * a file, and this says which of them is being read (and where in the file to open it).
+     */
+    private val _chosenTocEntry = MutableStateFlow<EpubTocEntry?>(null)
+    val chosenTocEntry: StateFlow<EpubTocEntry?> get() = _chosenTocEntry
+
+    /**
+     * Each time an entry is chosen from the contents, even the one already being read (to go back to
+     * where it starts): the chapter is opened there again. Not replayed, so coming back to the
+     * reader leaves the chapter where it was scrolled to.
+     */
+    private val _tocJumps = MutableSharedFlow<EpubTocEntry>(extraBufferCapacity = 1)
+    val tocJumps: SharedFlow<EpubTocEntry> get() = _tocJumps
 
     private val _totalPages = MutableStateFlow(0)
     val totalPages: StateFlow<Int> get() = _totalPages
@@ -68,7 +85,7 @@ class BookReaderViewModel(
     @Suppress("TooGenericExceptionCaught")
     fun loadBook(bookItemId: String, initialNightMode: Boolean) {
         val sameBook = bookItemId == currentBookItemId
-        // The fragment asks again each time it's recreated (rotation): the book is already open,
+        // The reader asks again each time it's recreated (rotation): the book is already open,
         // as the reader left it, night mode and all. Only a book that failed to open is tried again.
         if (sameBook && _error.value == null) return
         if (!sameBook) {
@@ -85,7 +102,7 @@ class BookReaderViewModel(
             try {
                 val cachedFile = bookFiles.fileFor(bookItemId)
                 val type = detectBookType(cachedFile)
-                // Populate totalPages/currentPage BEFORE publishing bookType — the Fragment's
+                // Populate totalPages/currentPage BEFORE publishing bookType — the reader's
                 // bookType collector builds the pager adapter as soon as it sees the new type, and
                 // nothing re-triggers that build later, so a premature emission leaves it stuck
                 // showing zero pages (a blank screen) until the reader mode is manually toggled.
@@ -123,11 +140,22 @@ class BookReaderViewModel(
     /** Real chapter titles for the currently-loaded EPUB, or empty for PDF/before loading. */
     fun getTableOfContents(): List<EpubTocEntry> = epubRenderer.getTableOfContents()
 
-    fun getChapterTitle(chapterIndex: Int): String? = epubRenderer.chapterTitleAt(chapterIndex)
+    /** The title of the chapter being read in the file at [chapterIndex]: the one chosen from the contents, if it's there. */
+    fun getChapterTitle(chapterIndex: Int): String? =
+        _chosenTocEntry.value?.takeIf { it.spineIndex == chapterIndex }?.title ?: epubRenderer.chapterTitleAt(chapterIndex)
+
+    /** Goes to [entry]'s chapter, at the place in its file where it starts. */
+    fun openTocEntry(entry: EpubTocEntry) {
+        _chosenTocEntry.value = entry
+        setPage(entry.spineIndex)
+        _tocJumps.tryEmit(entry)
+    }
 
     fun setPage(pageIndex: Int) {
         val total = _totalPages.value
         val clampedIndex = if (total > 0) pageIndex.coerceIn(0, total - 1) else pageIndex
+        // A chapter chosen from the contents is left behind with its file
+        if (_chosenTocEntry.value?.spineIndex != clampedIndex) _chosenTocEntry.value = null
         if (clampedIndex == _currentPage.value) return
         _currentPage.value = clampedIndex
         val itemId = currentBookItemId ?: return
@@ -153,7 +181,9 @@ class BookReaderViewModel(
     }
 
     private fun bookmarkLabel(page: Int): String =
-        epubRenderer.getTableOfContents().firstOrNull { it.spineIndex == page }?.title ?: "Page ${page + 1}"
+        _chosenTocEntry.value?.takeIf { it.spineIndex == page }?.title
+            ?: epubRenderer.getTableOfContents().firstOrNull { it.spineIndex == page }?.title
+            ?: "Page ${page + 1}"
 
     fun deleteBookmark(id: Long) {
         viewModelScope.launch { bookBookmarkDao.delete(id) }
@@ -188,6 +218,8 @@ class BookReaderViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        // The book's closed: its place goes to the server
+        sendProgress()
         pdfCore.close()
         epubRenderer.close()
     }

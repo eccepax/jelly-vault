@@ -12,6 +12,10 @@ import androidx.media3.exoplayer.offline.DownloadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.shareIn
+import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.bookVaultSignOut
 import org.jellyfin.mobile.books.data.BookDatabase
 import org.jellyfin.mobile.books.progress.BookProgressSync
@@ -20,8 +24,11 @@ import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.Media3DownloadSettings
 import org.jellyfin.mobile.common.downloads.Media3ItemDownloads
+import org.jellyfin.mobile.common.downloads.downloadRequirements
 import org.jellyfin.mobile.common.downloads.fileDownloadManager
 import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.mobile.common.server.withAccessToken
@@ -60,7 +67,13 @@ val bookDownloadsModule = module {
     }
     single {
         androidContext().deleteOldBookDownloads()
-        fileDownloadManager(androidContext(), get(), get(), get())
+        fileDownloadManager(
+            androidContext(),
+            get(),
+            get(),
+            get(),
+            requirements = downloadRequirements(get<BookAppPreferences>().downloadOnWifiOnly),
+        )
     }
     single<ItemDownloads> {
         val context = androidContext()
@@ -78,13 +91,35 @@ val bookDownloadsModule = module {
         DownloadGroups(get(), get<BookDatabase>().downloadGroupDao, uriOf = apiClient::bookUri)
     }
     single { BookDownloads(get()) }
+    // Copies fetched for reading take space like downloads, so Settings counts and removes them too
+    single<DownloadSettings> {
+        val downloads = get<BookDownloads>()
+        val files = get<BookFiles>()
+        // Measured once for both, as they're watched: measuring walks every copy
+        val copiesBytes = files.copiesBytes.shareIn(
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+            replay = 1,
+        )
+        Media3DownloadSettings(
+            manager = get(),
+            savedWifiOnly = get<BookAppPreferences>()::downloadOnWifiOnly,
+            bytesUsed = combine(downloads.bytesUsed, copiesBytes) { downloaded, copies -> downloaded + copies },
+            hasDownloads = combine(downloads.hasDownloads, copiesBytes) { has, copies -> has || copies > 0L },
+            removeAll = {
+                downloads.removeAll()
+                files.removeCopies()
+            },
+        )
+    }
     single {
         val apiClient = get<ApiClient>()
         BookFiles(get(), androidContext().cacheDir, get(), uriOf = apiClient::bookUri)
     }
-    // Signing out sends the places read here, then forgets them; downloads stay unless the user asked otherwise in Settings
+    // Signing out sends the places read here, then forgets them; downloads (and the copies fetched
+    // for reading, which Settings counts with them) stay unless the user asked otherwise in Settings
     single<SignOut> {
-        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<BookDownloads>()::removeAll)
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<DownloadSettings>()::removeAll)
         val progressSync = get<BookProgressSync>()
         bookVaultSignOut(
             session = get(),

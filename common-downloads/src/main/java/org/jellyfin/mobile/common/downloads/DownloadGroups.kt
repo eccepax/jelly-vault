@@ -1,10 +1,12 @@
 package org.jellyfin.mobile.common.downloads
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.common.downloads.ItemDownload.State
 
 /** How far along a downloaded group is, as a whole. */
@@ -58,6 +60,11 @@ class DownloadGroups(
     val bytesUsed: Flow<Long> = downloads.downloads.map { downloads -> downloads.values.sumOf { it.bytesDownloaded } }
         .distinctUntilChanged()
 
+    /** Whether anything is kept or on its way, even before a byte of it arrives (e.g. waiting for Wi-Fi). */
+    val hasDownloads: Flow<Boolean> = combine(dao.groups(), downloads.downloads) { groups, downloads ->
+        groups.isNotEmpty() || downloads.isNotEmpty()
+    }.distinctUntilChanged()
+
     fun status(groupId: String): Flow<GroupStatus> =
         statuses.map { it[groupId] ?: GroupStatus.NotDownloaded }.distinctUntilChanged()
 
@@ -86,8 +93,11 @@ class DownloadGroups(
         deleteUnneeded(before)
     }
 
-    /** Deletes every group and every item, including any no group knows about. */
-    suspend fun removeAll() {
+    /**
+     * Deletes every group and every item, including any no group knows about. Not cut off part way
+     * when the caller goes away, which would leave files on the device that no group knows about.
+     */
+    suspend fun removeAll() = withContext(NonCancellable) {
         dao.deleteAllGroups()
         downloads.downloads.value.keys.forEach(downloads::remove)
     }

@@ -3,6 +3,7 @@ package org.jellyfin.mobile.books.settings
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
@@ -31,6 +32,8 @@ class BookSettingsScreenTest {
         fontFamily = EpubFontFamily.SANS_SERIF,
         lineSpacing = 1.5f,
         removeDownloadsOnSignOut = false,
+        downloadOnWifiOnly = true,
+        downloadBytes = 0L,
         appName = "BookVault",
         appVersion = "1.2.3",
     )
@@ -46,6 +49,8 @@ class BookSettingsScreenTest {
                     onFontFamily = { events += "fontFamily $it" },
                     onLineSpacing = { events += "lineSpacing $it" },
                     onRemoveDownloadsOnSignOut = { events += "removeOnSignOut $it" },
+                    onWifiOnly = { events += "wifiOnly $it" },
+                    onRemoveAllDownloads = { events += "removeAll" },
                     onSignOut = { events += "signOut" },
                 ),
             )
@@ -103,6 +108,36 @@ class BookSettingsScreenTest {
         composeRule.onNodeWithText("Remove downloads on sign out").performClick()
 
         events shouldBe listOf("removeOnSignOut true")
+    }
+
+    @Test
+    fun `wi-fi only is on, and can be switched off`() {
+        show()
+
+        composeRule.onNodeWithText("Download over Wi-Fi only").performScrollTo().assertIsOn()
+        composeRule.onNodeWithText("Download over Wi-Fi only").performClick()
+
+        events shouldBe listOf("wifiOnly false")
+    }
+
+    @Test
+    fun `shows the space books take, and removing them all asks first`() {
+        show(defaults.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
+
+        composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        events shouldBe emptyList()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+        events shouldBe listOf("removeAll")
+    }
+
+    @Test
+    fun `with no books downloaded there is nothing to remove`() {
+        show()
+
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Remove all downloads").assertDoesNotExist()
     }
 
     @Test
