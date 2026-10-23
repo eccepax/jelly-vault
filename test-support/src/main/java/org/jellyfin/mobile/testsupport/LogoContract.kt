@@ -22,11 +22,13 @@ import org.robolectric.annotation.GraphicsMode
  * The sign-in screen's logo is the app's icon, and the app's accent comes from that icon: the
  * icon's hue, lightened so it reads on the dark background, and still vivid. Each app subclasses
  * this with its own logo and accent.
+ *
+ * This lives in :test-support's main source set, which is dexed at minSdk 26 for the apps'
+ * androidTest APKs, so test names can't contain spaces (DEX 040+ only).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Suppress("FunctionNaming") // test names in backticks, as in the apps' test source sets
 abstract class LogoContract(@DrawableRes logoRes: Int, @ColorRes private val accentRes: Int) {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
@@ -35,18 +37,18 @@ abstract class LogoContract(@DrawableRes logoRes: Int, @ColorRes private val acc
     private val accent get() = context.getColor(accentRes)
 
     @Test
-    fun `the logo is the app icon, a rounded square`() {
+    fun logoIsTheAppIconARoundedSquare() {
         Color.alpha(logo.getPixel(0, 0)) shouldBe 0
         Color.alpha(logo.getPixel(SIZE / 2, SIZE / 2)) shouldBe OPAQUE
     }
 
     @Test
-    fun `the icon's white animal is in the middle`() {
+    fun iconsWhiteAnimalIsInTheMiddle() {
         logo.whiteShareOfMiddle() shouldBeGreaterThan MIN_ANIMAL
     }
 
     @Test
-    fun `the launcher icon's layers are the app's own, not common's stand-ins`() {
+    fun launcherIconLayersAreTheAppsOwnNotCommonsStandIns() {
         for (layer in listOf("ic_launcher_background", "ic_launcher_foreground")) {
             @Suppress("DiscouragedApi") // :common's R can't name the app's own mipmaps
             val id = context.resources.getIdentifier(layer, "mipmap", context.packageName)
@@ -55,19 +57,19 @@ abstract class LogoContract(@DrawableRes logoRes: Int, @ColorRes private val acc
     }
 
     @Test
-    fun `the accent has the icon's hue`() {
+    fun accentHasTheIconsHue() {
         hueDistance(iconColor, accent) shouldBeLessThan MAX_HUE_DISTANCE
     }
 
     @Test
-    fun `the accent is a lighter tint of the icon's color`() {
+    fun accentIsALighterTintOfTheIconsColor() {
         withClue("accent lightness vs icon lightness") {
             lightness(accent) shouldBeGreaterThan lightness(iconColor)
         }
     }
 
     @Test
-    fun `the accent is vivid, not washed out`() {
+    fun accentIsVividNotWashedOut() {
         saturation(accent) shouldBeGreaterThanOrEqual MIN_ACCENT_SATURATION
     }
 
