@@ -34,10 +34,14 @@ private val UNTRUSTED_XML_FEATURES = listOf(
  * and percent-decode (`chapter%201.xhtml` is the file `chapter 1.xhtml`); unlike form data, `+`
  * stays a plus.
  */
-internal fun resolveEpubHref(baseDir: File, href: String): File {
-    val path = href.substringBefore('#').replace("+", "%2B")
-    return File(baseDir, URLDecoder.decode(path, Charsets.UTF_8.name()))
-}
+internal fun resolveEpubHref(baseDir: File, href: String): File =
+    File(baseDir, decodeHrefPart(href.substringBefore('#')))
+
+/** The element id an href's `#fragment` names, percent-decoded as its path is; null without one. */
+internal fun epubHrefAnchor(href: String): String? =
+    href.substringAfter('#', "").takeIf { it.isNotEmpty() }?.let(::decodeHrefPart)
+
+private fun decodeHrefPart(part: String): String = URLDecoder.decode(part.replace("+", "%2B"), Charsets.UTF_8.name())
 
 /** Whether this file is inside [dir], once any ".." and links in its path are resolved. */
 internal fun File.isInside(dir: File): Boolean = try {

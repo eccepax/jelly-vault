@@ -37,8 +37,7 @@ internal class EpubTocParser {
     private fun resolveTocEntry(title: String, sourceFile: File, href: String, spineFiles: List<File>): EpubTocEntry? {
         val targetFile = resolveEpubHref(sourceFile.parentFile, href)
         val spineIndex = spineFiles.indexOfFirst { it.canonicalFile == targetFile.canonicalFile }
-        val anchor = href.substringAfter('#', "").takeIf { it.isNotEmpty() }
-        return if (spineIndex >= 0) EpubTocEntry(title, spineIndex, anchor) else null
+        return if (spineIndex >= 0) EpubTocEntry(title, spineIndex, epubHrefAnchor(href)) else null
     }
 
     /** Parses an EPUB3 nav document's `<nav epub:type="toc">` into (title, href) pairs, in order. */
