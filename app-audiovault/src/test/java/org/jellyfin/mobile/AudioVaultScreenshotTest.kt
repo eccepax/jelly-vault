@@ -2,6 +2,7 @@ package org.jellyfin.mobile
 
 import android.app.Application
 import androidx.fragment.app.testing.launchFragmentInContainer
+import androidx.media3.exoplayer.offline.DownloadManager
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -9,6 +10,7 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.downloads.DownloadMethod
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.library.LibraryFragment
 import org.jellyfin.mobile.library.LibraryItem
@@ -16,12 +18,14 @@ import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.library.SortOption
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.robolectric.playerViewModel
+import org.jellyfin.mobile.settings.SettingsFragment
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.operations.ImageApi
+import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
@@ -112,6 +116,30 @@ class AudioVaultScreenshotTest {
 
         launchFragmentInContainer<PlayerFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
             scenario.onFragment { it.requireView().captureWithSystemBars("player") }
+        }
+    }
+
+    @Test
+    fun settings() {
+        val preferences = mockk<AudioVaultAppPreferences>(relaxed = true).apply {
+            every { exoPlayerAllowPressSpeedUp } returns true
+            every { skipSilenceEnabled } returns false
+            every { libraryGlobalFlattened } returns false
+            every { downloadMethod } returns DownloadMethod.WIFI_ONLY
+            every { removeDownloadsOnSignOut } returns true
+        }
+        startKoin {
+            modules(
+                module {
+                    single { preferences }
+                    single { mockk<DownloadManager>(relaxed = true) }
+                    single { ClientInfo(name = "AudioVault", version = "1.0.0") }
+                },
+            )
+        }
+
+        launchFragmentInContainer<SettingsFragment>(themeResId = CommonR.style.AppTheme).use { scenario ->
+            scenario.onFragment { it.requireView().captureWithSystemBars("settings") }
         }
     }
 

@@ -14,6 +14,7 @@ import org.jellyfin.mobile.music.data.TuneDatabase
 import org.jellyfin.mobile.music.offline.ServerConnectivity
 import org.jellyfin.mobile.music.playback.PlaybackController
 import org.jellyfin.mobile.testing.endtoend.SignedInE2ETest
+import org.jellyfin.mobile.testing.endtoend.SuiteAreaRule
 import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Rule
 
@@ -22,6 +23,9 @@ import org.junit.Rule
  * common's Compose `ConnectScreen`, and login is common's Compose `LoginScreen`.
  */
 abstract class LoggedInE2ETest : SignedInE2ETest<TuneMainActivity>(TuneMainActivity::class.java) {
+
+    @get:Rule
+    val suiteArea = SuiteAreaRule(SUITE_AREAS)
 
     /** Pre-granted, so the system's prompt on a first download never covers the screen under test. */
     @get:Rule

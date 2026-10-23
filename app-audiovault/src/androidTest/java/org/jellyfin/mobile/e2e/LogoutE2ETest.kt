@@ -12,6 +12,7 @@ import org.junit.Test
  * (the server itself stays configured, only `currentUserId` is cleared — see
  * `MainViewModel.logout()` / `MainActivity.handleAvailableServerState`).
  */
+@AccountArea
 class LogoutE2ETest : LoggedInE2ETest() {
 
     @Test

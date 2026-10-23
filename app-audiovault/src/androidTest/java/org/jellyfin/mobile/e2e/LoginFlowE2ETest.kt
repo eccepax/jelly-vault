@@ -9,8 +9,10 @@ import org.junit.Test
  * Connect (Compose `ConnectScreen`) -> Login (common's Compose `LoginScreen`) -> lands on
  * `LibraryFragment`. Runs against the test server (see [BaseE2ETest]).
  */
+@AccountArea
 class LoginFlowE2ETest : LoggedInE2ETest() {
 
+    @Smoke
     @Test
     fun loginThroughToLibrary() {
         loginAndWaitForLibrary()

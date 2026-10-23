@@ -9,8 +9,10 @@ import org.junit.Test
  * list starts playback and lands on `PlayerFragment`. Runs against the test server
  * (see [BaseE2ETest]).
  */
+@PlaybackArea
 class LibraryPlaybackE2ETest : LoggedInE2ETest() {
 
+    @Smoke
     @Test
     fun tappingALibraryItemStartsPlayback() {
         loginAndWaitForLibrary()

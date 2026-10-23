@@ -16,6 +16,7 @@ import org.junit.Test
  * `HiddenItemEntity`/Room, which [BaseE2ETest.resetAppState] already clears before/after every
  * test — no manual unhide needed for cleanup.
  */
+@BrowseArea
 class LibraryHideItemE2ETest : LoggedInE2ETest() {
 
     @Test

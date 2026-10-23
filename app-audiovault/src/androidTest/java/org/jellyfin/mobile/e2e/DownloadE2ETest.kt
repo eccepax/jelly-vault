@@ -33,6 +33,7 @@ private const val SMALL_TRACKS_BOOK = Audiobooks.MULTI_PART_SEARCH_TERM
  * Long-press -> Download really downloads through the shared download engine. Finished means a
  * track's whole file is on the device and plays from there, not just that the tap registered.
  */
+@DownloadsArea
 class DownloadE2ETest : LoggedInE2ETest() {
 
     @Before
