@@ -94,4 +94,25 @@ class ReaderWebViewTest {
         client.shouldOverrideUrlLoading(webView, request("https://example.com")) shouldBe true
         client.shouldOverrideUrlLoading(webView, request(File(book, "chapter2.xhtml").toURI().toString())) shouldBe false
     }
+
+    @Test
+    fun `a chapter loaded again under a new address is still answered with the styled page`() {
+        val client = shadowOf(webView).webViewClient.shouldNotBeNull()
+
+        val page = client.shouldInterceptRequest(
+            webView,
+            request(chapterUrl(chapter, "ch5", load = 2), mainFrame = true),
+        )
+
+        page.shouldNotBeNull().data.readBytes().decodeToString() shouldBe "<html>styled chapter2.xhtml</html>"
+    }
+
+    @Test
+    fun `a picture a chapter links to opens as it is, not restyled as a page`() {
+        val stylesAnything = readerWebView(context, bookDir = { book }, chapterPage = { "<html>styled</html>" })
+        val client = shadowOf(stylesAnything).webViewClient.shouldNotBeNull()
+        val map = File(book, "images/map.jpg").toURI().toString()
+
+        client.shouldInterceptRequest(stylesAnything, request(map, mainFrame = true)).shouldBeNull()
+    }
 }

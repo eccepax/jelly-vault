@@ -24,6 +24,19 @@ fun styledChapterHtml(html: String, textCss: String, night: Boolean): String {
 }
 
 /**
+ * The address a chapter [file] is loaded at, opening at the element [anchor] names, if any. Each
+ * [load] gets an address of its own: loading the address already showing, with an anchor, would
+ * only scroll to it, leaving the page as it was styled before (text settings, night mode).
+ */
+fun chapterUrl(file: File, anchor: String?, load: Int): String =
+    URI("file", "", file.toURI().path, "load=$load", anchor).toASCIIString()
+
+/** Whether a page the reader opens is a chapter (restyled), rather than a picture or such it links to (shown as it is). */
+fun isChapterDocument(path: String): Boolean = path.substringAfterLast('.', "").lowercase() in CHAPTER_EXTENSIONS
+
+private val CHAPTER_EXTENSIONS = setOf("xhtml", "html", "htm", "xml")
+
+/**
  * Whether the reader may load [url] for a book extracted to [bookDir]: only plain files inside that
  * folder, and pictures or fonts written into the page itself (`data:`). EPUBs are untrusted, and the
  * app's other files (the server sign-in among them) sit next to the book's; so does the network.

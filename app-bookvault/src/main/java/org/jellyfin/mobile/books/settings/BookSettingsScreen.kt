@@ -14,6 +14,8 @@ import androidx.compose.material.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,6 +36,7 @@ import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
+import org.koin.compose.viewmodel.koinViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
 /** What the settings screen shows: the reading settings every EPUB uses, downloads, and the account's. */
@@ -137,5 +140,26 @@ private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSetti
         ),
         confirmLabel = stringResource(R.string.sign_out_yes),
         onSignOut = actions.onSignOut,
+    )
+}
+
+@Composable
+fun BookSettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: BookSettingsViewModel = koinViewModel()) {
+    val state by viewModel.state.collectAsState()
+    val signedOut by viewModel.signedOut.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.reload() }
+    LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
+    BookSettingsScreen(
+        state = state,
+        actions = BookSettingsActions(
+            onBack = onBack,
+            onFontScale = viewModel::setFontScale,
+            onFontFamily = viewModel::setFontFamily,
+            onLineSpacing = viewModel::setLineSpacing,
+            onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
+            onWifiOnly = viewModel::setWifiOnly,
+            onRemoveAllDownloads = viewModel::removeAllDownloads,
+            onSignOut = viewModel::signOut,
+        ),
     )
 }

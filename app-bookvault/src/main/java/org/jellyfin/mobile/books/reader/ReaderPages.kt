@@ -1,62 +1,47 @@
 package org.jellyfin.mobile.books.reader
 
-import android.content.res.Configuration
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.net.Uri
-import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.ImageView
-import android.widget.Toast
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.ViewCompat
-import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jellyfin.mobile.books.app.BookAppPreferences
-import org.jellyfin.mobile.books.databinding.FragmentComposeBinding
 import org.jellyfin.mobile.books.databinding.ReaderPagesBinding
-import org.jellyfin.mobile.common.ui.theme.AppTheme
-import org.jellyfin.mobile.common.ui.theme.VaultBrand
-import org.koin.android.ext.android.inject
-import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.io.File
 import java.io.IOException
 
-class BookReaderFragment : Fragment() {
+/**
+ * The book's pages, as views of their own that the reader draws between its bars: a PDF as a
+ * scroll or one page at a time, an EPUB one chapter at a time. Kept in step with [viewModel] while
+ * [follow] runs. Rendering runs in [scope], which goes with the reader.
+ */
+internal class ReaderPages(
+    context: Context,
+    private val viewModel: BookReaderViewModel,
+    private val scope: CoroutineScope,
+    scrollMode: Boolean,
+    private val textSettings: () -> EpubTextSettings,
+) {
+    private val pages = ReaderPagesBinding.inflate(LayoutInflater.from(context))
 
-    private val bookItemId: String get() = requireArguments().getString(ARG_BOOK_ITEM_ID)!!
-    private val viewModel: BookReaderViewModel by viewModel()
-    private val appPreferences: BookAppPreferences by inject()
+    val view: View get() = pages.root
 
-    private var _binding: FragmentComposeBinding? = null
-    private val binding get() = _binding!!
-
-    /** The book's pages: views of their own, which the Compose screen draws between its bars. */
-    private var _pages: ReaderPagesBinding? = null
-    private val pages get() = _pages!!
-
-    private var isScrollMode by mutableStateOf(true)
-    private var textSettings by mutableStateOf(EpubTextSettings())
+    /** Read as a scroll, or a page (EPUB: a chapter) at a time; changing it shows the same page the other way. */
+    var scrollMode = scrollMode
+        set(value) {
+            field = value
+            showReadingMode()
+        }
 
     /**
      * True after a programmatic jump (TOC/bookmark/page-jump dialog) has driven the PDF
@@ -70,115 +55,45 @@ class BookReaderFragment : Fragment() {
      */
     private var suppressPdfScrollTracking = false
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        _binding = FragmentComposeBinding.inflate(inflater, container, false)
-        _pages = ReaderPagesBinding.inflate(inflater)
-        return binding.composeView
+    init {
+        setupPdfScrollMode(context)
+        setupPager()
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        ViewCompat.requestApplyInsets(binding.composeView)
-        textSettings = readTextSettings()
-        setupPdfScrollMode()
-        setupPdfPageFlipMode()
-
-        val nightMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-            Configuration.UI_MODE_NIGHT_YES
-
-        viewModel.loadBook(bookItemId, nightMode)
-
-        val actions = BookReaderActions(
-            onBack = { requireActivity().onBackPressedDispatcher.onBackPressed() },
-            onToggleScrollMode = ::toggleReadingMode,
-            onToggleNightMode = {
-                viewModel.toggleNightMode()
-                refreshAdapters()
-            },
-            onGoTo = viewModel::setPage,
-            onOpenTocEntry = viewModel::openTocEntry,
-            onFontScale = { changeTextSettings { appPreferences.epubFontScale = it } },
-            onFontFamily = { changeTextSettings { appPreferences.epubFontFamily = it } },
-            onLineSpacing = { changeTextSettings { appPreferences.epubLineSpacing = it } },
-            onAddBookmark = viewModel::addBookmark,
-            onOpenBookmark = viewModel::jumpToBookmark,
-            onDeleteBookmark = viewModel::deleteBookmark,
-        )
-        val pagesView = pages.root
-        binding.composeView.setContent {
-            AppTheme(VaultBrand.BookVault) {
-                BookReaderScreen(collectState(), actions) {
-                    AndroidView(
-                        factory = {
-                            // A recomposed screen takes the same views back
-                            (pagesView.parent as? ViewGroup)?.removeView(pagesView)
-                            pagesView
-                        },
-                        // Left to wrap, the pages (which only fill their parent) would get no room at all
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+    /** Follows the book as it opens and moves, until cancelled. */
+    suspend fun follow() = coroutineScope {
+        launch { observeBookType() }
+        launch { observeLoading() }
+        launch { observeCurrentPage() }
+        // A chapter chosen from the contents opens at its place in its file, even the file already open
+        launch {
+            viewModel.tocJumps.collect { entry ->
+                (pages.viewPager.adapter as? EpubChapterAdapter)?.notifyItemChanged(entry.spineIndex)
             }
         }
-
-        observeViewModel()
     }
 
-    @Composable
-    private fun collectState(): BookReaderUiState {
-        val bookType by viewModel.bookType.collectAsState()
-        val loading by viewModel.loading.collectAsState()
-        val chapter by viewModel.currentPage.collectAsState()
-        val chapterCount by viewModel.totalPages.collectAsState()
-        val nightMode by viewModel.nightMode.collectAsState()
-        val bookmarks by viewModel.bookmarks.collectAsState()
-        val chosenTocEntry by viewModel.chosenTocEntry.collectAsState()
-        // Only a loaded EPUB has contents and chapter names
-        val epubReady = bookType == BookType.EPUB && !loading
-        val tableOfContents = remember(epubReady) { if (epubReady) viewModel.getTableOfContents() else emptyList() }
-        val chapterTitle = remember(epubReady, chapter, chosenTocEntry) {
-            if (bookType == BookType.EPUB) viewModel.getChapterTitle(chapter) else null
+    /** Draws the pages again: the text settings or night mode changed. */
+    fun refresh() {
+        when (viewModel.bookType.value) {
+            BookType.EPUB -> pages.viewPager.adapter?.notifyDataSetChanged()
+            else -> {
+                pages.recyclerView.adapter?.notifyDataSetChanged()
+                pages.viewPager.adapter?.notifyDataSetChanged()
+            }
         }
-        return BookReaderUiState(
-            bookType = bookType,
-            loading = loading,
-            scrollMode = isScrollMode,
-            nightMode = nightMode,
-            chapter = chapter,
-            chapterCount = chapterCount,
-            chapterTitle = chapterTitle,
-            tableOfContents = tableOfContents,
-            chosenTocEntry = chosenTocEntry,
-            bookmarks = bookmarks,
-            textSettings = textSettings,
-        )
     }
 
-    private fun readTextSettings() = EpubTextSettings(
-        appPreferences.epubFontScale,
-        appPreferences.epubFontFamily,
-        appPreferences.epubLineSpacing,
-    )
-
-    /** Saves a text setting, then shows it: on the screen, and in the chapters drawn again with it. */
-    private fun changeTextSettings(save: () -> Unit) {
-        save()
-        textSettings = readTextSettings()
-        refreshAdapters()
-    }
-
-    private fun toggleReadingMode() {
-        isScrollMode = !isScrollMode
+    private fun showReadingMode() {
         pages.root.reset()
-        pages.root.childScrollsVertically = isScrollMode
+        pages.root.childScrollsVertically = scrollMode
         val loading = viewModel.loading.value
         when (viewModel.bookType.value) {
             BookType.PDF -> {
-                pages.recyclerView.visibility = if (!loading && isScrollMode) View.VISIBLE else View.GONE
-                pages.viewPager.visibility = if (!loading && !isScrollMode) View.VISIBLE else View.GONE
+                pages.recyclerView.visibility = if (!loading && scrollMode) View.VISIBLE else View.GONE
+                pages.viewPager.visibility = if (!loading && !scrollMode) View.VISIBLE else View.GONE
                 val currentPage = viewModel.currentPage.value
-                if (isScrollMode) {
+                if (scrollMode) {
                     (pages.recyclerView.layoutManager as LinearLayoutManager)
                         .scrollToPositionWithOffset(currentPage, 0)
                 } else {
@@ -187,17 +102,6 @@ class BookReaderFragment : Fragment() {
             }
             BookType.EPUB -> setupEpubMode()
             else -> Unit
-        }
-    }
-
-    private fun observeViewModel() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { observeBookType() }
-                launch { observeLoading() }
-                launch { observeError() }
-                launch { observeCurrentPage() }
-            }
         }
     }
 
@@ -219,7 +123,7 @@ class BookReaderFragment : Fragment() {
             BookType.EPUB -> {
                 if (pages.viewPager.currentItem != page) pages.viewPager.setCurrentItem(page, false)
             }
-            BookType.PDF -> if (isScrollMode) {
+            BookType.PDF -> if (scrollMode) {
                 val layoutManager = pages.recyclerView.layoutManager as? LinearLayoutManager
                 if (layoutManager != null && layoutManager.findFirstVisibleItemPosition() != page) {
                     suppressPdfScrollTracking = true
@@ -252,29 +156,21 @@ class BookReaderFragment : Fragment() {
     }
 
     private fun applyPageVisibilityAndScroll() {
-        pages.root.childScrollsVertically = isScrollMode
-        if (isScrollMode) {
+        pages.root.childScrollsVertically = scrollMode
+        if (scrollMode) {
             pages.recyclerView.visibility = View.VISIBLE
             pages.viewPager.visibility = View.GONE
         } else {
             pages.recyclerView.visibility = View.GONE
             pages.viewPager.visibility = View.VISIBLE
         }
-        refreshAdapters()
+        refresh()
         val savedPage = viewModel.currentPage.value
-        if (isScrollMode) {
+        if (scrollMode) {
             (pages.recyclerView.layoutManager as LinearLayoutManager)
                 .scrollToPositionWithOffset(savedPage, 0)
         } else {
             pages.viewPager.setCurrentItem(savedPage, false)
-        }
-    }
-
-    private suspend fun observeError() {
-        viewModel.error.collect { error ->
-            if (error != null) {
-                Toast.makeText(requireContext(), error, Toast.LENGTH_LONG).show()
-            }
         }
     }
 
@@ -283,38 +179,31 @@ class BookReaderFragment : Fragment() {
         pages.recyclerView.visibility = View.GONE
         pages.viewPager.visibility = View.VISIBLE
 
-        val adapter = EpubChapterAdapter(
-            chapterCount = { viewModel.totalPages.value },
-            getChapterFile = { viewModel.getChapterFile(it) },
-            anchorAt = { position -> viewModel.chosenTocEntry.value?.takeIf { it.spineIndex == position }?.anchor },
-            bookDir = { viewModel.getBookDir() },
-            nightMode = { viewModel.nightMode.value },
-            textSettings = { textSettings },
-        )
-        pages.viewPager.adapter = adapter
-        // A chapter chosen from the contents opens at its place in its file, even the file already open
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.chosenTocEntry.collect { entry -> entry?.let { adapter.notifyItemChanged(it.spineIndex) } }
+        if (pages.viewPager.adapter !is EpubChapterAdapter) {
+            pages.viewPager.adapter = EpubChapterAdapter(
+                chapterCount = { viewModel.totalPages.value },
+                getChapterFile = { viewModel.getChapterFile(it) },
+                anchorAt = { position ->
+                    viewModel.chosenTocEntry.value?.takeIf { it.spineIndex == position }?.anchor
+                },
+                bookDir = { viewModel.getBookDir() },
+                nightMode = { viewModel.nightMode.value },
+                textSettings = textSettings,
+            )
         }
         // Scroll mode: no swipe (the chapter bar moves between chapters). Page flip: swipe between chapters.
-        pages.viewPager.isUserInputEnabled = !isScrollMode
-
-        pages.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                viewModel.setPage(position)
-            }
-        })
+        pages.viewPager.isUserInputEnabled = !scrollMode
 
         val savedPage = viewModel.currentPage.value
         if (savedPage > 0) pages.viewPager.setCurrentItem(savedPage, false)
     }
 
-    private fun setupPdfScrollMode() {
-        pages.recyclerView.layoutManager = LinearLayoutManager(requireContext())
+    private fun setupPdfScrollMode(context: Context) {
+        pages.recyclerView.layoutManager = LinearLayoutManager(context)
         pages.recyclerView.adapter = PdfScrollAdapter(
             pageCount = { viewModel.totalPages.value },
             renderPage = { viewModel.renderPage(it) },
-            scope = viewLifecycleOwner.lifecycleScope,
+            scope = scope,
         )
         pages.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
@@ -330,48 +219,20 @@ class BookReaderFragment : Fragment() {
         })
     }
 
-    private fun setupPdfPageFlipMode() {
+    /** The pager shows a PDF's pages until an EPUB's chapters take it over; either way, the page it shows is the place. */
+    private fun setupPager() {
         pages.viewPager.adapter = PdfPageAdapter(
             pageCount = { viewModel.totalPages.value },
             renderPage = { viewModel.renderPage(it) },
-            scope = viewLifecycleOwner.lifecycleScope,
+            scope = scope,
         )
         pages.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 // The zoom is the whole pager's: a new page (a swipe once zoomed out, or a jump) starts whole
-                if (!isScrollMode) pages.root.reset()
+                if (!scrollMode) pages.root.reset()
                 viewModel.setPage(position)
             }
         })
-    }
-
-    private fun refreshAdapters() {
-        when (viewModel.bookType.value) {
-            BookType.EPUB -> pages.viewPager.adapter?.notifyDataSetChanged()
-            else -> {
-                pages.recyclerView.adapter?.notifyDataSetChanged()
-                pages.viewPager.adapter?.notifyDataSetChanged()
-            }
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        viewModel.sendProgress()
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
-        _pages = null
-    }
-
-    companion object {
-        const val ARG_BOOK_ITEM_ID = "book_item_id"
-
-        fun newInstance(bookItemId: String) = BookReaderFragment().apply {
-            arguments = Bundle().apply { putString(ARG_BOOK_ITEM_ID, bookItemId) }
-        }
     }
 }
 
@@ -445,6 +306,9 @@ private class EpubChapterAdapter(
 
     inner class Holder(val webView: WebView) : RecyclerView.ViewHolder(webView)
 
+    /** Loads so far, giving each its own address (see [chapterUrl]). */
+    private var loads = 0
+
     override fun getItemCount() = chapterCount()
 
     // Unique view type per position prevents recycling stale WebView content
@@ -480,8 +344,7 @@ private class EpubChapterAdapter(
         )
 
         // Opened by its own URL, so an anchor opens it at that element; the page comes from styledPage
-        val anchor = anchorAt(position)?.let { "#" + Uri.encode(it) }.orEmpty()
-        holder.webView.loadUrl(Uri.fromFile(file).toString() + anchor)
+        holder.webView.loadUrl(chapterUrl(file, anchorAt(position), ++loads))
     }
 
     /** [file] as the reader shows it: the text settings and night mode come with it, as a stylesheet (no scripts needed). */
