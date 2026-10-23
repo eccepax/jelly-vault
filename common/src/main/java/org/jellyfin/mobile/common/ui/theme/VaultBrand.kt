@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * What makes one Vault app look like itself: its accent, used for buttons, progress, selection
- * and links. Each launcher color is too dark to read on the dark background, so each accent is a
+ * and links. Each icon's color is too dark to read on the dark background, so each accent is a
  * lighter tint of it. Labels on the accent take whichever of dark or white reads better.
  */
 data class VaultBrand(val accent: Color) {
@@ -19,16 +19,16 @@ data class VaultBrand(val accent: Color) {
     companion object {
         val Jellyfin = VaultBrand(Color(0xFF00A4DC))
 
-        /** Crimson, from the launcher's #880015. */
-        val AudioVault = VaultBrand(Color(0xFFFF5C72))
+        /** Orange, from the hare icon. */
+        val AudioVault = VaultBrand(Color(0xFFFF8C1A))
 
-        /** Teal, from the launcher's #004D40. */
-        val BookVault = VaultBrand(Color(0xFF26A69A))
+        /** Sea green, from the turtle icon. */
+        val BookVault = VaultBrand(Color(0xFF16B08A))
 
-        /** Indigo, from the launcher's #1A237E. */
-        val TuneVault = VaultBrand(Color(0xFF7986CB))
+        /** Red, from the woodpecker icon. */
+        val TuneVault = VaultBrand(Color(0xFFF75F6D))
 
-        /** LiveVault's launcher is a near-black slate, so it keeps Jellyfin blue. */
-        val LiveVault = Jellyfin
+        /** Violet, from the frog icon. */
+        val LiveVault = VaultBrand(Color(0xFFB470FF))
     }
 }
