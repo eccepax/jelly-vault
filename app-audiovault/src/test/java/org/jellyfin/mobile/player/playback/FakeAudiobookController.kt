@@ -13,6 +13,9 @@ class FakeAudiobookController : AudiobookPlaybackController {
     override val volume: Float get() = currentVolume
     val commands = mutableListOf<String>()
 
+    /** As the real service does, the queue asked for shows in [state] only once a test calls [playing]. */
+    var playsLater = false
+
     /** Puts [tracks] in the queue, [index] current, as if they were playing. */
     fun playing(vararg tracks: AudiobookTrack, index: Int = 0, positionMs: Long = 0L, isPlaying: Boolean = true) {
         state.value = AudiobookPlaybackState(
@@ -27,7 +30,7 @@ class FakeAudiobookController : AudiobookPlaybackController {
 
     override fun play(tracks: List<AudiobookTrack>, startIndex: Int, startPositionMs: Long) {
         commands += "play ${tracks.joinToString(",") { it.id }} from $startIndex at $startPositionMs"
-        playing(*tracks.toTypedArray(), index = startIndex, positionMs = startPositionMs)
+        if (!playsLater) playing(*tracks.toTypedArray(), index = startIndex, positionMs = startPositionMs)
     }
 
     override fun play() {

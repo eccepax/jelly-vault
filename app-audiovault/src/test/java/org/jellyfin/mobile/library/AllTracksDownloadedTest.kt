@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import java.util.UUID
 
 /** Regression coverage for [allTracksDownloaded], which picks the download-menu action label. */
-class LibraryFragmentDownloadStateTest {
+class AllTracksDownloadedTest {
 
     private val trackA = UUID.randomUUID()
     private val trackB = UUID.randomUUID()

@@ -55,6 +55,11 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         get() = sharedPreferences.getBoolean(Constants.PREF_SKIP_SILENCE, false)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_SKIP_SILENCE, value) }
 
+    /** Whether AudioVault has asked to show notifications (see common shouldAskForNotifications). */
+    var askedForNotifications: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_ASKED_NOTIFICATIONS, false)
+        set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_ASKED_NOTIFICATIONS, value) }
+
     private companion object {
         /** The Bluetooth permission prompt, removed in favour of pausing when headphones go */
         val RETIRED_PREFS = listOf("pref_ignore_bluetooth_permission")

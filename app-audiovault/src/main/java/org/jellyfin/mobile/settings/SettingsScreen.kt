@@ -14,6 +14,8 @@ import androidx.compose.material.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,6 +33,7 @@ import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.koin.compose.viewmodel.koinViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
 /** What the settings screen shows. */
@@ -176,3 +179,24 @@ private fun downloadNetworks() = listOf(
         stringResource(R.string.mobile_data_summary),
     ),
 )
+
+/** Settings, saved through [viewModel]; [onSignedOut] once signing out is done, to start the app over. */
+@Composable
+fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
+    val state by viewModel.state.collectAsState()
+    val signedOut by viewModel.signedOut.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.reload() }
+    LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
+    SettingsScreen(
+        state = state,
+        actions = SettingsActions(
+            onBack = onBack,
+            onHoldToSpeedUp = viewModel::setHoldToSpeedUp,
+            onSkipSilence = viewModel::setSkipSilence,
+            onFlatLibrary = viewModel::setFlatLibrary,
+            onDownloadMethod = viewModel::setDownloadMethod,
+            onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
+            onSignOut = viewModel::signOut,
+        ),
+    )
+}
