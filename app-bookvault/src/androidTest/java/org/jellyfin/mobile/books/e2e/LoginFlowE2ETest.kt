@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Connect (Compose `ConnectScreen`) -> Login (common's Compose `LoginScreen`, shared with
- * `app-audiovault` via the `common` module) -> lands on `BookLibraryFragment`. Runs against the
+ * `app-audiovault` via the `common` module) -> lands on the library (`BookLibraryRoute`). Runs against the
  * test server (see [BaseE2ETest]).
  */
 @AccountArea

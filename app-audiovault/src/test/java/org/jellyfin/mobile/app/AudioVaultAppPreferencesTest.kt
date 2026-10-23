@@ -35,6 +35,15 @@ class AudioVaultAppPreferencesTest {
     // --- downloadMethod -----------------------------------------------------------------------
 
     @Test
+    fun `it hasn't asked about notifications until it's said it has, and remembers that`() {
+        preferences.askedForNotifications shouldBe false
+
+        preferences.askedForNotifications = true
+
+        AudioVaultAppPreferences(context).askedForNotifications shouldBe true
+    }
+
+    @Test
     fun `downloadMethod is null when never set`() {
         preferences.downloadMethod shouldBe null
     }

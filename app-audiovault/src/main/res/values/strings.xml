@@ -36,6 +36,7 @@
     <string name="player_error_invalid_play_options">Unable to resolve playback info</string>
     <string name="player_error_network_failure">Unable to load media info from server</string>
     <string name="player_error_unsupported_content">Media cannot be played by this device</string>
+    <string name="player_error_start_timed_out">The player took too long to start</string>
     <string name="playback_info_from_device">Playing from the download on this device</string>
     <string name="playback_info_streamed">Streaming from the server</string>
     <string name="skip_media_segment">Skip</string>
@@ -83,4 +84,5 @@
     <string name="sign_out_keeps_downloads">Your downloaded audiobooks stay on this device.</string>
     <string name="sign_out_removes_downloads">Your downloaded audiobooks will be removed from this device.</string>
     <string name="sign_out_yes">Yes, sign out</string>
+    <string name="sign_out_failed">Couldn\'t sign out. Try again.</string>
 </resources>

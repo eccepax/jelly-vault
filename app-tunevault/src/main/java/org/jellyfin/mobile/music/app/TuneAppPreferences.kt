@@ -60,7 +60,7 @@ class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPre
         get() = sharedPreferences.getBoolean(PREF_SHOW_SLEEP_TIMER, true)
         set(value) = sharedPreferences.edit { putBoolean(PREF_SHOW_SLEEP_TIMER, value) }
 
-    /** Whether TuneVault has asked to show notifications (see shouldAskForNotifications). */
+    /** Whether TuneVault has asked to show notifications (see common shouldAskForNotifications). */
     var askedForNotifications: Boolean
         get() = sharedPreferences.getBoolean(PREF_ASKED_NOTIFICATIONS, false)
         set(value) = sharedPreferences.edit { putBoolean(PREF_ASKED_NOTIFICATIONS, value) }

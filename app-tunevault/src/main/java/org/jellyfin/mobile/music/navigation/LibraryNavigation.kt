@@ -1,25 +1,15 @@
 package org.jellyfin.mobile.music.navigation
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.toMutableStateList
+import androidx.compose.runtime.remember
+import org.jellyfin.mobile.common.ui.navigation.VaultBackStack
+import org.jellyfin.mobile.common.ui.navigation.rememberVaultBackStack
 
 private const val ALBUM = "album:"
 private const val ARTIST = "artist:"
 private const val PLAYLIST = "playlist:"
 private const val SETTINGS = "settings"
-private const val HOME = "home"
-
-private val backStackSaver = listSaver<SnapshotStateList<String>, String>(
-    save = { it.toList() },
-    restore = { it.toMutableStateList() },
-)
 
 /** A page that something outside the library, such as the player, asks it to open. */
 sealed interface BrowseTarget {
@@ -36,9 +26,8 @@ class Browse(
 )
 
 /**
- * The library's back stack: [home] (the tabs) with artists and albums opened on top of it, e.g.
- * home → artist → album. Back pops one level. Only ids are saved, so the stack survives rotation and
- * process death, and each level keeps its own saved state (scroll position) while covered.
+ * The library's back stack ([VaultBackStack]): [home] (the tabs) with artists and albums opened on
+ * top of it, e.g. home → artist → album. Back pops one level.
  */
 @Composable
 fun LibraryNavigation(
@@ -51,21 +40,15 @@ fun LibraryNavigation(
     open: BrowseTarget? = null,
     onOpened: () -> Unit = {},
 ) {
-    val stack = rememberSaveable(saver = backStackSaver) { mutableStateListOf() }
-    val savedStates = rememberSaveableStateHolder()
-
-    // Keyed by depth too, so the same album opened at two depths keeps separate state.
-    fun keyAt(depth: Int) = "$depth:${stack.getOrNull(depth - 1) ?: HOME}"
-    val pop: () -> Unit = {
-        savedStates.removeState(keyAt(stack.size))
-        stack.removeAt(stack.lastIndex)
+    val backStack = rememberVaultBackStack()
+    val browse = remember(backStack) {
+        Browse(
+            openAlbum = { backStack.open(ALBUM + it) },
+            openArtist = { backStack.open(ARTIST + it) },
+            openPlaylist = { backStack.open(PLAYLIST + it) },
+            openSettings = { backStack.open(SETTINGS) },
+        )
     }
-    val browse = Browse(
-        openAlbum = { stack += ALBUM + it },
-        openArtist = { stack += ARTIST + it },
-        openPlaylist = { stack += PLAYLIST + it },
-        openSettings = { stack += SETTINGS },
-    )
 
     LaunchedEffect(open) {
         when (open) {
@@ -76,16 +59,13 @@ fun LibraryNavigation(
         onOpened()
     }
 
-    BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
-
-    val top = stack.lastOrNull()
-    savedStates.SaveableStateProvider(keyAt(stack.size)) {
+    backStack.Show { top, close ->
         when {
             top == null -> home(browse)
-            top.startsWith(ALBUM) -> albumDetail(top.removePrefix(ALBUM), pop)
-            top.startsWith(PLAYLIST) -> playlistDetail(top.removePrefix(PLAYLIST), pop)
-            top == SETTINGS -> settings(pop)
-            else -> artistDetail(top.removePrefix(ARTIST), pop, browse)
+            top.startsWith(ALBUM) -> albumDetail(top.removePrefix(ALBUM), close)
+            top.startsWith(PLAYLIST) -> playlistDetail(top.removePrefix(PLAYLIST), close)
+            top == SETTINGS -> settings(close)
+            else -> artistDetail(top.removePrefix(ARTIST), close, browse)
         }
     }
 }

@@ -10,6 +10,8 @@ import org.jellyfin.mobile.books.library.BookLibraryViewModel
 import org.jellyfin.mobile.books.progress.BookProgressSync
 import org.jellyfin.mobile.books.progress.JellyfinBookProgressServer
 import org.jellyfin.mobile.books.reader.BookReaderViewModel
+import org.jellyfin.mobile.books.settings.BookSettingsViewModel
+import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.koin.android.ext.koin.androidApplication
 import org.koin.core.module.dsl.viewModel
@@ -30,5 +32,9 @@ val bookAppModule = module {
     }
     viewModel {
         BookReaderViewModel(androidApplication(), get<BookProgressSync>(), get(), get<BookBookmarkDao>())
+    }
+    viewModel {
+        val signOut = get<SignOut>()
+        BookSettingsViewModel(get(), get(), signOut = { signOut() }, app = get())
     }
 }

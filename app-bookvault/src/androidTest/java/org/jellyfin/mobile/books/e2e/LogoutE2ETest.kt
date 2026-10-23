@@ -10,9 +10,8 @@ import org.jellyfin.mobile.common.R as CommonR
 import org.junit.Test
 
 /**
- * Library "More options" menu -> Settings -> Settings screen (Compose) -> Sign out, confirmed -> lands back on
- * `LoginFragment` (the server itself stays configured, only `currentUserId` is cleared — see
- * `MainViewModel.logout()`).
+ * Library "More options" menu -> Settings -> Sign out, confirmed -> the app starts over at sign-in
+ * (the server itself stays configured, only `currentUserId` is cleared — see `SignOut`).
  */
 @AccountArea
 class LogoutE2ETest : LoggedInE2ETest() {

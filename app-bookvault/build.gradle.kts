@@ -55,7 +55,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
-    implementation(libs.androidx.fragment)
 
     // Lifecycle
     implementation(libs.bundles.androidx.lifecycle)
@@ -98,18 +97,14 @@ dependencies {
     testImplementation(libs.mockwebserver)
     // Migration tests (see the debug assets above)
     testImplementation(libs.androidx.room.testing)
-    // Robolectric shadows the Android framework for Fragment/Activity-level JVM tests. Robolectric
+    // Robolectric shadows the Android framework for Activity- and Compose-level JVM tests. Robolectric
     // itself is still JUnit4-based, so its tests run through the JUnit5 platform's vintage engine
     // alongside the rest of the (JUnit5 Jupiter) suite.
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(project(":common-testing"))
     testImplementation(project(":test-support"))
-    testImplementation(libs.androidx.fragment.testing)
     testImplementation(libs.compose.ui.test.junit4)
-    // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
-    // into the debug variant, which is what unit tests actually run against.
-    debugImplementation(libs.androidx.fragment.testing.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
     androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)
@@ -121,15 +116,13 @@ dependencies {
         exclude(group = "com.android.support", module = "support-v4")
         exclude(group = "com.android.support", module = "recyclerview-v7")
     }
-    // Compose UI testing (drives BookConnectFragment's ConnectScreen); Espresso above handles the
-    // classic-View fragments (LoginFragment, BookLibraryFragment, BookReaderFragment) in the same
-    // tests.
+    // Compose UI testing; Espresso above handles the reader's pages, still views of their own.
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
 }
 
 androidComponents {
-    // Robolectric fragment tests rely on the debug-only fragment-testing manifest, so unit tests run against debug builds only
+    // Unit tests run against debug builds only (the migration tests need the debug assets above)
     beforeVariants(selector().withBuildType("release")) { variant ->
         variant.enableUnitTest = false
     }

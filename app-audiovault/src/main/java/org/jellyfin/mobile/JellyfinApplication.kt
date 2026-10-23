@@ -14,7 +14,6 @@ import org.jellyfin.mobile.player.playback.removeRetiredNotificationChannels
 import org.jellyfin.mobile.utils.JellyTree
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.fragment.koin.fragmentFactory
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
@@ -39,7 +38,6 @@ class JellyfinApplication : Application() {
 
         val koin = startKoin {
             androidContext(this@JellyfinApplication)
-            fragmentFactory()
 
             modules(audioVaultModules)
         }.koin

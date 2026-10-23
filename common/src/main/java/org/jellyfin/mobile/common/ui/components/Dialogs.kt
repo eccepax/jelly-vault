@@ -25,7 +25,12 @@ import androidx.compose.ui.window.Dialog
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 
-/** Picks one of [choices], scrolling when there are many; choosing reports it and closes, like dismissing does. */
+/**
+ * Picks one of [choices], scrolling when there are many; choosing reports it and closes, like
+ * dismissing does. [message], if any, explains the choice under the title.
+ */
+// Each parameter is part of the dialog's content or one way out of it.
+@Suppress("LongParameterList")
 @Composable
 fun <T> ChoiceDialog(
     title: String,
@@ -33,8 +38,9 @@ fun <T> ChoiceDialog(
     selected: T?,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
+    message: String? = null,
 ) {
-    ListDialog(title = title, onDismiss = onDismiss, modifier = Modifier.selectableGroup()) {
+    ListDialog(title = title, onDismiss = onDismiss, modifier = Modifier.selectableGroup(), message = message) {
         choices.forEach { choice ->
             RadioRow(
                 choice,
@@ -58,16 +64,15 @@ fun ListDialog(
     title: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    message: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colors.surface) {
             Column(modifier = Modifier.padding(vertical = VaultSpacing.XLarge)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.subtitle1,
-                    modifier = Modifier.padding(horizontal = VaultSpacing.XLarge).padding(bottom = VaultSpacing.Large),
-                )
+                val above = Modifier.padding(horizontal = VaultSpacing.XLarge).padding(bottom = VaultSpacing.Large)
+                Text(title, style = MaterialTheme.typography.subtitle1, modifier = above)
+                if (message != null) Text(message, style = MaterialTheme.typography.body2, modifier = above)
                 Column(
                     modifier = modifier
                         .weight(1f, fill = false)

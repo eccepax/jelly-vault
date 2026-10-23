@@ -11,7 +11,6 @@ import org.jellyfin.mobile.common.app.apiModule
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.fragment.koin.fragmentFactory
 import org.koin.core.context.startKoin
 import timber.log.Timber
 
@@ -34,7 +33,6 @@ class BookVaultApplication : Application() {
 
         startKoin {
             androidContext(this@BookVaultApplication)
-            fragmentFactory()
 
             modules(bookVaultModules)
         }

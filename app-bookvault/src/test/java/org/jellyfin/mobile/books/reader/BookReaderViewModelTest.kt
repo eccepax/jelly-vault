@@ -1,6 +1,10 @@
 package org.jellyfin.mobile.books.reader
 
 import android.app.Application
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -357,6 +361,19 @@ class BookReaderViewModelTest {
         coVerify { progressSync.sendSoon() }
     }
 
+    @Test
+    fun `closing a book sends its place too`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        val store = ViewModelStore()
+        ViewModelProvider.create(store, viewModelFactory { initializer { viewModel } })[BookReaderViewModel::class]
+
+        // Closing the PDF renderer after needs Android's LruCache, which a plain JVM test lacks
+        runCatching { store.clear() }
+
+        coVerify { progressSync.sendSoon() }
+    }
+
     // --- contents ---------------------------------------------------------------------------------
 
     @Test
@@ -380,6 +397,21 @@ class BookReaderViewModelTest {
         viewModel.setPage(0)
 
         viewModel.chosenTocEntry.value shouldBe null
+    }
+
+    @Test
+    fun `choosing the entry already open goes back to where it starts`() = runTest {
+        viewModel.loadBook("book-1", initialNightMode = false)
+        awaitLoaded()
+        val entry = EpubTocEntry("Chapter Two", spineIndex = 1, anchor = "ch2")
+
+        viewModel.tocJumps.test {
+            viewModel.openTocEntry(entry)
+            awaitItem() shouldBe entry
+            // Scrolled on in the chapter, then chosen again from the contents
+            viewModel.openTocEntry(entry)
+            awaitItem() shouldBe entry
+        }
     }
 
     // --- setPage bounds clamping ------------------------------------------------------------------

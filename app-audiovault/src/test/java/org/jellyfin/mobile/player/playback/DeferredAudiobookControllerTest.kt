@@ -35,6 +35,19 @@ class DeferredAudiobookControllerTest {
         delegate.commands shouldBe listOf("play a from 0 at 42000", "pause")
     }
 
+    /** The player screen gives up on a book whose service is slow to come up by stopping it. */
+    @Test
+    fun `a book stopped before the connection is up never plays on`() {
+        controller.play(book, startIndex = 0, startPositionMs = 0L)
+        controller.stop()
+        val delegate = FakeAudiobookController()
+
+        connection.set(delegate)
+
+        delegate.commands shouldBe listOf("play a from 0 at 0", "stop")
+        controller.state.value.currentTrack shouldBe null
+    }
+
     @Test
     fun `commands after the connection go straight through`() {
         val delegate = FakeAudiobookController()

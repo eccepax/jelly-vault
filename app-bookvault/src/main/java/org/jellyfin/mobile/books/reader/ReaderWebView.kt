@@ -46,8 +46,8 @@ private class ReaderWebViewClient(
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = when {
         !allowed(request) -> WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
-        // The chapter itself, as the reader shows it; what it loads (pictures, stylesheets) as it is
-        request.isForMainFrame -> request.url.path?.let { chapterPage(File(it)) }
+        // The chapter itself, as the reader shows it; what it loads (pictures, stylesheets), or a picture it links to, as it is
+        request.isForMainFrame -> request.url.path?.takeIf(::isChapterDocument)?.let { chapterPage(File(it)) }
             ?.let { WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(it.toByteArray())) }
         else -> null
     }

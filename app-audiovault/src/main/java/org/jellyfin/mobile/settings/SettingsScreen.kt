@@ -14,15 +14,17 @@ import androidx.compose.material.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.components.AboutSettings
-import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.SettingsActionRow
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
@@ -31,6 +33,9 @@ import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.jellyfin.mobile.downloads.DownloadMethod
+import org.jellyfin.mobile.downloads.downloadNetworks
+import org.jellyfin.mobile.utils.toast
+import org.koin.compose.viewmodel.koinViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
 /** What the settings screen shows. */
@@ -167,12 +172,25 @@ private fun AccountSection(state: SettingsUiState, actions: SettingsActions) {
     )
 }
 
+/** Settings, saved through [viewModel]; [onSignedOut] once signing out is done, to start the app over. */
 @Composable
-private fun downloadNetworks() = listOf(
-    Choice(DownloadMethod.WIFI_ONLY, stringResource(R.string.wifi_only), stringResource(R.string.wifi_only_summary)),
-    Choice(
-        DownloadMethod.MOBILE_DATA,
-        stringResource(R.string.mobile_data),
-        stringResource(R.string.mobile_data_summary),
-    ),
-)
+fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
+    val state by viewModel.state.collectAsState()
+    val signedOut by viewModel.signedOut.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.reload() }
+    LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) { viewModel.signOutFailures.collect { context.toast(R.string.sign_out_failed) } }
+    SettingsScreen(
+        state = state,
+        actions = SettingsActions(
+            onBack = onBack,
+            onHoldToSpeedUp = viewModel::setHoldToSpeedUp,
+            onSkipSilence = viewModel::setSkipSilence,
+            onFlatLibrary = viewModel::setFlatLibrary,
+            onDownloadMethod = viewModel::setDownloadMethod,
+            onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
+            onSignOut = viewModel::signOut,
+        ),
+    )
+}
