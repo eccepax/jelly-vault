@@ -53,6 +53,9 @@ class DownloadRequestsTest {
 
         composeRule.runOnIdle { requests.download(listOf("a", "b")) }
         composeRule.onNodeWithText(string(R.string.network_message)).assertExists()
+        // Offered as the settings offer them
+        composeRule.onNodeWithText(string(R.string.wifi_only_summary)).assertExists()
+        composeRule.onNodeWithText(string(R.string.mobile_data_summary)).assertExists()
         downloaded.shouldBeEmpty()
         composeRule.onNodeWithText(string(R.string.mobile_data)).performClick()
         composeRule.waitForIdle()

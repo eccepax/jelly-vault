@@ -2,7 +2,12 @@ package org.jellyfin.mobile.library
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -141,6 +146,27 @@ class LibraryRouteTest {
         composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertDoesNotExist()
         playback.commands shouldBe listOf("stop")
         verify { libraryViewModel.onPlaybackStopped() }
+    }
+
+    /** As the player does, opened over the library: the library isn't there to see the book stop. */
+    @Test
+    fun `a book that stopped while the library was covered has the list loaded again once it's back`() {
+        var covered by mutableStateOf(false)
+        playback.playing(AudiobookTrack(id = UUID.randomUUID().toString(), title = "Dune", durationMs = 0L))
+        composeRule.setContent {
+            val savedStates = rememberSaveableStateHolder()
+            if (covered) Text("Player") else savedStates.SaveableStateProvider("library") { Library() }
+        }
+        covered = true
+        composeRule.waitForIdle()
+
+        playback.stop()
+        composeRule.waitForIdle()
+        verify(exactly = 0) { libraryViewModel.onPlaybackStopped() }
+        covered = false
+        composeRule.waitForIdle()
+
+        verify(exactly = 1) { libraryViewModel.onPlaybackStopped() }
     }
 
     @Test

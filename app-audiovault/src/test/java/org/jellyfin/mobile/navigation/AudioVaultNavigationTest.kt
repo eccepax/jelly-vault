@@ -47,7 +47,16 @@ class AudioVaultNavigationTest {
                     Button(onClick = navigator.openSettings) { Text("Open settings") }
                 }
             },
-            player = { onBack -> Button(onClick = onBack) { Text("Player page") } },
+            player = { onBack ->
+                Column {
+                    Button(onClick = onBack) { Text("Player page") }
+                    // As the back arrow tapped just as the book stops: the player leaves twice at once
+                    Button(onClick = {
+                        onBack()
+                        onBack()
+                    }) { Text("Leave twice") }
+                }
+            },
             downloads = { onBack, navigator ->
                 Column {
                     Button(onClick = onBack) { Text("Downloads page") }
@@ -110,6 +119,27 @@ class AudioVaultNavigationTest {
         composeRule.onNodeWithText("Downloads page").assertIsDisplayed()
         systemBack()
         composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the player leaving twice at once goes back once`() {
+        composeRule.setContent(content)
+
+        tap("Open player")
+        tap("Leave twice")
+
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the player opened from downloads, leaving twice at once, goes back to downloads`() {
+        composeRule.setContent(content)
+
+        tap("Open downloads")
+        tap("Play a download")
+        tap("Leave twice")
+
+        composeRule.onNodeWithText("Downloads page").assertIsDisplayed()
     }
 
     @Test

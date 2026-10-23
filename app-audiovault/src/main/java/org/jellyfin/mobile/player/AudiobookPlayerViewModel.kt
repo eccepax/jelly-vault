@@ -6,14 +6,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
@@ -80,9 +79,12 @@ class AudiobookPlayerViewModel(
      * [START_TIMEOUT_MS]) stays starting until another is asked for, as the player screen leaves on
      * the failure itself. The screen, showing no book and none
      * starting (as it's restored with the app's process gone), has nothing to show.
+     * Followed only while the player screen follows it; [presenceNow] is where it starts from.
      */
-    val presence: StateFlow<PlayerPresence> = combine(playback.state, _starting, ::presenceOf)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, presenceOf(playback.state.value, null))
+    val presence: Flow<PlayerPresence> = combine(playback.state, _starting, ::presenceOf).distinctUntilChanged()
+
+    /** [presence] as it is now. */
+    val presenceNow: PlayerPresence get() = presenceOf(playback.state.value, _starting.value)
 
     /** Where playback is, about 4 times a second while followed: the player has no event for it moving. */
     val progress: Flow<PlayerProgress> = flow {
@@ -103,11 +105,15 @@ class AudiobookPlayerViewModel(
         val asked = nextRequest()
         _starting.value = Starting.Loading
         viewModelScope.launch {
-            val started = start(options)
+            val loaded = loader.load(options)
+            // Overtaken by another book, or the player screen left, while it loaded: it mustn't play
             if (asked != request) return@launch
-            started.fold(
-                onSuccess = { trackId -> awaitPlaying(asked, trackId) },
-                onFailure = { _startFailures.send(it as PlayerException) },
+            loaded.fold(
+                onSuccess = { queue ->
+                    playback.play(queue.tracks, queue.startIndex, queue.startPositionMs)
+                    awaitPlaying(asked, queue.tracks[queue.startIndex].id)
+                },
+                onFailure = { _startFailures.send(it as? PlayerException ?: PlayerException.NetworkFailure(it)) },
             )
         }
     }
@@ -142,15 +148,6 @@ class AudiobookPlayerViewModel(
         while (_startFailures.tryReceive().isSuccess) Unit
         return ++request
     }
-
-    /** Plays what [options] ask for, giving the id of the track it starts on, or why it can't. */
-    private suspend fun start(options: PlayOptions): Result<String> = loader.load(options).fold(
-        onSuccess = { queue ->
-            playback.play(queue.tracks, queue.startIndex, queue.startPositionMs)
-            Result.success(queue.tracks[queue.startIndex].id)
-        },
-        onFailure = { Result.failure(it as? PlayerException ?: PlayerException.NetworkFailure(it)) },
-    )
 
     fun togglePlayPause() = playback.togglePlayPause()
 

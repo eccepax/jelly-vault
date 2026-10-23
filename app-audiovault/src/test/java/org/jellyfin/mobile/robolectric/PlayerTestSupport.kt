@@ -28,6 +28,8 @@ fun playerViewModel(
     speed: Float = 1f,
     /** The "Hold to speed up" setting. */
     holdToSpeedUp: Boolean = true,
+    /** The setting as it is each time it's read, for a test that changes it. */
+    holdToSpeedUpNow: () -> Boolean = { holdToSpeedUp },
     /** The server's items with these ids: by default, each a book called "Book". */
     items: suspend (List<UUID>) -> List<BaseItemDto> = { ids ->
         ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "Book") }
@@ -41,7 +43,7 @@ fun playerViewModel(
     )
     val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
         every { playbackSpeed } returns speed
-        every { exoPlayerAllowPressSpeedUp } returns holdToSpeedUp
+        every { exoPlayerAllowPressSpeedUp } answers { holdToSpeedUpNow() }
     }
     return AudiobookPlayerViewModel(
         controller,

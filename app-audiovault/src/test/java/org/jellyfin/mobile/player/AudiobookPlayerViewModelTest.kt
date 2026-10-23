@@ -137,6 +137,58 @@ class AudiobookPlayerViewModelTest {
         withTimeoutOrNull(1.seconds) { viewModel.startFailures.first() } shouldBe null
     }
 
+    /** As when back's pressed on the player while the book's still loading: it mustn't start later, unseen. */
+    @Test
+    fun `a book given up on while it loads never plays`() = runTest {
+        val loading = CompletableDeferred<Unit>()
+        val viewModel = viewModel(items = { ids ->
+            loading.await()
+            ids.map(::bookNamed)
+        })
+        viewModel.play(options(book))
+
+        viewModel.forgetStartFailures()
+        loading.complete(Unit)
+        runCurrent()
+
+        controller.commands shouldBe emptyList()
+    }
+
+    @Test
+    fun `of two books asked for, only the last plays, even when the first loads last`() = runTest {
+        val second = UUID.fromString("00000000-0000-4000-8000-000000000002")
+        onServer += second
+        val loads = mapOf(book to CompletableDeferred<Unit>(), second to CompletableDeferred())
+        val viewModel = viewModel(items = { ids ->
+            loads.getValue(ids.single()).await()
+            ids.map(::bookNamed)
+        })
+        viewModel.play(options(book))
+        viewModel.play(options(second))
+
+        loads.getValue(second).complete(Unit)
+        runCurrent()
+        loads.getValue(book).complete(Unit)
+        runCurrent()
+
+        controller.commands shouldBe listOf("play $second from 0 at 0")
+    }
+
+    @Test
+    fun `whether there's a book to show is followed only while the player screen follows it`() = runTest {
+        val viewModel = viewModel()
+        val followers = controller.state.subscriptionCount
+        val others = followers.value
+
+        val following = backgroundScope.launch(
+            UnconfinedTestDispatcher(testScheduler),
+        ) { viewModel.presence.collect {} }
+        followers.value shouldBe others + 1
+        following.cancel()
+        runCurrent()
+        followers.value shouldBe others
+    }
+
     @Test
     fun `a book is starting from being asked for until it plays`() = runTest {
         val loading = CompletableDeferred<Unit>()
@@ -144,14 +196,14 @@ class AudiobookPlayerViewModelTest {
             loading.await()
             ids.map(::bookNamed)
         })
-        viewModel.presence.value.starting shouldBe false
+        viewModel.presenceNow.starting shouldBe false
 
         viewModel.play(options(book))
-        viewModel.presence.value.starting shouldBe true
+        viewModel.presenceNow.starting shouldBe true
         loading.complete(Unit)
         runCurrent()
 
-        viewModel.presence.value.starting shouldBe false
+        viewModel.presenceNow.starting shouldBe false
     }
 
     @Test
@@ -162,12 +214,12 @@ class AudiobookPlayerViewModelTest {
         val viewModel = viewModel()
 
         viewModel.play(options(book))
-        viewModel.presence.value.starting shouldBe true
+        viewModel.presenceNow.starting shouldBe true
 
         // The service tells of the book asked for
         controller.playing(AudiobookTrack(id = book.toString(), title = "Book", durationMs = 0L))
         runCurrent()
-        viewModel.presence.value.starting shouldBe false
+        viewModel.presenceNow.starting shouldBe false
     }
 
     @Test
@@ -178,7 +230,7 @@ class AudiobookPlayerViewModelTest {
         viewModel.play(options(book))
 
         viewModel.startFailures.first()
-        viewModel.presence.value.starting shouldBe true
+        viewModel.presenceNow.starting shouldBe true
     }
 
     @Test
@@ -194,7 +246,7 @@ class AudiobookPlayerViewModelTest {
         controller.commands shouldBe listOf("play $book from 0 at 0", "stop")
         viewModel.startFailures.first().shouldBeInstanceOf<PlayerException.StartTimedOut>()
         // The screen leaves on the failure, once heard, not on there being nothing to show
-        viewModel.presence.value shouldBe PlayerPresence(hasBook = false, starting = true)
+        viewModel.presenceNow shouldBe PlayerPresence(hasBook = false, starting = true)
     }
 
     @Test
