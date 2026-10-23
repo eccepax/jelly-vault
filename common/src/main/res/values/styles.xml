@@ -9,4 +9,11 @@
     </style>
 
     <style name="AppTheme" parent="AppTheme.V21" />
+
+    <!-- Launch theme. ic_splash draws the app's own launcher layers, so every app shares it -->
+    <style name="AppTheme.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/theme_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
+    </style>
 </resources>

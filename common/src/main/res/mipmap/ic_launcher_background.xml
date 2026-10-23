@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stand-in so :common's shared launcher icon and splash link. Every app replaces it with its
+     own PNG in each density folder, which Android always picks over this unqualified one.
+     LogoContract checks that the app's own layer is what loads. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@android:color/transparent" />
+</shape>
