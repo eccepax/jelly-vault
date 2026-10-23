@@ -17,6 +17,7 @@ private const val DOWNLOAD_TIMEOUT_MS = 60_000L
  * and shows a Toast; see `BookLibraryScreen`). Finished means the book's whole file is on the
  * device, not just that the tap registered.
  */
+@DownloadsArea
 class DownloadE2ETest : LoggedInE2ETest() {
 
     @Test

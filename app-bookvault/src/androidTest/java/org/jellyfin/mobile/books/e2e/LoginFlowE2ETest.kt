@@ -10,8 +10,10 @@ import org.junit.Test
  * `app-audiovault` via the `common` module) -> lands on `BookLibraryFragment`. Runs against the
  * test server (see [BaseE2ETest]).
  */
+@AccountArea
 class LoginFlowE2ETest : LoggedInE2ETest() {
 
+    @Smoke
     @Test
     fun loginThroughToLibrary() {
         loginAndWaitForLibrary()

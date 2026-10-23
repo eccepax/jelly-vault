@@ -9,6 +9,8 @@ android {
 
 dependencies {
     implementation(libs.androidx.core)
+    implementation(libs.junit4)
+    implementation(libs.kotest.assertions)
     implementation(libs.robolectric)
     implementation(libs.roborazzi)
 }

@@ -77,6 +77,16 @@ class BookDownloadsTest {
     }
 
     @Test
+    fun `the space used is every book's file together`() = runTest {
+        downloads.download("b1")
+        downloads.download("b2")
+        items.complete("b1", bytes = 2_000L)
+        items.complete("b2", bytes = 3_000L)
+
+        downloads.bytesUsed.first() shouldBe 5_000L
+    }
+
+    @Test
     fun `a book whose file was lost is fetched again at launch`() = runTest {
         downloads.download("b1")
         items.complete("b1")

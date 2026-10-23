@@ -1,11 +1,14 @@
 package org.jellyfin.mobile.common.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -18,8 +21,10 @@ import androidx.compose.material.Switch
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import org.jellyfin.mobile.common.R
+import org.jellyfin.mobile.common.ui.formatBytes
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 
 /** The heading over a group of settings, in the app's accent. */
@@ -149,6 +155,52 @@ fun InlineConfirm(
             TextButton(onClick = onCancel) { Text(stringResource(R.string.vault_cancel)) }
         }
     }
+}
+
+/**
+ * How much space downloads take, and removing them all after asking in place ([InlineConfirm]).
+ * [hasDownloads] rather than [bytes] says whether there's anything to remove: downloads waiting for
+ * Wi-Fi take no space yet, but can still be removed.
+ */
+@Composable
+fun DownloadsSpaceSetting(bytes: Long, hasDownloads: Boolean, onRemoveAll: () -> Unit) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    val textModifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small)
+    if (!hasDownloads) {
+        // Removed elsewhere while asking: don't ask again, unprompted, once something downloads
+        LaunchedEffect(Unit) { confirming = false }
+        Text(stringResource(R.string.vault_downloads_nothing), modifier = textModifier)
+        return
+    }
+    Text(stringResource(R.string.vault_downloads_use, formatBytes(bytes)), modifier = textModifier)
+    if (confirming) {
+        InlineConfirm(
+            message = stringResource(R.string.vault_downloads_remove_all_confirm),
+            confirmLabel = stringResource(R.string.vault_downloads_remove_all_yes),
+            onConfirm = {
+                confirming = false
+                onRemoveAll()
+            },
+            onCancel = { confirming = false },
+            modifier = Modifier.bringIntoViewWhenShown(),
+        )
+    } else {
+        OutlinedButton(
+            onClick = { confirming = true },
+            modifier = Modifier.padding(horizontal = VaultSpacing.Large, vertical = VaultSpacing.Small),
+        ) {
+            Text(stringResource(R.string.vault_downloads_remove_all))
+        }
+    }
+}
+
+/** A confirmation opened near the bottom would otherwise appear below the fold, buttons unseen. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.bringIntoViewWhenShown(): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(Unit) { requester.bringIntoView() }
+    return bringIntoViewRequester(requester)
 }
 
 /** Signs out, after asking in place ([InlineConfirm]); [confirmDetail] says what happens to downloads. */

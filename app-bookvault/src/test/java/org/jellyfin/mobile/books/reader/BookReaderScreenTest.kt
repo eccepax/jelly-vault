@@ -166,7 +166,10 @@ class BookReaderScreenTest {
     fun `an EPUB's contents mark the chapter being read, and choosing one goes to it`() {
         var went: Int? = null
         val toc = listOf(EpubTocEntry("Prologue", 0), EpubTocEntry("Chapter One", 1), EpubTocEntry("Chapter Two", 3))
-        show(epub.copy(chapter = 4, tableOfContents = toc), BookReaderActions(onGoTo = { went = it }))
+        show(
+            epub.copy(chapter = 4, tableOfContents = toc),
+            BookReaderActions(onOpenTocEntry = { went = it.spineIndex }),
+        )
 
         openMenuItem(R.string.contents_title)
 
@@ -174,6 +177,29 @@ class BookReaderScreenTest {
         composeRule.onNodeWithText("Prologue").assertIsNotSelected()
         composeRule.onNodeWithText("Chapter One").performClick()
         went shouldBe 1
+    }
+
+    @Test
+    fun `choosing a chapter that shares its file hands over the entry, to open at it`() {
+        var opened: EpubTocEntry? = null
+        val toc = listOf(EpubTocEntry("Chapter I", 1, "ch1"), EpubTocEntry("Chapter II", 1, "ch2"))
+        show(epub.copy(chapter = 1, tableOfContents = toc), BookReaderActions(onOpenTocEntry = { opened = it }))
+
+        openMenuItem(R.string.contents_title)
+        composeRule.onNodeWithText("Chapter II").performClick()
+
+        opened shouldBe toc[1]
+    }
+
+    @Test
+    fun `the contents mark the chapter chosen, not just the first in its file`() {
+        val toc = listOf(EpubTocEntry("Chapter I", 1, "ch1"), EpubTocEntry("Chapter II", 1, "ch2"))
+        show(epub.copy(chapter = 1, tableOfContents = toc, chosenTocEntry = toc[1]))
+
+        openMenuItem(R.string.contents_title)
+
+        composeRule.onNodeWithText("Chapter II").assertIsSelected()
+        composeRule.onNodeWithText("Chapter I").assertIsNotSelected()
     }
 
     @Test

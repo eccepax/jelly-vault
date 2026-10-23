@@ -14,6 +14,7 @@ import org.junit.Test
  * `LoginFragment` (the server itself stays configured, only `currentUserId` is cleared — see
  * `MainViewModel.logout()`).
  */
+@AccountArea
 class LogoutE2ETest : LoggedInE2ETest() {
 
     @Test
