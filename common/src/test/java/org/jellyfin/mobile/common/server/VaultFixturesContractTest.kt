@@ -139,8 +139,12 @@ class VaultFixturesContractTest {
             books.firstOrNull()?.name shouldBe Books.FIRST_BY_TITLE_PDF
             books.firstOrNull()?.path.orEmpty().lowercase() shouldEndWith ".pdf"
             books.single { it.name.orEmpty().contains(Books.SEARCH_TERM, ignoreCase = true) }.name shouldBe Books.EPUB
-            // PDFs run 10,000 ticks a page on the server
-            books.firstOrNull()?.runTimeTicks shouldBe Books.FIRST_BY_TITLE_PDF_PAGES * 10_000L
+            // PDFs run 10,000 ticks a page on the server, from Jellyfin 12 (see countsPdfPages)
+            if (VaultTestServer.countsPdfPages) {
+                books.firstOrNull()?.runTimeTicks shouldBe Books.FIRST_BY_TITLE_PDF_PAGES * 10_000L
+            } else {
+                books.firstOrNull()?.runTimeTicks.shouldNotBeNull() shouldBeGreaterThan 0L
+            }
             for (epub in listOf(Books.EPUB, Books.OTHER_EPUB)) {
                 withClue(epub) {
                     books.singleOrNull { it.name == epub }?.path.orEmpty().lowercase() shouldEndWith ".epub"
