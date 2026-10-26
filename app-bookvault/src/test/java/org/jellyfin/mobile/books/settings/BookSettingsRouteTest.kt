@@ -31,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import org.jellyfin.mobile.common.R as CommonR
 
 /** Settings as BookVault shows them: each choice is saved where the app reads it. */
@@ -46,6 +47,7 @@ class BookSettingsRouteTest {
     private val downloads = FakeDownloadSettings()
     private val signingOut = CompletableDeferred<Unit>()
     private var signOuts = 0
+    private var signOutFails = false
     private var backs = 0
     private var signedOut = 0
 
@@ -55,6 +57,7 @@ class BookSettingsRouteTest {
             downloads = downloads,
             signOut = {
                 signOuts++
+                if (signOutFails) error("Couldn't forget the account")
                 signingOut.await()
             },
             app = ClientInfo("BookVault", "9.9.9"),
@@ -179,6 +182,27 @@ class BookSettingsRouteTest {
         signingOut.complete(Unit)
         composeRule.waitForIdle()
 
+        signedOut shouldBe 1
+    }
+
+    @Test
+    fun `a sign out that fails says so, and can be tried again`() {
+        signOutFails = true
+        show()
+        clickText("Sign out")
+        clickText("Yes, sign out")
+        composeRule.waitForIdle()
+
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(CommonR.string.sign_out_failed)
+        signedOut shouldBe 0
+
+        signOutFails = false
+        signingOut.complete(Unit)
+        clickText("Sign out")
+        clickText("Yes, sign out")
+        composeRule.waitForIdle()
+
+        signOuts shouldBe 2
         signedOut shouldBe 1
     }
 

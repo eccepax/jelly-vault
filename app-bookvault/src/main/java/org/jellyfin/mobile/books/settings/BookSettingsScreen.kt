@@ -33,6 +33,7 @@ import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
+import org.jellyfin.mobile.common.ui.components.SignOutFailures
 import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
@@ -149,6 +150,7 @@ fun BookSettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Bo
     val signedOut by viewModel.signedOut.collectAsState()
     LaunchedEffect(viewModel) { viewModel.reload() }
     LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
+    SignOutFailures(viewModel.signOutFailures)
     BookSettingsScreen(
         state = state,
         actions = BookSettingsActions(

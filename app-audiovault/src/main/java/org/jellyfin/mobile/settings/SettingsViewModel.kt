@@ -3,43 +3,35 @@ package org.jellyfin.mobile.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.exoplayer.offline.DownloadManager
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.common.account.SigningOut
 import org.jellyfin.mobile.downloads.applyDownloadMethod
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.sdk.model.ClientInfo
-import timber.log.Timber
 
 /** AudioVault's settings: each change is saved, then shown by reading the settings back. */
 class SettingsViewModel(
     private val preferences: AudioVaultAppPreferences,
     private val downloadManager: DownloadManager,
     private val playback: AudiobookPlaybackController,
-    private val signOut: suspend () -> Unit,
+    signOut: suspend () -> Unit,
     private val app: ClientInfo,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(read())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
-    private val _signedOut = MutableStateFlow(false)
+    private val signingOut = SigningOut(viewModelScope, signOut)
 
     /** Becomes true once signed out; the app then starts over at sign-in. */
-    val signedOut: StateFlow<Boolean> = _signedOut.asStateFlow()
-
-    private val _signOutFailures = Channel<Unit>(Channel.CONFLATED)
+    val signedOut: StateFlow<Boolean> = signingOut.done
 
     /** Each sign out that failed, to say so; signing out can be tried again. */
-    val signOutFailures: Flow<Unit> = _signOutFailures.receiveAsFlow()
-
-    private var signingOut = false
+    val signOutFailures: Flow<Unit> = signingOut.failures
 
     /**
      * Reads the settings again, for the screen as it opens: this view model outlives it, and a
@@ -67,22 +59,7 @@ class SettingsViewModel(
 
     fun setRemoveDownloadsOnSignOut(remove: Boolean) = save { preferences.removeDownloadsOnSignOut = remove }
 
-    fun signOut() {
-        if (signingOut) return
-        signingOut = true
-        viewModelScope.launch {
-            try {
-                signOut.invoke()
-                _signedOut.value = true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.e(e, "Couldn't sign out")
-                signingOut = false
-                _signOutFailures.send(Unit)
-            }
-        }
-    }
+    fun signOut() = signingOut.start()
 
     private fun save(change: () -> Unit) {
         change()

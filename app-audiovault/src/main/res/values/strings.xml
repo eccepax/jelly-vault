@@ -84,5 +84,4 @@
     <string name="sign_out_keeps_downloads">Your downloaded audiobooks stay on this device.</string>
     <string name="sign_out_removes_downloads">Your downloaded audiobooks will be removed from this device.</string>
     <string name="sign_out_yes">Yes, sign out</string>
-    <string name="sign_out_failed">Couldn\'t sign out. Try again.</string>
 </resources>

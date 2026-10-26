@@ -163,7 +163,7 @@ class SettingsRouteTest {
         click(R.string.sign_out_yes)
         composeRule.waitForIdle()
 
-        ShadowToast.getTextOfLatestToast() shouldBe context.getString(R.string.sign_out_failed)
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(CommonR.string.sign_out_failed)
         signedOut shouldBe 0
 
         signOutFails = false

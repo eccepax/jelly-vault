@@ -2,15 +2,16 @@ package org.jellyfin.mobile.books.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
+import org.jellyfin.mobile.common.account.SigningOut
 import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.sdk.model.ClientInfo
 
@@ -18,7 +19,7 @@ import org.jellyfin.sdk.model.ClientInfo
 class BookSettingsViewModel(
     private val preferences: BookAppPreferences,
     private val downloads: DownloadSettings,
-    private val signOut: suspend () -> Unit,
+    signOut: suspend () -> Unit,
     private val app: ClientInfo,
 ) : ViewModel() {
 
@@ -30,12 +31,13 @@ class BookSettingsViewModel(
             settings.copy(downloadBytes = bytes, hasDownloads = hasDownloads)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, saved.value)
 
-    private val _signedOut = MutableStateFlow(false)
+    private val signingOut = SigningOut(viewModelScope, signOut)
 
     /** Becomes true once signed out; the app then starts over at sign-in. */
-    val signedOut: StateFlow<Boolean> = _signedOut.asStateFlow()
+    val signedOut: StateFlow<Boolean> = signingOut.done
 
-    private var signingOut = false
+    /** Each sign out that failed, to say so; signing out can be tried again. */
+    val signOutFailures: Flow<Unit> = signingOut.failures
 
     /**
      * Reads the settings again, for the screen as it opens: this view model outlives it, and the
@@ -60,14 +62,7 @@ class BookSettingsViewModel(
         viewModelScope.launch { downloads.removeAll() }
     }
 
-    fun signOut() {
-        if (signingOut) return
-        signingOut = true
-        viewModelScope.launch {
-            signOut.invoke()
-            _signedOut.value = true
-        }
-    }
+    fun signOut() = signingOut.start()
 
     private fun save(change: () -> Unit) {
         change()
