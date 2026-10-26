@@ -255,8 +255,9 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
                 state.downloadedIds,
                 state.hiddenIds,
                 actions,
-                // Another folder, sort, filter or search is a different list
-                scrollKey = "${state.folderId}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
+                // Another folder, sort, filter or search is a different list; at the root (no folder)
+                // the title tells the folder view from All Audiobooks
+                scrollKey = "${state.folderId}|${state.title}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
             )
         }
         PullRefreshIndicator(

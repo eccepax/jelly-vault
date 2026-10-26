@@ -220,6 +220,20 @@ class LibraryScreenTest {
         composeRule.onNodeWithText("Chapter 1").assertIsDisplayed()
     }
 
+    @Test
+    fun `switching the root between folders and all audiobooks opens at the top`() {
+        val folders = (1..LONG_LIST).map { book("Folder $it") }
+        val flat = (1..LONG_LIST).map { book("Audiobook $it") }
+        val state = mutableStateOf(defaults.copy(title = "Library", items = folders))
+        composeRule.setContent { AppTheme(VaultBrand.AudioVault) { LibraryScreen(state.value, actions) } }
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).performScrollToIndex(LONG_LIST / 2)
+
+        // Both are the root, with no folder: only the title says this is another list
+        state.value = state.value.copy(title = "All Audiobooks", items = flat)
+
+        composeRule.onNodeWithText("Audiobook 1").assertIsDisplayed()
+    }
+
     // --- top bar ------------------------------------------------------------------------------------
 
     @Test
