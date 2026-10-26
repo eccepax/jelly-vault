@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.books.progress
 
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -66,8 +67,9 @@ class BookProgressContractTest {
     ).content.items.orEmpty().single().id!!
 
     @Test
-    fun `the server counts a PDF's pages, so a page is a position in it`() = runBlocking<Unit> {
-        progress(pdf).runTimeTicks shouldBe AARDVARK_PAGES * PDF_TICKS_PER_PAGE
+    fun `the server gives a PDF a length, so a page is a position in it`() = runBlocking<Unit> {
+        val runTime = progress(pdf).runTimeTicks.shouldNotBeNull()
+        if (VaultTestServer.countsPdfPages) runTime shouldBe AARDVARK_PAGES * PDF_TICKS_PER_PAGE else runTime shouldBeGreaterThan 0L
     }
 
     @Test
