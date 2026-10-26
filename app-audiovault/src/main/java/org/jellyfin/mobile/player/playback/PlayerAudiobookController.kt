@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player.playback
 
 import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,12 @@ class PlayerAudiobookController(
 
     private val _state = MutableStateFlow(AudiobookPlaybackState())
     override val state: StateFlow<AudiobookPlaybackState> = _state.asStateFlow()
+
+    /**
+     * The volume last asked for (the sleep timer's fade). A cast device's volume is its own (the TV's
+     * or speaker's), so while casting it waits, and applies once playback is back here.
+     */
+    private var wantedVolume: Float? = null
 
     /** The player's error at the last sync: a MediaController's is a new copy each time, so it's matched by value. */
     private var seenError: PlaybackException? = null
@@ -86,7 +93,16 @@ class PlayerAudiobookController(
     override fun setSkipSilence(enabled: Boolean) = setSkipSilence.invoke(enabled)
 
     override fun setVolume(volume: Float) {
-        player.volume = volume
+        wantedVolume = volume
+        if (!isRemote) applyWantedVolume()
+    }
+
+    private val isRemote: Boolean get() = player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
+
+    private fun applyWantedVolume() {
+        val volume = wantedVolume ?: return
+        wantedVolume = null
+        if (player.volume != volume) player.volume = volume
     }
 
     override fun stop() {
@@ -99,6 +115,7 @@ class PlayerAudiobookController(
     fun release() = player.release()
 
     private fun syncFromPlayer() {
+        if (!isRemote) applyWantedVolume()
         val tracks = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toAudiobookTrack() }
         // The player keeps its error past stop() and a new playlist, until it's prepared again: only
         // one not seen before is news.
@@ -118,6 +135,7 @@ class PlayerAudiobookController(
                 isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 isEnded = player.playbackState == Player.STATE_ENDED,
                 error = newError?.let { it.localizedMessage ?: it.errorCodeName } ?: kept,
+                isRemote = isRemote,
             )
         }
     }

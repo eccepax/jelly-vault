@@ -3,6 +3,7 @@ package org.jellyfin.mobile.player.playback
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -27,11 +28,15 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.SessionCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.player.forAudiobooks
 import org.jellyfin.mobile.player.session.withPlayableUri
+import org.jellyfin.sdk.api.client.ApiClient
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -50,9 +55,13 @@ class AudiobookPlaybackService : MediaSessionService() {
     private val voiceSearch: AudiobookVoiceSearch by inject()
     private val audiobooks: JellyfinAudiobooks by inject()
     private val appController: DeferredAudiobookController by inject()
+    private val casting: Casting by inject()
+    private val apiClient: ApiClient by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var session: MediaSession? = null
+    private var exoPlayer: ExoPlayer? = null
+    private var sessionCasting: SessionCasting? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +84,8 @@ class AudiobookPlaybackService : MediaSessionService() {
                 addListener(WakeModeFollowsTrack({ downloads.fileFor(it.mediaId) != null }, ::setWakeMode))
             }
 
-        return MediaSession.Builder(this, AudiobookPlayer(exoPlayer))
+        val audiobookPlayer = AudiobookPlayer(exoPlayer)
+        return MediaSession.Builder(this, audiobookPlayer)
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
             .setSessionActivity(
@@ -87,6 +97,26 @@ class AudiobookPlaybackService : MediaSessionService() {
                 ),
             )
             .build()
+            .also { session ->
+                this.exoPlayer = exoPlayer
+                sessionCasting = SessionCasting.attach(
+                    session,
+                    exoPlayer,
+                    casting,
+                    // This player sends the token as a header; the cast device fetches on its own
+                    castUri = { withAccessToken(it.toString(), apiClient.accessToken).toUri() },
+                    wrap = castingWrapper(exoPlayer, audiobookPlayer),
+                )
+            }
+    }
+
+    /**
+     * Chapters and transcode seeking on either player, wrapped once each: a wrapper listens to its
+     * player for good, so a new one per cast would pile up.
+     */
+    private fun castingWrapper(exoPlayer: ExoPlayer, audiobookPlayer: AudiobookPlayer): (Player) -> Player {
+        val wrapped = mutableMapOf<Player, Player>(exoPlayer to audiobookPlayer)
+        return { player -> wrapped.getOrPut(player) { AudiobookPlayer(player) } }
     }
 
     /** Uses the FFmpeg decoders for what the device can't play itself. */
@@ -149,10 +179,12 @@ class AudiobookPlaybackService : MediaSessionService() {
     }
 
     private fun releaseSession() {
-        session?.run {
-            player.release()
-            release()
-        }
+        // The session's player is either of these, so each is released here rather than through it
+        sessionCasting?.release()
+        exoPlayer?.release()
+        session?.release()
+        sessionCasting = null
+        exoPlayer = null
         session = null
     }
 

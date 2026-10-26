@@ -20,6 +20,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
 import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
@@ -35,7 +38,12 @@ import org.koin.compose.viewmodel.koinViewModel
  * started, with nothing else to show.
  */
 @Composable
-fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinViewModel()) {
+fun PlayerRoute(
+    onBack: () -> Unit,
+    viewModel: AudiobookPlayerViewModel = koinViewModel(),
+    /** The app passes its own; without one there's no cast button. */
+    casting: Casting = NoCasting,
+) {
     val context = LocalContext.current
     val goBack by rememberUpdatedState(onBack)
     // Once: a book that can't start can stop the one playing too, and back can be tapped as the
@@ -52,6 +60,7 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
+    val castDevice by casting.castDevice.collectAsState()
     val progress = rememberProgress(viewModel)
     val holdToSpeedUp = rememberHoldToSpeedUp(viewModel)
 
@@ -86,6 +95,9 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
             onTrack = viewModel::skipToTrack,
             onSkipSegment = viewModel::skipOfferedSegment,
         ),
+        castDevice = castDevice,
+        onStopCasting = casting::stopCasting,
+        castButton = { CastButton(casting) },
     )
 }
 

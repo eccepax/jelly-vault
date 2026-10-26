@@ -17,6 +17,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.junit.After
 import org.junit.Before
@@ -54,6 +56,7 @@ class AudiobookPlaybackServiceTest {
                     single { mockk<AudiobookVoiceSearch>() }
                     single { mockk<JellyfinAudiobooks>() }
                     single { appController }
+                    single<Casting> { NoCasting }
                 },
             )
         }
