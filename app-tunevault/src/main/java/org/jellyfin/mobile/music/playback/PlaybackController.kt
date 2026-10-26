@@ -7,6 +7,8 @@ import org.jellyfin.mobile.music.domain.Track
 data class PlaybackState(
     val queue: PlayQueue = PlayQueue.EMPTY,
     val isPlaying: Boolean = false,
+    /** True while the session's player is a cast device's, not this device's. */
+    val isRemote: Boolean = false,
 ) {
     val currentTrack: Track? get() = queue.current
 }

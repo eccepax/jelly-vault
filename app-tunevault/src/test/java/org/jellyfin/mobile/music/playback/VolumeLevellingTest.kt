@@ -28,7 +28,7 @@ class VolumeLevellingTest {
     }
 
     private fun TestScope.playing(vararg tracks: org.jellyfin.mobile.music.domain.Track, index: Int = 0) {
-        playback.state.value = PlaybackState(queue = PlayQueue.of(tracks.toList(), index), isPlaying = true)
+        playback.state.value = playback.state.value.copy(queue = PlayQueue.of(tracks.toList(), index), isPlaying = true)
         runCurrent()
     }
 
@@ -111,5 +111,45 @@ class VolumeLevellingTest {
         playing(unmeasured)
 
         playback.volumes shouldBe emptyList()
+    }
+
+    private fun TestScope.casting(remote: Boolean) {
+        playback.state.value = playback.state.value.copy(isRemote = remote)
+        runCurrent()
+    }
+
+    @Test
+    fun `while casting, the cast device's volume is left alone`() = runTest {
+        levelling()
+        casting(true)
+
+        playing(loud)
+        volume.setFade(0.5f)
+
+        playback.volumes shouldBe emptyList()
+    }
+
+    @Test
+    fun `back from casting, the song playing here is levelled for itself`() = runTest {
+        levelling()
+        playing(loud, quiet)
+        casting(true)
+        playing(loud, quiet, index = 1)
+        playback.volumes.size shouldBe 1
+
+        casting(false)
+
+        playback.volumes.last() shouldBe 1f
+    }
+
+    @Test
+    fun `back from casting, this device's volume is set again only if it changed`() = runTest {
+        levelling()
+        playing(loud)
+        casting(true)
+
+        casting(false)
+
+        playback.volumes.size shouldBe 1
     }
 }

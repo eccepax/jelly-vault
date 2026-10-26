@@ -2,6 +2,8 @@ package org.jellyfin.mobile.music.playback
 
 import android.app.Application
 import android.os.Looper
+import androidx.media3.common.DeviceInfo
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -382,5 +384,32 @@ class PlayerPlaybackControllerTest {
 
         player.volume shouldBe 0.25f
         controller.volume shouldBe 0.25f
+    }
+
+    @Test
+    fun `playback on a cast device shows as remote, and back here as local`() {
+        val castable = Castable(player)
+        val castController = PlayerPlaybackController(castable, streamUrl = { "https://vault.test/stream/$it" })
+        castController.play(abc)
+        settle()
+        castController.state.value.isRemote shouldBe false
+
+        castable.remote = true
+        castController.togglePlayPause()
+        settle()
+        castController.state.value.isRemote shouldBe true
+
+        castable.remote = false
+        castController.togglePlayPause()
+        settle()
+        castController.state.value.isRemote shouldBe false
+    }
+
+    /** The player as a controller sees it once the session's player is a cast player. */
+    private class Castable(player: Player) : ForwardingPlayer(player) {
+        var remote = false
+
+        override fun getDeviceInfo(): DeviceInfo =
+            if (remote) DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).build() else super.getDeviceInfo()
     }
 }

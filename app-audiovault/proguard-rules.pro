@@ -14,11 +14,6 @@
     @android.webkit.JavascriptInterface public *;
 }
 
-# Keep Chromecast methods
--keepclassmembers class org.jellyfin.mobile.player.cast.Chromecast {
-    public *;
-}
-
 # Keep file names/line numbers
 -keepattributes SourceFile,LineNumberTable
 

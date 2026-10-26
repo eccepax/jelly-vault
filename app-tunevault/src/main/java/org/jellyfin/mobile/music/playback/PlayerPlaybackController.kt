@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.music.playback
 
 import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.Player
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -153,6 +154,7 @@ class PlayerPlaybackController(
                     .let { if (index >= 0) it.skipTo(index) else it }
                     .withRepeatMode(player.repeatMode.toRepeatMode()),
                 isPlaying = player.isPlaying,
+                isRemote = player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE,
             )
         }
     }

@@ -35,6 +35,8 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":common-downloads"))
     implementation(project(":common-media"))
+    // Chromecast: the only Google Play services dependency
+    implementation(project(":common-cast"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)

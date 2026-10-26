@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.cast.CastButton
 import org.jellyfin.mobile.common.ui.components.ErrorState
 import org.jellyfin.mobile.common.ui.components.LoadingState
 import org.jellyfin.mobile.common.ui.components.SectionTitle
@@ -53,12 +54,14 @@ fun HomeScreen(
     onFavoriteSongClick: (index: Int) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     isOffline: Boolean = false,
+    castButton: @Composable () -> Unit = {},
 ) {
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
             VaultTopBar(
                 title = stringResource(R.string.home_title),
                 actions = {
+                    castButton()
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
@@ -203,5 +206,6 @@ fun HomeRoute(onAlbumClick: (Album) -> Unit, onSettingsClick: () -> Unit, viewMo
         onFavoriteSongClick = viewModel::playFavorite,
         onSettingsClick = onSettingsClick,
         isOffline = isOffline,
+        castButton = { CastButton(koinInject()) },
     )
 }

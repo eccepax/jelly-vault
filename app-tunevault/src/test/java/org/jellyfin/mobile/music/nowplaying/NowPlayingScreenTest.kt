@@ -44,10 +44,11 @@ class NowPlayingScreenTest {
     )
     private val events = mutableListOf<String>()
 
-    private fun show(state: NowPlayingUiState) {
+    private fun show(state: NowPlayingUiState, castDevice: String? = null) {
         composeRule.setContent {
             NowPlayingScreen(
                 state = state,
+                castDevice = castDevice,
                 actions = NowPlayingActions(
                     onCollapse = { events += "collapse" },
                     onTogglePlayPause = { events += "toggle" },
@@ -63,6 +64,20 @@ class NowPlayingScreenTest {
                 ),
             )
         }
+    }
+
+    @Test
+    fun `while casting, says which device it's playing on`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").assertIsDisplayed()
+    }
+
+    @Test
+    fun `playing here, no device is named`() {
+        show(playing)
+
+        composeRule.onNodeWithText("Playing on", substring = true).assertDoesNotExist()
     }
 
     @Test

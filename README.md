@@ -11,7 +11,7 @@ Four Android apps for a self-hosted [Jellyfin](https://jellyfin.org) server, one
 
 Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the apps install side by side.
 
-None of the apps need Google Play services. None of them cast, but LiveVault runs on Google TV devices, Chromecast with Google TV included.
+TuneVault casts to a Chromecast or a speaker with Google Cast built in, which needs Google Play services on the phone. Without Play services it works the same, just without the cast button; the other apps don't need Play services at all. LiveVault runs on Google TV devices, Chromecast with Google TV included.
 
 Each APK has a `.sha256` checksum next to it. To check an APK really comes from this project, compare its signing certificate (`apksigner verify --print-certs <apk>`, or what Obtainium/AppVerifier show) against:
 
@@ -52,6 +52,7 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Favorites and playlists
 - Offline downloads, optionally over Wi-Fi only
 - Sleep timer and volume levelling
+- Chromecast: plays the queue on a cast device, and picks up on the phone where it left off when you stop
 
 ## LiveVault
 

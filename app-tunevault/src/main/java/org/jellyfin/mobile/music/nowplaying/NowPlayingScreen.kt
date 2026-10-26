@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.cast.PlayingOnLabel
 import org.jellyfin.mobile.common.ui.components.PlayPauseButton
 import org.jellyfin.mobile.common.ui.components.SleepTimerButton
 import org.jellyfin.mobile.common.ui.components.SleepTimerLabel
@@ -52,9 +53,18 @@ import org.jellyfin.mobile.music.library.FavoriteButton
 import org.jellyfin.mobile.music.ui.artistOrUnknown
 import org.jellyfin.mobile.music.ui.formatDuration
 
-/** [sleepTimer] is null when the timer is hidden (a setting). */
+/**
+ * [sleepTimer] is null when the timer is hidden (a setting). [castDevice] names the cast device
+ * playback is on (null while it's on this device); [castButton] is the app's cast button.
+ */
 @Composable
-fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleepTimer: SleepTimerUi? = SleepTimerUi()) {
+fun NowPlayingScreen(
+    state: NowPlayingUiState,
+    actions: NowPlayingActions,
+    sleepTimer: SleepTimerUi? = SleepTimerUi(),
+    castDevice: String? = null,
+    castButton: @Composable () -> Unit = {},
+) {
     val track = state.track
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -65,7 +75,8 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
                 IconButton(onClick = actions.onCollapse) {
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.collapse))
                 }
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    castButton()
                     sleepTimer?.let { SleepTimerButton(it, stringResource(R.string.sleep_end_of_song)) }
                     FavoriteButton(isFavorite = state.isFavorite, onToggle = actions.onToggleFavorite)
                     IconButton(onClick = actions.onOpenQueue) {
@@ -109,6 +120,7 @@ fun NowPlayingScreen(state: NowPlayingUiState, actions: NowPlayingActions, sleep
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
             TransportControls(state, actions)
+            PlayingOnLabel(castDevice, Modifier.padding(top = 8.dp))
             sleepTimer?.let { SleepTimerLabel(it.state, stringResource(R.string.sleeps_after_song)) }
         }
     }

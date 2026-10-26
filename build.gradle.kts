@@ -7,6 +7,7 @@ dependencies {
     kover(project(":common"))
     kover(project(":common-media"))
     kover(project(":common-downloads"))
+    kover(project(":common-cast"))
     kover(project(":app-audiovault"))
     kover(project(":app-bookvault"))
     kover(project(":app-livevault"))
