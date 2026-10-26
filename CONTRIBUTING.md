@@ -25,6 +25,17 @@ Debug builds install next to the release apps, under their own IDs ending in `.d
 | `common-downloads` | The download engine |
 | `common-testing`, `test-support` | Test helpers |
 
+## How the apps fit together
+
+The apps are built the same way, so a fix or a pattern in one usually carries over to the others.
+
+- **Compose only.** Each app has a single activity whose content is the common `VaultRoot`: connecting to a server and signing in, then the app's own screens. There are no fragments or XML layouts. Dependencies are wired with Koin, and each app keeps its own data in Room.
+- **Navigation** is a saved back stack of screen names over the app's home screen, so it survives rotation and the app's process being stopped. `AudioVaultNavigation` and TuneVault's `LibraryNavigation` use the common `VaultBackStack`; `BookVaultNavigation` has its own, of the same shape. A screen that holds something open (a book being read) gets view models of its own, released when it closes.
+- **Playback** (AudioVault, TuneVault) runs in a Media3 `MediaSessionService` (`AudiobookPlaybackService`, `PlaybackService`) that outlives the screens, so it keeps playing in the background and lock-screen and Bluetooth controls reach it. The screens talk to it through a `MediaController` (`DeferredConnection` in `common-media`). The sleep timer is shared, in `common`.
+- **Downloads** (all but LiveVault) go through the engine in `common-downloads`.
+- **Places in a book** (AudioVault, BookVault) sync with the server through `ServerPositions` in `common`, which writes the user's data directly. When the phone and the server disagree, the newer place wins, and places saved while it can't be reached are kept and sent later. TuneVault reports plays instead, queued while offline.
+- **BookVault's reader** draws PDFs as a `LazyColumn` (scroll) or a `HorizontalPager` (a page at a time), and EPUB chapters as locked-down WebViews (no scripts, only the book's own files) inside a `HorizontalPager`. PDFs zoom with `Modifier.pageZoom`.
+
 ## Before opening a pull request
 
 GitHub runs these on every pull request, and they need to pass:
@@ -48,7 +59,10 @@ test-server/up.sh    # Jellyfin on :8097 with music, audiobooks, books and Live 
 export VAULT_TEST_USERNAME=vault-test VAULT_TEST_PASSWORD=vault-test
 ./gradlew test                                          # contract tests now run instead of skipping
 E2E_MODULE=app-tunevault scripts/run-e2e-tests.sh       # end-to-end, on an emulator
+E2E_MODULE=app-bookvault E2E_SUITE=smoke scripts/run-e2e-tests.sh   # just the critical paths
 ```
+
+`E2E_SUITE` runs part of an app's end-to-end tests (AudioVault, BookVault and TuneVault): `smoke`, or one area such as `reading` (BookVault) or `playback`. Each app's areas are listed in its `E2ESuites.kt`, and every test class belongs to exactly one.
 
 The end-to-end tests clear the app's data, so use an emulator. Without credentials the server tests are skipped, so a plain `./gradlew test` passes with no server. With them but no server reachable, they fail.
 
