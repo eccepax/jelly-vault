@@ -28,8 +28,9 @@ import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
+import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.player.forAudiobooks
-import org.jellyfin.mobile.player.wakeModeFor
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -69,7 +70,8 @@ class AudiobookPlaybackService : MediaSessionService() {
             .apply {
                 setPlaybackSpeed(preferences.playbackSpeed)
                 skipSilenceEnabled = preferences.skipSilenceEnabled
-                addListener(WakeModeFollowsTrack(this))
+                // A track playing from the device needs only the CPU kept awake; one streaming needs Wi-Fi too
+                addListener(WakeModeFollowsTrack({ downloads.fileFor(it.mediaId) != null }, ::setWakeMode))
             }
 
         return MediaSession.Builder(this, AudiobookPlayer(exoPlayer))
@@ -124,14 +126,6 @@ class AudiobookPlaybackService : MediaSessionService() {
         .setDisplayName(getString(name))
         .setSlots(slot)
         .build()
-
-    /** A track playing from the device needs only the CPU kept awake; one streaming needs Wi-Fi too. */
-    private inner class WakeModeFollowsTrack(private val player: ExoPlayer) : Player.Listener {
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val onDevice = mediaItem != null && downloads.fileFor(mediaItem.mediaId) != null
-            player.setWakeMode(wakeModeFor(onDevice))
-        }
-    }
 
     /** A new session if the last was let go of, for a controller connecting again before the service stops. */
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession =
