@@ -41,12 +41,13 @@ class AudioVaultAppPreferencesTest {
     // --- downloadOnWifiOnly ----------------------------------------------------------------------
 
     @Test
-    fun `downloads wait for Wi-Fi until told otherwise, and that's remembered`() {
-        preferences.downloadOnWifiOnly shouldBe true
+    fun `downloads use any network until told to wait for Wi-Fi, and that's remembered`() {
+        // The library doesn't show a download waiting for Wi-Fi: on by default, one would look stuck
+        preferences.downloadOnWifiOnly shouldBe false
 
-        preferences.downloadOnWifiOnly = false
+        preferences.downloadOnWifiOnly = true
 
-        AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe false
+        AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe true
     }
 
     @Test
@@ -62,6 +63,18 @@ class AudioVaultAppPreferencesTest {
             AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe wifiOnly
             upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
         }
+    }
+
+    @Test
+    fun `an old choice of networks that isn't a number is let go instead of failing every launch`() {
+        val upgraded = FakeSharedPreferences()
+        upgraded.edit().putString(OLD_DOWNLOAD_METHOD, "1").apply()
+        val context = mockk<Context>(relaxed = true) {
+            every { getSharedPreferences(any(), any()) } returns upgraded
+        }
+
+        AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe false
+        upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
     }
 
     // --- mediaSegmentActions --------------------------------------------------------------------
@@ -171,7 +184,9 @@ private class FakeSharedPreferences : SharedPreferences {
     @Suppress("UNCHECKED_CAST")
     override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? =
         values[key] as? MutableSet<String> ?: defValues
-    override fun getInt(key: String?, defValue: Int): Int = values[key] as? Int ?: defValue
+
+    // As the real ones: a value of another type throws rather than reading as the default
+    override fun getInt(key: String?, defValue: Int): Int = values[key]?.let { it as Int } ?: defValue
     override fun getLong(key: String?, defValue: Long): Long = values[key] as? Long ?: defValue
     override fun getFloat(key: String?, defValue: Float): Float = values[key] as? Float ?: defValue
     override fun getBoolean(key: String?, defValue: Boolean): Boolean = values[key] as? Boolean ?: defValue

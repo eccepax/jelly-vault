@@ -103,18 +103,28 @@ val audioDownloadsModule = module {
         )
     }
     // Listening saved on the device reaches the server once it can be reached
-    single { OfflineListeningSync(get<JellyfinDatabase>().downloadDao, JellyfinServerPositions(get())) }
+    single {
+        OfflineListeningSync(
+            get<JellyfinDatabase>().downloadDao,
+            JellyfinServerPositions(get()),
+            isKept = get<AudiobookDownloads>()::isKept,
+        )
+    }
     // Signing out keeps downloads unless the user asked otherwise in Settings
     single {
-        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<DownloadSettings>()::removeAll)
+        val downloads = get<AudiobookDownloads>()
+        // Listening that couldn't be sent by now is the account's, not the next one's
+        val downloadsOnSignOut = DownloadsOnSignOut(get()) { downloads.removeAll(forgetUnsentListening = true) }
         val sleepTimer = get<SleepTimer>()
         val reporter = get<AudiobookProgressReporter>()
+        val offlineListening = get<OfflineListeningSync>()
         SignOut(
             get(),
             get<ApiClientController>()::logoutUser,
             whileSignedIn = {
                 sleepTimer.cancel()
                 reporter.finishAndStop()
+                offlineListening.sync()
             },
             forgetAccount = { downloadsOnSignOut() },
         )

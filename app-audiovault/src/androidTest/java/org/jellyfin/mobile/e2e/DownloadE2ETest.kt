@@ -12,7 +12,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.R
-import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.audioItemIdOf
@@ -80,9 +79,8 @@ class DownloadE2ETest : LoggedInE2ETest() {
     private fun downloadATrack() {
         loginAndWaitForLibrary()
         assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
-        // Any network, as Settings' Wi-Fi only switch turned off does, so whether the emulator's
-        // network counts as metered can't hold the download back
-        onMain { koinGet<DownloadSettings>().wifiOnly = false }
+        // Downloads use any network unless Settings says Wi-Fi only, so whether the emulator's
+        // network counts as metered can't hold this one back
 
         // A book of short tracks: the test waits for one whole track, and the first item in the
         // library can be a book of 200 MB files that the emulator can't fetch within the timeout

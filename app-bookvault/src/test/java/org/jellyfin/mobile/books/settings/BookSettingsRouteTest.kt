@@ -186,6 +186,23 @@ class BookSettingsRouteTest {
     }
 
     @Test
+    fun `removing all downloads that fails says so, and can be tried again`() {
+        downloads.bytesUsed.value = 32_400_000L
+        downloads.removeFails = true
+        show()
+
+        clickText("Remove all downloads")
+        clickText("Yes, remove all")
+        composeRule.waitForIdle()
+
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(CommonR.string.vault_downloads_remove_all_failed)
+        downloads.removeFails = false
+        clickText("Remove all downloads")
+        clickText("Yes, remove all")
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun `a sign out that fails says so, and can be tried again`() {
         signOutFails = true
         show()

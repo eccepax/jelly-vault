@@ -4,15 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
 import org.jellyfin.mobile.books.app.BookAppPreferences
 import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.common.account.SigningOut
 import org.jellyfin.mobile.common.downloads.DownloadSettings
+import org.jellyfin.mobile.common.downloads.DownloadSpace
+import org.jellyfin.mobile.common.downloads.DownloadsInSettings
 import org.jellyfin.sdk.model.ClientInfo
 
 /** BookVault's settings: each change is saved, then shown by reading the settings back. */
@@ -24,12 +23,15 @@ class BookSettingsViewModel(
 ) : ViewModel() {
 
     private val saved = MutableStateFlow(read())
+    val state: StateFlow<BookSettingsState> = saved.asStateFlow()
 
-    /** The settings, with the space downloads take as it changes. */
-    val state: StateFlow<BookSettingsState> =
-        combine(saved, downloads.bytesUsed, downloads.hasDownloads) { settings, bytes, hasDownloads ->
-            settings.copy(downloadBytes = bytes, hasDownloads = hasDownloads)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, saved.value)
+    private val downloadsInSettings = DownloadsInSettings(viewModelScope, downloads)
+
+    /** The space downloads take, while the screen shows it; null until known. */
+    val downloadSpace: StateFlow<DownloadSpace?> = downloadsInSettings.space
+
+    /** Each time removing all downloads failed, to say so. */
+    val removeDownloadsFailures: Flow<Unit> = downloadsInSettings.removeFailures
 
     private val signingOut = SigningOut(viewModelScope, signOut)
 
@@ -58,9 +60,7 @@ class BookSettingsViewModel(
     /** Saved, and applied to downloads already waiting too, by the download settings. */
     fun setWifiOnly(wifiOnly: Boolean) = save { downloads.wifiOnly = wifiOnly }
 
-    fun removeAllDownloads() {
-        viewModelScope.launch { downloads.removeAll() }
-    }
+    fun removeAllDownloads() = downloadsInSettings.removeAll()
 
     fun signOut() = signingOut.start()
 

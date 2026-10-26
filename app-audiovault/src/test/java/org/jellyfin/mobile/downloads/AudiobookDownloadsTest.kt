@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Instant
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -193,6 +194,58 @@ class AudiobookDownloadsTest {
         items.removals.toSet() shouldBe setOf(chapter1, chapter2)
         savedDetails().shouldBeEmpty()
         downloads.downloadedIds.first().shouldBeEmpty()
+    }
+
+    @Test
+    fun `removing everything keeps the listening the server hasn't heard about yet, to send it later`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+        listenedOffline(chapter1)
+
+        downloads.removeAll()
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails() shouldBe listOf(chapter1.replace("-", ""))
+        downloads.downloadedIds.first().shouldBeEmpty()
+        downloads.finished.first().shouldBeEmpty()
+        downloads.isKept(UUID.fromString(chapter1)) shouldBe false
+    }
+
+    @Test
+    fun `removing a track keeps the listening the server hasn't heard about yet`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        listenedOffline(chapter1)
+
+        downloads.remove(chapter1)
+
+        items.removals shouldBe listOf(chapter1)
+        savedDetails() shouldBe listOf(chapter1.replace("-", ""))
+        downloads.playable(UUID.fromString(chapter1)) shouldBe null
+    }
+
+    @Test
+    fun `removing everything for the next account forgets unsent listening too`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        listenedOffline(chapter1)
+
+        downloads.removeAll(forgetUnsentListening = true)
+
+        savedDetails().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a track is kept while it's downloaded or on its way`() = runTest {
+        downloads.download(listOf(chapter1))
+
+        downloads.isKept(UUID.fromString(chapter1)) shouldBe true
+        downloads.isKept(UUID.fromString(chapter2)) shouldBe false
+    }
+
+    /** Played offline: a position the server hasn't been sent (see OfflineListeningSync). */
+    private suspend fun listenedOffline(trackId: String) {
+        database.downloadDao.insert(details(trackId)!!.apply { mediaSource.positionSavedAt = Instant.EPOCH })
     }
 
     @Test

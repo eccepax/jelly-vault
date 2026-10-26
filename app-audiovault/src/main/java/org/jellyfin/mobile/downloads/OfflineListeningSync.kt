@@ -8,6 +8,7 @@ import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import timber.log.Timber
 import java.time.Instant
+import java.util.UUID
 
 /**
  * Sends the server the listening it hasn't heard about: positions in downloaded tracks saved on
@@ -17,6 +18,8 @@ import java.time.Instant
 class OfflineListeningSync(
     private val dao: DownloadDao,
     private val server: ServerPositions,
+    /** Whether a track is still downloaded; a removed one's details stay only until this is sent. */
+    private val isKept: suspend (trackId: UUID) -> Boolean,
 ) {
     /**
      * Sends what's waiting, until the server can't be reached or isn't ready (restarting,
@@ -42,10 +45,17 @@ class OfflineListeningSync(
         }
     }
 
-    /** Clears what was sent, unless the player saved a newer position meanwhile. */
+    /**
+     * Clears what was sent, unless the player saved a newer position meanwhile; a removed track's
+     * details go with it.
+     */
     private suspend fun markSent(downloadId: String, savedAt: Instant) {
         val current = dao.get(downloadId)?.mediaSource ?: return
         if (current.positionSavedAt != savedAt) return
+        if (!isKept(current.itemId)) {
+            dao.delete(downloadId)
+            return
+        }
         current.positionSavedAt = null
         current.finished = false
         dao.insert(DownloadEntity(current))

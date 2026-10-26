@@ -154,6 +154,23 @@ class SettingsRouteTest {
     }
 
     @Test
+    fun `removing all downloads that fails says so, and can be tried again`() {
+        downloads.bytesUsed.value = 32_400_000L
+        downloads.removeFails = true
+        show()
+
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(CommonR.string.vault_downloads_remove_all_failed)
+        downloads.removeFails = false
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun `confirming sign out signs out, and the app is told once it's done`() {
         show()
 

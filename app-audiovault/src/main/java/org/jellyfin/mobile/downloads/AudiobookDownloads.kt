@@ -63,18 +63,34 @@ class AudiobookDownloads(
         }
     }
 
+    /**
+     * Deletes [trackId]'s file and its details, except listening the server hasn't heard about yet:
+     * that stays until [OfflineListeningSync] sends it.
+     */
     suspend fun remove(trackId: String) {
         groups.remove(trackId)
         dao.getAllDownloads().first()
             .filter { it.mediaSource.itemId.toString() == trackId }
-            .forEach { dao.delete(it.itemId) }
+            .forEach { if (it.mediaSource.positionSavedAt == null) dao.delete(it.itemId) }
     }
 
-    /** Deletes every downloaded track and its details. */
-    suspend fun removeAll() {
+    /**
+     * Deletes every downloaded track and its details. Listening the server hasn't heard about yet
+     * stays to be sent, unless [forgetUnsentListening] (signing out: it isn't the next account's).
+     */
+    suspend fun removeAll(forgetUnsentListening: Boolean = false) {
         groups.removeAll()
-        dao.deleteAll()
+        if (forgetUnsentListening) {
+            dao.deleteAll()
+        } else {
+            dao.getAllDownloads().first()
+                .filter { it.mediaSource.positionSavedAt == null }
+                .forEach { dao.delete(it.itemId) }
+        }
     }
+
+    /** Whether [trackId] is downloaded or on its way, rather than removed. */
+    suspend fun isKept(trackId: UUID): Boolean = groups.contains(trackId.toString())
 
     /** At launch: fetches again any downloaded track whose file is gone. */
     suspend fun repair() = groups.repair()

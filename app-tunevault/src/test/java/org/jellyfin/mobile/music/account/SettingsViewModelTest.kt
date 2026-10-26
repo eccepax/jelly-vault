@@ -2,13 +2,16 @@ package org.jellyfin.mobile.music.account
 
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.jellyfin.mobile.music.app.FakePlaybackPreferences
 import org.jellyfin.mobile.music.catalog.Account
 import org.jellyfin.mobile.music.catalog.AccountInfo
@@ -150,11 +153,12 @@ class SettingsViewModelTest {
         preferences.downloadQuality = StreamingQuality.HIGH
         downloads.bytesUsed.value = 1_500_000_000L
 
-        val state = viewModel().state.value
+        val viewModel = viewModel()
+        val state = viewModel.state.value
 
         state.downloadQuality shouldBe StreamingQuality.HIGH
         state.downloadOnWifiOnly shouldBe true
-        state.downloadBytes shouldBe 1_500_000_000L
+        viewModel.spaceShown() shouldBe DownloadSpace(bytes = 1_500_000_000L, hasDownloads = true)
     }
 
     @Test
@@ -198,17 +202,43 @@ class SettingsViewModelTest {
         viewModel.removeAllDownloads()
 
         downloads.events shouldBe listOf("removeAll")
-        viewModel.state.value.downloadBytes shouldBe 0L
+        viewModel.spaceShown() shouldBe DownloadSpace(bytes = 0L, hasDownloads = false)
+    }
+
+    @Test
+    fun `removing all downloads that fails says so, and can be tried again`() {
+        downloads.removeFails = true
+        val viewModel = viewModel()
+        val failures = mutableListOf<Unit>()
+        CoroutineScope(Dispatchers.Main).launch { viewModel.removeDownloadsFailures.collect { failures += it } }
+
+        viewModel.removeAllDownloads()
+        failures.size shouldBe 1
+
+        downloads.removeFails = false
+        viewModel.removeAllDownloads()
+        failures.size shouldBe 1
+        downloads.events shouldBe listOf("removeAll")
     }
 
     @Test
     fun `downloads waiting for wi-fi can be removed though they take no space yet`() {
         downloads.queued.value = true
 
-        val state = viewModel().state.value
+        viewModel().spaceShown() shouldBe DownloadSpace(bytes = 0L, hasDownloads = true)
+    }
 
-        state.downloadBytes shouldBe 0L
-        state.hasDownloads shouldBe true
+    @Test
+    fun `the space isn't followed while settings isn't shown`() {
+        viewModel()
+
+        downloads.bytesUsed.subscriptionCount.value shouldBe 0
+    }
+
+    /** The space downloads take, as the screen sees it: it's followed only while shown. */
+    private fun SettingsViewModel.spaceShown(): DownloadSpace? {
+        val shown = downloadSpace.launchIn(CoroutineScope(Dispatchers.Main))
+        return downloadSpace.value.also { shown.cancel() }
     }
 
     @Test

@@ -3,6 +3,7 @@ package org.jellyfin.mobile.testing.downloads
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import org.jellyfin.mobile.common.downloads.DownloadSettings
+import java.io.IOException
 
 class FakeDownloadSettings : DownloadSettings {
     override val bytesUsed = MutableStateFlow(0L)
@@ -18,7 +19,11 @@ class FakeDownloadSettings : DownloadSettings {
             events += "wifiOnly $value"
         }
 
+    /** Removing them all throws, as a disk or database error would. */
+    var removeFails = false
+
     override suspend fun removeAll() {
+        if (removeFails) throw IOException("Couldn't remove the downloads")
         events += "removeAll"
         bytesUsed.value = 0L
         queued.value = false

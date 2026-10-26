@@ -15,20 +15,16 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         if (RETIRED_PREFS.any(sharedPreferences::contains)) {
             sharedPreferences.edit { RETIRED_PREFS.forEach { remove(it) } }
         }
-        // Before the Wi-Fi only switch, a choice of networks: any but Wi-Fi only let mobile data in
+        // Before the Wi-Fi only switch, a choice of networks: any but Wi-Fi only let mobile data in.
+        // Read without getInt, which would throw on every launch for a value kept as anything else.
         if (sharedPreferences.contains(OLD_DOWNLOAD_METHOD)) {
-            val wifiOnly = sharedPreferences.getInt(OLD_DOWNLOAD_METHOD, OLD_WIFI_ONLY) == OLD_WIFI_ONLY
+            val method = sharedPreferences.all[OLD_DOWNLOAD_METHOD] as? Int
             sharedPreferences.edit {
-                putBoolean(Constants.PREF_DOWNLOAD_ON_WIFI_ONLY, wifiOnly)
+                if (method != null) putBoolean(PREF_DOWNLOAD_WIFI_ONLY, method == OLD_WIFI_ONLY)
                 remove(OLD_DOWNLOAD_METHOD)
             }
         }
     }
-
-    /** Whether downloads wait for Wi-Fi; they do until it's switched off in Settings. */
-    var downloadOnWifiOnly: Boolean
-        get() = sharedPreferences.getBoolean(Constants.PREF_DOWNLOAD_ON_WIFI_ONLY, true)
-        set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_DOWNLOAD_ON_WIFI_ONLY, value) }
 
     var mediaSegmentActions: String
         get() = sharedPreferences.getString(
