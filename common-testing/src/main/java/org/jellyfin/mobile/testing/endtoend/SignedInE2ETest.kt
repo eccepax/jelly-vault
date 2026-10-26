@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.testing.endtoend
 
-import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -13,13 +12,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import kotlinx.coroutines.runBlocking
-import org.hamcrest.Matcher
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
@@ -44,8 +38,8 @@ const val FIRST_SCREEN_TIMEOUT_MS = 45_000L
 private const val QUICK_CONNECT_CODE_LENGTH = 6
 
 /**
- * Base for e2e tests that sign in to the Vault through common's screens: the Compose connect screen,
- * then the classic-View LoginFragment (driven with Espresso).
+ * Base for e2e tests that sign in to the Vault through common's screens, the connect screen then
+ * the sign-in screen.
  */
 abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : VaultE2ETest() {
 
@@ -104,7 +98,9 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
 
     protected fun waitForComposeTag(tag: String, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
         composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+            // Between one screen and the next (signing out starts the app over) there's briefly no
+            // Compose content at all, which throws rather than finding nothing: not there yet either
+            runCatching { composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false)
         }
     }
 
@@ -134,16 +130,6 @@ abstract class SignedInE2ETest<A : ComponentActivity>(activity: Class<A>) : Vaul
     protected fun waitForComposeText(text: String, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
         composeRule.waitUntil(timeoutMillis = timeoutMillis) {
             runCatching { composeRule.onNodeWithText(text).assertExists() }.isSuccess
-        }
-    }
-
-    protected fun waitForView(viewId: Int, timeoutMillis: Long = WAIT_TIMEOUT_MS) =
-        waitForView(withId(viewId), timeoutMillis)
-
-    /** Waits until a view matching [matcher] is displayed (combine with isDisplayed() for duplicate ids). */
-    protected fun waitForView(matcher: Matcher<View>, timeoutMillis: Long = WAIT_TIMEOUT_MS) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching { onView(matcher).check(matches(isDisplayed())) }.isSuccess
         }
     }
 }

@@ -42,7 +42,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.fragment)
     implementation(libs.androidx.core.splashscreen)
     coreLibraryDesugaring(libs.androiddesugarlibs)
 
@@ -93,15 +92,11 @@ dependencies {
     // Compose UI tests on Robolectric (e.g. the shared buttons' TV focus outline)
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
-    testImplementation(libs.androidx.fragment.testing)
-    // fragment-testing's EmptyFragmentActivity is only registered when this manifest is merged
-    // into the debug variant, which is what unit tests actually run against.
-    debugImplementation(libs.androidx.fragment.testing.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
 }
 
 androidComponents {
-    // Robolectric fragment tests rely on the debug-only fragment-testing manifest, so unit tests run against debug builds only
+    // Compose UI tests rely on the debug-only ui-test-manifest, so unit tests run against debug builds only
     beforeVariants(selector().withBuildType("release")) { variant ->
         variant.enableUnitTest = false
     }

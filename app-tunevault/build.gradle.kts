@@ -47,8 +47,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.fragment)
-    // Hosts common's View-based LoginFragment inside the otherwise all-Compose UI.
 
     // Lifecycle
     implementation(libs.bundles.androidx.lifecycle)
@@ -112,7 +110,7 @@ dependencies {
 }
 
 androidComponents {
-    // Robolectric fragment tests rely on the debug-only fragment-testing manifest, so unit tests run against debug builds only
+    // Compose UI tests rely on the debug-only ui-test-manifest, so unit tests run against debug builds only
     beforeVariants(selector().withBuildType("release")) { variant ->
         variant.enableUnitTest = false
     }
