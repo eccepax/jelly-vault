@@ -32,7 +32,7 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - 10 s back / 30 s forward skips, chapter markers, and a track list for multi-file books
 - Playback speed control, with hold-to-speed-up
 - Keeps playing in the background, with lock-screen and Bluetooth controls, and pauses when headphones are unplugged
-- Offline downloads
+- Offline downloads, optionally over Wi-Fi only
 
 ## BookVault
 
@@ -50,7 +50,7 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Home, albums, artists, and songs, with search
 - Now Playing screen, mini-player, and an editable queue
 - Favorites and playlists
-- Offline downloads
+- Offline downloads, optionally over Wi-Fi only
 - Sleep timer and volume levelling
 
 ## LiveVault
