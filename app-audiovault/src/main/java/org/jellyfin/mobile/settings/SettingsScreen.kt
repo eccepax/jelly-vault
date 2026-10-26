@@ -17,23 +17,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.components.AboutSettings
-import org.jellyfin.mobile.common.ui.components.ChoiceDialog
-import org.jellyfin.mobile.common.ui.components.SettingsActionRow
+import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutFailures
 import org.jellyfin.mobile.common.ui.components.SignOutSetting
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
-import org.jellyfin.mobile.downloads.DownloadMethod
-import org.jellyfin.mobile.downloads.downloadNetworks
 import org.koin.compose.viewmodel.koinViewModel
 import org.jellyfin.mobile.common.R as CommonR
 
@@ -42,9 +36,12 @@ data class SettingsUiState(
     val holdToSpeedUp: Boolean,
     val skipSilence: Boolean,
     val flatLibrary: Boolean,
-    /** The networks downloads may use; none chosen yet means Wi-Fi only, as downloads treat it. */
-    @DownloadMethod val downloadMethod: Int?,
+    val downloadOnWifiOnly: Boolean,
     val removeDownloadsOnSignOut: Boolean,
+    /** The space downloads take. */
+    val downloadBytes: Long = 0L,
+    /** Anything to remove, even downloads waiting for Wi-Fi that take no space yet. */
+    val hasDownloads: Boolean = false,
     /** For About: the name as the bug form lists it, and the version. */
     val appName: String,
     val appVersion: String,
@@ -56,8 +53,9 @@ data class SettingsActions(
     val onHoldToSpeedUp: (Boolean) -> Unit = {},
     val onSkipSilence: (Boolean) -> Unit = {},
     val onFlatLibrary: (Boolean) -> Unit = {},
-    val onDownloadMethod: (Int) -> Unit = {},
+    val onWifiOnly: (Boolean) -> Unit = {},
     val onRemoveDownloadsOnSignOut: (Boolean) -> Unit = {},
+    val onRemoveAllDownloads: () -> Unit = {},
     val onSignOut: () -> Unit = {},
 )
 
@@ -129,16 +127,14 @@ private fun LibrarySection(state: SettingsUiState, actions: SettingsActions) {
     )
 }
 
+/** As BookVault's and TuneVault's: Wi-Fi only, what signing out does with downloads, and the space they take. */
 @Composable
 private fun DownloadsSection(state: SettingsUiState, actions: SettingsActions) {
-    var choosingNetwork by rememberSaveable { mutableStateOf(false) }
-    val networks = downloadNetworks()
-    val network = networks.first { it.value == (state.downloadMethod ?: DownloadMethod.WIFI_ONLY) }
     SettingsSectionHeader(stringResource(R.string.pref_category_downloads))
-    SettingsActionRow(
-        label = stringResource(R.string.network_title),
-        summary = network.label,
-        onClick = { choosingNetwork = true },
+    SettingsSwitchRow(
+        label = stringResource(CommonR.string.vault_pref_download_wifi_only),
+        checked = state.downloadOnWifiOnly,
+        onCheckedChange = actions.onWifiOnly,
     )
     SettingsSwitchRow(
         label = stringResource(CommonR.string.pref_remove_downloads_on_sign_out),
@@ -146,15 +142,7 @@ private fun DownloadsSection(state: SettingsUiState, actions: SettingsActions) {
         checked = state.removeDownloadsOnSignOut,
         onCheckedChange = actions.onRemoveDownloadsOnSignOut,
     )
-    if (choosingNetwork) {
-        ChoiceDialog(
-            title = stringResource(R.string.network_title),
-            choices = networks,
-            selected = network.value,
-            onSelect = actions.onDownloadMethod,
-            onDismiss = { choosingNetwork = false },
-        )
-    }
+    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAllDownloads)
 }
 
 @Composable
@@ -186,8 +174,9 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
             onHoldToSpeedUp = viewModel::setHoldToSpeedUp,
             onSkipSilence = viewModel::setSkipSilence,
             onFlatLibrary = viewModel::setFlatLibrary,
-            onDownloadMethod = viewModel::setDownloadMethod,
+            onWifiOnly = viewModel::setWifiOnly,
             onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
+            onRemoveAllDownloads = viewModel::removeAllDownloads,
             onSignOut = viewModel::signOut,
         ),
     )

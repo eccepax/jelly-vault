@@ -4,9 +4,6 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,7 +14,6 @@ import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
-import org.jellyfin.mobile.downloads.DownloadMethod
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,7 +32,7 @@ class SettingsScreenTest {
         holdToSpeedUp = true,
         skipSilence = false,
         flatLibrary = true,
-        downloadMethod = DownloadMethod.WIFI_ONLY,
+        downloadOnWifiOnly = true,
         removeDownloadsOnSignOut = false,
         appName = "AudioVault",
         appVersion = "1.2.3",
@@ -53,7 +49,8 @@ class SettingsScreenTest {
                         onHoldToSpeedUp = { events += "holdToSpeedUp $it" },
                         onSkipSilence = { events += "skipSilence $it" },
                         onFlatLibrary = { events += "flatLibrary $it" },
-                        onDownloadMethod = { events += "downloadMethod $it" },
+                        onWifiOnly = { events += "wifiOnly $it" },
+                        onRemoveAllDownloads = { events += "removeAll" },
                         onRemoveDownloadsOnSignOut = { events += "removeOnSignOut $it" },
                         onSignOut = { events += "signOut" },
                     ),
@@ -93,23 +90,34 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun `the network for downloads shows the one in use, and a picker to change it`() {
+    fun `downloads are Wi-Fi only until switched off`() {
         show()
 
-        val network = string(R.string.network_title)
-        composeRule.onNodeWithText(string(R.string.wifi_only)).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(network).performScrollTo().performClick()
-        composeRule.onAllNodes(hasText(string(R.string.wifi_only)) and isSelectable())[0].assertIsSelected()
-        composeRule.onNodeWithText(string(R.string.mobile_data)).performClick()
+        val wifiOnly = string(CommonR.string.vault_pref_download_wifi_only)
+        composeRule.onNodeWithText(wifiOnly).performScrollTo().assertIsOn()
+        composeRule.onNodeWithText(wifiOnly).performClick()
 
-        events shouldBe listOf("downloadMethod ${DownloadMethod.MOBILE_DATA}")
+        events shouldBe listOf("wifiOnly false")
     }
 
     @Test
-    fun `with no network chosen yet, it's Wi-Fi only`() {
-        show(defaults.copy(downloadMethod = null))
+    fun `shows the space downloads take, and removing them all asks first`() {
+        show(defaults.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
 
-        composeRule.onNodeWithText(string(R.string.wifi_only)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        events shouldBe emptyList()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+        events shouldBe listOf("removeAll")
+    }
+
+    @Test
+    fun `with nothing downloaded there is nothing to remove`() {
+        show()
+
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Remove all downloads").assertDoesNotExist()
     }
 
     @Test

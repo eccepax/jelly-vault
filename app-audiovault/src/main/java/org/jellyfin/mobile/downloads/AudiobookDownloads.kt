@@ -25,6 +25,12 @@ class AudiobookDownloads(
     /** Tracks whose file is fully on the device. */
     val downloadedIds: Flow<Set<String>> = groups.downloadedItemIds
 
+    /** How much space the tracks' files take. */
+    val bytesUsed: Flow<Long> = groups.bytesUsed
+
+    /** Whether any track is downloaded or on its way, even one waiting for Wi-Fi. */
+    val hasDownloads: Flow<Boolean> = groups.hasDownloads
+
     /** Downloaded tracks' details, for the downloads screen: only those whose file is complete. */
     val finished: Flow<List<DownloadEntity>> = combine(dao.getAllDownloads(), downloadedIds) { all, done ->
         all.filter { it.mediaSource.itemId.toString() in done }
