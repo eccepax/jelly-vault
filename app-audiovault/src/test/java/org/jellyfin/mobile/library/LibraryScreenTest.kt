@@ -206,6 +206,20 @@ class LibraryScreenTest {
         composeRule.onNodeWithText("Book 3").assertIsDisplayed()
     }
 
+    @Test
+    fun `a sub-folder named like its parent opens at its top`() {
+        val parent = (1..LONG_LIST).map { book("Part $it") }
+        val child = (1..LONG_LIST).map { book("Chapter $it") }
+        val state = mutableStateOf(defaults.copy(title = "Dune", folderId = "parent", items = parent))
+        composeRule.setContent { AppTheme(VaultBrand.AudioVault) { LibraryScreen(state.value, actions) } }
+        composeRule.onNodeWithTag(VaultTestTags.LIBRARY_LIST).performScrollToIndex(LONG_LIST / 2)
+
+        // The same title: only the folder says this is another list
+        state.value = state.value.copy(folderId = "child", items = child)
+
+        composeRule.onNodeWithText("Chapter 1").assertIsDisplayed()
+    }
+
     // --- top bar ------------------------------------------------------------------------------------
 
     @Test

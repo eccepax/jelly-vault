@@ -94,7 +94,8 @@ class AudiobookPlaybackServiceTest {
     @Test
     fun `it pauses when headphones are unplugged`() {
         player.playWhenReady = true
-        shadowOf(Looper.getMainLooper()).idle()
+        // ExoPlayer starts listening for unplugging on its playback thread, not the main one
+        advance(exoPlayer).untilPendingCommandsAreFullyHandled()
 
         service.sendBroadcast(Intent(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
         shadowOf(Looper.getMainLooper()).idle()

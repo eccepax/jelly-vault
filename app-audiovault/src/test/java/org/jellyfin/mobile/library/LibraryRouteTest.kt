@@ -82,6 +82,7 @@ class LibraryRouteTest {
         every { libraryViewModel.downloadedIds } returns downloadedIdsFlow
         every { libraryViewModel.hiddenIds } returns hiddenIdsFlow
         every { libraryViewModel.filterQuery } returns filterQueryFlow
+        every { libraryViewModel.folderId } returns MutableStateFlow(null)
         every { libraryViewModel.title } returns MutableStateFlow("Library")
         every { libraryViewModel.canGoUp } returns canGoUpFlow
         every { libraryViewModel.isLoading } returns MutableStateFlow(false)

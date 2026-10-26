@@ -383,6 +383,29 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `the folder shown is the one last opened, and none at the root`() = runTest {
+        val outer = UUID.randomUUID()
+        val inner = UUID.randomUUID()
+        val viewModel = createViewModel()
+        viewModel.awaitSettled()
+        viewModel.folderId.value shouldBe null
+
+        viewModel.openFolder(outer, "Dune")
+        viewModel.awaitSettled()
+        viewModel.openFolder(inner, "Dune")
+        viewModel.awaitSettled()
+        viewModel.folderId.value shouldBe inner
+
+        viewModel.goUp()
+        viewModel.awaitSettled()
+        viewModel.folderId.value shouldBe outer
+
+        viewModel.goUp()
+        viewModel.awaitSettled()
+        viewModel.folderId.value shouldBe null
+    }
+
+    @Test
     fun `goUp with nothing on the stack returns false`() = runTest {
         val viewModel = createViewModel()
         viewModel.awaitSettled()

@@ -44,8 +44,12 @@ class VaultBackStack internal constructor(
         }
     }
 
-    // Keyed by depth too, so the same page opened at two depths keeps separate state.
-    private fun keyAt(depth: Int) = "$depth:${stack.getOrNull(depth - 1) ?: HOME}"
+    /**
+     * The page at [depth]'s own key, which its saved state is kept under (and anything else of its
+     * own, such as its view models). Keyed by depth too, so the same page opened at two depths keeps
+     * separate state.
+     */
+    fun keyAt(depth: Int) = "$depth:${stack.getOrNull(depth - 1) ?: HOME}"
 
     /**
      * Shows the page at [depth] (home is 0; the top page by default) with its saved state, and back
