@@ -17,6 +17,8 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
+import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.music.TuneMainActivity
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
 import org.koin.android.ext.android.inject
@@ -30,6 +32,7 @@ import org.koin.android.ext.android.inject
 @UnstableApi
 class PlaybackService : MediaSessionService() {
 
+    private val downloads: ItemDownloads by inject()
     private var session: MediaSession? = null
 
     override fun onCreate() {
@@ -45,8 +48,10 @@ class PlaybackService : MediaSessionService() {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setWakeMode(wakeModeFor(onDevice = false))
             .build()
+        // A downloaded song needs only the CPU kept awake; one streaming needs Wi-Fi too
+        player.addListener(WakeModeFollowsTrack({ it.trackId?.let(downloads::fileFor) != null }, player::setWakeMode))
 
         session = MediaSession.Builder(this, player)
             .setCallback(StreamUriCallback)
@@ -62,15 +67,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     /** Fully downloaded songs play from the device; anything else streams. */
-    private fun downloadAwareDataSource(): DataSource.Factory {
-        val downloads: ItemDownloads by inject()
-        return DownloadAwareDataSource.Factory(
-            itemIdOf = TrackCacheKey::trackIdOf,
-            fileFor = downloads::fileFor,
-            onDevice = FileDataSource.Factory(),
-            server = DefaultDataSource.Factory(this),
-        )
-    }
+    private fun downloadAwareDataSource(): DataSource.Factory = DownloadAwareDataSource.Factory(
+        itemIdOf = TrackCacheKey::trackIdOf,
+        fileFor = downloads::fileFor,
+        onDevice = FileDataSource.Factory(),
+        server = DefaultDataSource.Factory(this),
+    )
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 

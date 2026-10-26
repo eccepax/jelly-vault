@@ -65,12 +65,33 @@ class OfflinePlayReporterTest {
     }
 
     @Test
-    fun `a server error isn't kept to resend`() = runTest {
-        server.failure = InvalidStatusException(500)
+    fun `a play the server isn't ready for (restarting, overloaded, signed out) is kept to resend`() = runTest {
+        for (status in listOf(503, 500, 429, 401)) {
+            server.failure = InvalidStatusException(status)
+            reporter.started("status $status", 0L, isPaused = false)
+        }
+
+        kept().size shouldBe 4
+    }
+
+    @Test
+    fun `a play the server refuses as such isn't kept, as resending wouldn't help`() = runTest {
+        server.failure = InvalidStatusException(400)
 
         reporter.started("a", 0L, isPaused = false)
 
         kept().shouldBeEmpty()
+    }
+
+    @Test
+    fun `syncing keeps a play the server isn't ready for`() = runTest {
+        server.failure = ConnectException("refused")
+        reporter.started("a", 0L, isPaused = false)
+        server.failure = InvalidStatusException(503)
+
+        reporter.sync()
+
+        kept().size shouldBe 1
     }
 
     @Test

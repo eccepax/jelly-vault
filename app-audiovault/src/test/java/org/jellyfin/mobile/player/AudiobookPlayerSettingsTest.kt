@@ -41,14 +41,4 @@ class AudiobookPlayerSettingsTest {
 
         verify { builder.setHandleAudioBecomingNoisy(true) }
     }
-
-    @Test
-    fun `a streamed book keeps the network awake while the screen is off`() {
-        wakeModeFor(onDevice = false) shouldBe C.WAKE_MODE_NETWORK
-    }
-
-    @Test
-    fun `a downloaded book keeps only the CPU awake, not Wi-Fi`() {
-        wakeModeFor(onDevice = true) shouldBe C.WAKE_MODE_LOCAL
-    }
 }

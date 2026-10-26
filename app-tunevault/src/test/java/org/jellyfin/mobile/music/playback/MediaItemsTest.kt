@@ -49,6 +49,20 @@ class MediaItemsTest {
     }
 
     @Test
+    fun `the song an item plays comes from its stream url, as the session or a controller sees it`() {
+        val audio = { trackId: String -> "https://vault.test/Audio/$trackId/universal?api_key=t" }
+        val item = PlayQueue.of(listOf(track("a"))).entries.single().toMediaItem(audio)
+        val stripped = MediaItem.Builder()
+            .setMediaId(item.mediaId)
+            .setRequestMetadata(item.requestMetadata)
+            .build()
+
+        item.trackId shouldBe "a"
+        stripped.trackId shouldBe "a"
+        MediaItem.Builder().setMediaId("1").build().trackId shouldBe null
+    }
+
+    @Test
     fun `carries the stream url for the player and for the session`() {
         val entry = PlayQueue.of(listOf(track("a"))).entries.single()
 
