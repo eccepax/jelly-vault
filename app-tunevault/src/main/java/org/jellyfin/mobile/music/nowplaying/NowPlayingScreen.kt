@@ -55,7 +55,8 @@ import org.jellyfin.mobile.music.ui.formatDuration
 
 /**
  * [sleepTimer] is null when the timer is hidden (a setting). [castDevice] names the cast device
- * playback is on (null while it's on this device); [castButton] is the app's cast button.
+ * playback is on (null while it's on this device), and tapping its name offers [onStopCasting];
+ * [castButton] is the app's cast button.
  */
 @Composable
 fun NowPlayingScreen(
@@ -63,6 +64,7 @@ fun NowPlayingScreen(
     actions: NowPlayingActions,
     sleepTimer: SleepTimerUi? = SleepTimerUi(),
     castDevice: String? = null,
+    onStopCasting: () -> Unit = {},
     castButton: @Composable () -> Unit = {},
 ) {
     val track = state.track
@@ -120,7 +122,7 @@ fun NowPlayingScreen(
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
             TransportControls(state, actions)
-            PlayingOnLabel(castDevice, Modifier.padding(top = 8.dp))
+            PlayingOnLabel(castDevice, onStopCasting, Modifier.padding(top = 4.dp))
             sleepTimer?.let { SleepTimerLabel(it.state, stringResource(R.string.sleeps_after_song)) }
         }
     }

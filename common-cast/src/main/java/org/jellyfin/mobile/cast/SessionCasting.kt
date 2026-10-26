@@ -36,15 +36,16 @@ class SessionCasting private constructor(private val castPlayer: CastPlayer) {
         ): SessionCasting? {
             val castPlayers = casting as? CastPlayers ?: return null
             val castPlayer = castPlayers.newCastPlayer(VaultMediaItemConverter(castUri, fallbackMimeType))
+            val remote = RemotePlaylist(castPlayer)
             val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
             castPlayer.setSessionAvailabilityListener(
                 object : SessionAvailabilityListener {
-                    override fun onCastSessionAvailable() = switcher.switchTo(castPlayer)
+                    override fun onCastSessionAvailable() = switcher.switchTo(remote)
                     override fun onCastSessionUnavailable() = switcher.switchTo(local)
                 },
             )
             // The service can start while a cast session is already up
-            if (castPlayer.isCastSessionAvailable) switcher.switchTo(castPlayer)
+            if (castPlayer.isCastSessionAvailable) switcher.switchTo(remote)
             return SessionCasting(castPlayer)
         }
     }

@@ -49,6 +49,7 @@ class NowPlayingScreenTest {
             NowPlayingScreen(
                 state = state,
                 castDevice = castDevice,
+                onStopCasting = { events += "stop casting" },
                 actions = NowPlayingActions(
                     onCollapse = { events += "collapse" },
                     onTogglePlayPause = { events += "toggle" },
@@ -71,6 +72,28 @@ class NowPlayingScreenTest {
         show(playing, castDevice = "Kitchen speaker")
 
         composeRule.onNodeWithText("Playing on Kitchen speaker").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the device's name offers to stop casting`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").performClick()
+        composeRule.onNodeWithText("Stop casting").performClick()
+
+        events shouldBe listOf("stop casting")
+        composeRule.onNodeWithText("Stop casting").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the stop-casting offer can be turned down`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        events shouldBe emptyList()
+        composeRule.onNodeWithText("Stop casting").assertDoesNotExist()
     }
 
     @Test

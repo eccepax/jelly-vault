@@ -22,6 +22,9 @@ interface Casting {
 
     /** The name of the cast device playback is on; null while it's on this device. */
     val castDevice: StateFlow<String?>
+
+    /** Ends the cast: the cast device stops, and playback comes back here (see SessionCasting). */
+    fun stopCasting()
 }
 
 /** Makes players for the cast device (see [SessionCasting]); kept in this module with Media3's unstable cast API. */
@@ -54,6 +57,7 @@ private fun castContextOrNull(context: Context): CastContext? {
 object NoCasting : Casting {
     override val isAvailable = false
     override val castDevice: StateFlow<String?> = MutableStateFlow(null)
+    override fun stopCasting() = Unit
 }
 
 @UnstableApi
@@ -88,6 +92,8 @@ private class CastContextCasting(private val castContext: CastContext) : Casting
             CastSession::class.java,
         )
     }
+
+    override fun stopCasting() = castContext.sessionManager.endCurrentSession(true)
 
     override fun newCastPlayer(converter: MediaItemConverter): CastPlayer = CastPlayer(castContext, converter)
 

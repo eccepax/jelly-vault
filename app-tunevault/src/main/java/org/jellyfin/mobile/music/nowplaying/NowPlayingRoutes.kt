@@ -64,6 +64,7 @@ fun PlayerShell(
                         ),
                         sleepTimer = sleepTimer,
                         castDevice = castDevice,
+                        onStopCasting = casting::stopCasting,
                         castButton = { CastButton(casting) },
                     )
                 },
