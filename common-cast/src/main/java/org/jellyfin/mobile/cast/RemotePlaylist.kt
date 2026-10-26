@@ -2,7 +2,9 @@ package org.jellyfin.mobile.cast
 
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import kotlin.math.min
 
@@ -12,6 +14,12 @@ import kotlin.math.min
  * no uri) and none once its session ends, so moving playback back to this device takes them from
  * [items]. Every change to the playlist goes through here (the session's player is this), and is
  * made to [items] the way the player makes it, out-of-range indexes clamped alike.
+ *
+ * Asked for the queue, which song is playing, or a song or its metadata, it answers from [items]
+ * too, and so does every event it passes on (see [SentQueueListener]), so what reads them through
+ * the session (chapters and progress in an app's own player, the notification) gets the songs as
+ * sent. Only while its copy and the player agree on the queue's length; otherwise the player's own
+ * answer stands.
  */
 // One override per playlist call Player has: each must be mirrored
 @Suppress("TooManyFunctions")
@@ -22,6 +30,30 @@ internal class RemotePlaylist(player: Player) : ForwardingPlayer(player) {
 
     /** The queue as sent, in the player's order. */
     val items: List<MediaItem> get() = tracked.toList()
+
+    /** The song at [index] as sent, while [items] and the player agree on the queue. */
+    private fun sentAt(index: Int): MediaItem? = tracked.getOrNull(index)?.takeIf { tracked.size == mediaItemCount }
+
+    override fun getCurrentMediaItem(): MediaItem? = sentAt(currentMediaItemIndex) ?: super.getCurrentMediaItem()
+
+    override fun getMediaItemAt(index: Int): MediaItem = sentAt(index) ?: super.getMediaItemAt(index)
+
+    override fun getMediaMetadata(): MediaMetadata =
+        sentAt(currentMediaItemIndex)?.mediaMetadata ?: super.getMediaMetadata()
+
+    override fun getCurrentTimeline(): Timeline = sent(super.getCurrentTimeline())
+
+    override fun addListener(listener: Player.Listener) =
+        super.addListener(SentQueueListener(listener, ::sent) { sentAt(currentMediaItemIndex) })
+
+    override fun removeListener(listener: Player.Listener) =
+        super.removeListener(SentQueueListener(listener, ::sent) { null })
+
+    /** [timeline] with each window's item as sent, while it and [items] agree on the queue's length. */
+    private fun sent(timeline: Timeline): Timeline {
+        if (timeline.windowCount != tracked.size || timeline.isEmpty) return timeline
+        return SentTimeline(timeline, tracked.toList())
+    }
 
     override fun setMediaItem(mediaItem: MediaItem) {
         replaceAll(listOf(mediaItem))
@@ -136,4 +168,34 @@ internal class RemotePlaylist(player: Player) : ForwardingPlayer(player) {
         remove(fromIndex, toIndex)
         tracked.addAll(fromIndex, items)
     }
+}
+
+/** [timeline] as it is, except each window holds the item as sent. */
+@UnstableApi
+private class SentTimeline(private val timeline: Timeline, private val items: List<MediaItem>) : Timeline() {
+    override fun getWindowCount(): Int = timeline.windowCount
+
+    override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window =
+        timeline.getWindow(windowIndex, window, defaultPositionProjectionUs).apply { mediaItem = items[windowIndex] }
+
+    override fun getNextWindowIndex(windowIndex: Int, repeatMode: Int, shuffleModeEnabled: Boolean): Int =
+        timeline.getNextWindowIndex(windowIndex, repeatMode, shuffleModeEnabled)
+
+    override fun getPreviousWindowIndex(windowIndex: Int, repeatMode: Int, shuffleModeEnabled: Boolean): Int =
+        timeline.getPreviousWindowIndex(windowIndex, repeatMode, shuffleModeEnabled)
+
+    override fun getFirstWindowIndex(shuffleModeEnabled: Boolean): Int = timeline.getFirstWindowIndex(
+        shuffleModeEnabled,
+    )
+
+    override fun getLastWindowIndex(shuffleModeEnabled: Boolean): Int = timeline.getLastWindowIndex(shuffleModeEnabled)
+
+    override fun getPeriodCount(): Int = timeline.periodCount
+
+    override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period =
+        timeline.getPeriod(periodIndex, period, setIds)
+
+    override fun getIndexOfPeriod(uid: Any): Int = timeline.getIndexOfPeriod(uid)
+
+    override fun getUidOfPeriod(periodIndex: Int): Any = timeline.getUidOfPeriod(periodIndex)
 }

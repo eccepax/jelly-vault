@@ -9,12 +9,16 @@ import androidx.media3.test.utils.ExoPlayerTestRunner
 import androidx.media3.test.utils.FakeMediaSource
 import androidx.media3.test.utils.FakeTimeline
 
-/** Fake audio sources that each last 100 s and keep the requested [MediaItem] (so media ids survive). */
-class FakeAudioSourceFactory : MediaSource.Factory {
+/**
+ * Fake audio sources that each last 100 s and keep the requested [MediaItem] (so media ids survive).
+ * With [placeholders], the player's timeline holds MediaItem.EMPTY for every item instead, the way
+ * Media3's cast player's does for the items the cast device doesn't know.
+ */
+class FakeAudioSourceFactory(private val placeholders: Boolean = false) : MediaSource.Factory {
     override fun createMediaSource(mediaItem: MediaItem): MediaSource = FakeMediaSource(
         FakeTimeline(
             FakeTimeline.TimelineWindowDefinition.Builder()
-                .setMediaItem(mediaItem)
+                .setMediaItem(if (placeholders) MediaItem.EMPTY else mediaItem)
                 .setUid(mediaItem.mediaId)
                 .setDurationUs(DURATION_US)
                 .build(),

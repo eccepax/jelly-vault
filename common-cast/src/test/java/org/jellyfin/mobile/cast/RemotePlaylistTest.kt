@@ -1,10 +1,13 @@
 package org.jellyfin.mobile.cast
 
 import android.app.Application
+import android.os.Bundle
 import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -103,6 +106,99 @@ class RemotePlaylistTest {
         playlist.moveMediaItems(0, 1, 10)
 
         matchesThePlayer()
+    }
+
+    @Test
+    fun `asked what's playing, it answers with the song as sent, not the cast player's placeholder`() {
+        val placeholders = RemotePlaylist(Placeholders(player))
+        val chapters = Bundle().apply { putLongArray("chapterStarts", longArrayOf(0L, 30_000L)) }
+        val withChapters = item("b").buildUpon()
+            .setMediaMetadata(MediaMetadata.Builder().setTitle("Chapter book").setExtras(chapters).build())
+            .build()
+        placeholders.setMediaItems(listOf(item("a"), withChapters), 1, 0L)
+        settle()
+
+        placeholders.currentMediaItem?.mediaId shouldBe "b"
+        placeholders.currentMediaItem?.localConfiguration?.uri.toString() shouldBe "https://vault.test/b"
+        placeholders.getMediaItemAt(0).mediaId shouldBe "a"
+        placeholders.mediaMetadata.title.toString() shouldBe "Chapter book"
+        placeholders.mediaMetadata.extras?.getLongArray("chapterStarts")?.toList() shouldBe listOf(0L, 30_000L)
+    }
+
+    @Test
+    fun `when its copy and the player disagree, the player's own answer stands`() {
+        val placeholders = RemotePlaylist(Placeholders(player))
+        placeholders.setMediaItems(listOf(item("a")))
+        settle()
+        // Changed behind its back, e.g. the cast session ending
+        player.clearMediaItems()
+        settle()
+
+        placeholders.currentMediaItem shouldBe null
+    }
+
+    @Test
+    fun `the queue it reports, and every event about it, carries the songs as sent`() {
+        val castLike: ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
+            .setMediaSourceFactory(FakeAudioSourceFactory(placeholders = true))
+            .build()
+        try {
+            val playlist = RemotePlaylist(castLike)
+            val timelines = mutableListOf<List<String>>()
+            val transitions = mutableListOf<String?>()
+            val titles = mutableListOf<String?>()
+            playlist.addListener(
+                object : Player.Listener {
+                    override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                        timelines += List(timeline.windowCount) { timeline.getWindow(it, Timeline.Window()).mediaItem.mediaId }
+                    }
+
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        transitions += mediaItem?.mediaId
+                    }
+
+                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                        titles += mediaMetadata.title?.toString()
+                    }
+                },
+            )
+            val titled = listOf("a", "b").map {
+                item(it).buildUpon().setMediaMetadata(MediaMetadata.Builder().setTitle("Title $it").build()).build()
+            }
+
+            playlist.setMediaItems(titled)
+            playlist.prepare()
+            advance(castLike).untilPendingCommandsAreFullyHandled()
+            shadowOf(Looper.getMainLooper()).idle()
+            playlist.seekTo(1, 0L)
+            advance(castLike).untilPendingCommandsAreFullyHandled()
+            shadowOf(Looper.getMainLooper()).idle()
+
+            val reported = playlist.currentTimeline
+            List(reported.windowCount) { reported.getWindow(it, Timeline.Window()).mediaItem.mediaId } shouldBe listOf("a", "b")
+            timelines.last() shouldBe listOf("a", "b")
+            transitions.last() shouldBe "b"
+            titles.last() shouldBe "Title b"
+        } finally {
+            castLike.release()
+        }
+    }
+
+    @Test
+    fun `a listener taken off hears nothing more`() {
+        val heard = mutableListOf<Int>()
+        val listener = object : Player.Listener {
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                heard += timeline.windowCount
+            }
+        }
+        playlist.addListener(listener)
+        playlist.removeListener(listener)
+
+        playlist.setMediaItems(listOf(item("a")))
+        settle()
+
+        heard shouldBe emptyList()
     }
 
     @Test

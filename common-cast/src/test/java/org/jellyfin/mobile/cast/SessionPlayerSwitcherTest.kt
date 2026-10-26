@@ -231,10 +231,4 @@ class SessionPlayerSwitcherTest {
     }
 
     private class Wrapped(player: Player) : ForwardingPlayer(player)
-
-    /** Like Media3's cast player: the queue is there, but each item reads back as MediaItem.EMPTY. */
-    private class Placeholders(player: Player) : ForwardingPlayer(player) {
-        override fun getMediaItemAt(index: Int): MediaItem = MediaItem.EMPTY
-        override fun getCurrentMediaItem(): MediaItem? = if (mediaItemCount == 0) null else MediaItem.EMPTY
-    }
 }
