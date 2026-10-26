@@ -8,7 +8,10 @@ import org.koin.android.ext.android.inject
 
 /** Keeps song downloads going in the background (see [VaultDownloadService]). */
 @UnstableApi
-class TuneDownloadService : VaultDownloadService(R.string.downloads_channel) {
+class TuneDownloadService : VaultDownloadService(
+    R.string.downloads_channel,
+    R.drawable.media3_notification_small_icon,
+) {
     private val manager: DownloadManager by inject()
 
     override fun getDownloadManager(): DownloadManager = manager

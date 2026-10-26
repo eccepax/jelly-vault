@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.common.downloads
 
 import android.app.Notification
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
@@ -18,6 +19,8 @@ import androidx.media3.exoplayer.scheduler.Scheduler
 @UnstableApi
 abstract class VaultDownloadService(
     @StringRes channelName: Int,
+    /** The app's own notification icon, a white silhouette like its playback notification's. */
+    @DrawableRes private val smallIcon: Int,
 ) : DownloadService(
     NOTIFICATION_ID,
     DEFAULT_FOREGROUND_NOTIFICATION_UPDATE_INTERVAL,
@@ -36,7 +39,7 @@ abstract class VaultDownloadService(
         val active = downloads.count { it.state != Download.STATE_COMPLETED }
         return notifications.buildProgressNotification(
             this,
-            android.R.drawable.stat_sys_download,
+            smallIcon,
             null,
             progressTitle(active),
             downloads,

@@ -8,7 +8,10 @@ import org.koin.android.ext.android.inject
 
 /** Keeps book downloads going in the background (see [VaultDownloadService]). */
 @UnstableApi
-class BookDownloadService : VaultDownloadService(R.string.downloads_channel) {
+class BookDownloadService : VaultDownloadService(
+    R.string.downloads_channel,
+    R.drawable.download_notification_small_icon,
+) {
     private val manager: DownloadManager by inject()
 
     override fun getDownloadManager(): DownloadManager = manager

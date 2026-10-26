@@ -8,7 +8,7 @@ import org.koin.android.ext.android.inject
 
 /** Keeps audiobook downloads going in the background (see [VaultDownloadService]). */
 @UnstableApi
-class AudioDownloadService : VaultDownloadService(R.string.downloads) {
+class AudioDownloadService : VaultDownloadService(R.string.downloads, R.drawable.media3_notification_small_icon) {
     private val manager: DownloadManager by inject()
 
     override fun getDownloadManager(): DownloadManager = manager
