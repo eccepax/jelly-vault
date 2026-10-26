@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.SignOutFailures
 import org.jellyfin.mobile.common.ui.startOver
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.account.AccountViewModel
@@ -44,6 +45,7 @@ fun LiveSignedIn(
     val signedOut by account.signedOut.collectAsState()
     val activity = LocalActivity.current
     LaunchedEffect(signedOut) { if (signedOut) activity?.startOver() }
+    SignOutFailures(account.signOutFailures)
     if (signingOut) {
         SigningOut()
     } else if (watching) {

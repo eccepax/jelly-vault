@@ -4,6 +4,8 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -36,6 +38,7 @@ class SettingsViewModelTest {
     private val levelling = SetVolumeLevelling { levellingSet += it }
     private var signOuts = 0
     private var signOutFinishes: CompletableDeferred<Unit>? = null
+    private var signOutFails = false
 
     private fun viewModel() = SettingsViewModel(
         accountInfo = accountInfo,
@@ -46,6 +49,7 @@ class SettingsViewModelTest {
         signOut = {
             signOuts++
             signOutFinishes?.await()
+            if (signOutFails) error("Couldn't forget the account")
         },
         app = ClientInfo("TuneVault", "1.2.3"),
     )
@@ -108,6 +112,25 @@ class SettingsViewModelTest {
         viewModel.signedOut.value shouldBe false
 
         signOutFinishes!!.complete(Unit)
+        viewModel.signedOut.value shouldBe true
+    }
+
+    @Test
+    fun `a sign out that fails says so, and can be tried again`() {
+        signOutFails = true
+        val viewModel = viewModel()
+        var failures = 0
+        val watching = TestScope(UnconfinedTestDispatcher()).backgroundScope
+        watching.launch { viewModel.signOutFailures.collect { failures++ } }
+
+        viewModel.signOut()
+        failures shouldBe 1
+        viewModel.state.value.signingOut shouldBe false
+        viewModel.signedOut.value shouldBe false
+
+        signOutFails = false
+        viewModel.signOut()
+        signOuts shouldBe 2
         viewModel.signedOut.value shouldBe true
     }
 

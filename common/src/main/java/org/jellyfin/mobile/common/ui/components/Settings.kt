@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.common.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +30,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import kotlinx.coroutines.flow.Flow
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.ui.formatBytes
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
@@ -231,6 +234,15 @@ fun SignOutSetting(
         ) {
             Text(label)
         }
+    }
+}
+
+/** Says so each time a sign out fails ([org.jellyfin.mobile.common.account.SigningOut.failures]). */
+@Composable
+fun SignOutFailures(failures: Flow<Unit>) {
+    val context = LocalContext.current
+    LaunchedEffect(failures) {
+        failures.collect { Toast.makeText(context, R.string.sign_out_failed, Toast.LENGTH_SHORT).show() }
     }
 }
 

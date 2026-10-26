@@ -40,6 +40,7 @@ import org.jellyfin.mobile.common.ui.components.SettingsNote
 import org.jellyfin.mobile.common.ui.components.SettingsRadioGroup
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
+import org.jellyfin.mobile.common.ui.components.SignOutFailures
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.components.bringIntoViewWhenShown
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
@@ -204,6 +205,7 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
     val state by viewModel.state.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
     LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
+    SignOutFailures(viewModel.signOutFailures)
     SettingsScreen(
         state = state,
         onBack = onBack,
