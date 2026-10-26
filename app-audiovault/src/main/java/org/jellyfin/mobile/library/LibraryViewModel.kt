@@ -101,6 +101,10 @@ class LibraryViewModel(
     private val _title = MutableStateFlow<String>("Library")
     val title = _title.asStateFlow()
 
+    /** The folder shown, null at the root; unlike [title], two folders never share it. */
+    private val _folderId = MutableStateFlow<UUID?>(null)
+    val folderId = _folderId.asStateFlow()
+
     private val _canGoUp = MutableStateFlow(false)
     val canGoUp = _canGoUp.asStateFlow()
 
@@ -341,6 +345,7 @@ class LibraryViewModel(
             folderStack.clear()
             _canGoUp.update { false }
             _title.update { "Library" }
+            _folderId.update { null }
 
             try {
                 val userId = resolveCurrentUserId() ?: run {
@@ -395,6 +400,7 @@ class LibraryViewModel(
             folderStack.clear()
             _canGoUp.update { false }
             _title.update { "All Audiobooks" }
+            _folderId.update { null }
 
             // Serve from cache immediately for a snappy paint, but fall through to a live
             // server fetch below regardless — cached progress/resume data goes stale as soon as
@@ -563,6 +569,7 @@ class LibraryViewModel(
             _isLoading.update { true }
             _error.update { null }
             _title.update { folderName }
+            _folderId.update { folderId }
             _canGoUp.update { folderStack.isNotEmpty() }
 
             try {

@@ -1,10 +1,11 @@
 package org.jellyfin.mobile.common.setup
 
 import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -24,7 +25,7 @@ import org.robolectric.annotation.Config
 class LoginRouteTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private val mainViewModel = mockk<MainViewModel>(relaxed = true) {
         every { serverState } returns MutableStateFlow<ServerState>(ServerState.Pending)
@@ -47,5 +48,17 @@ class LoginRouteTest {
         composeRule.waitForIdle()
 
         verify(exactly = 1) { loginViewModel.leave() }
+    }
+
+    @Test
+    fun `rotating keeps a quick connect code going, as the screen comes straight back`() {
+        composeRule.setContent {
+            AppTheme(VaultBrand.Jellyfin) { LoginRoute(mainViewModel, loginViewModel) }
+        }
+
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+
+        verify(exactly = 0) { loginViewModel.leave() }
     }
 }

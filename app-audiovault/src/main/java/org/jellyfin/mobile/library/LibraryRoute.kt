@@ -96,6 +96,7 @@ private fun libraryState(
     coverUrl: (UUID) -> String?,
 ): LibraryUiState {
     val title by viewModel.title.collectAsState()
+    val folderId by viewModel.folderId.collectAsState()
     val items by viewModel.items.collectAsState()
     val loading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -109,6 +110,7 @@ private fun libraryState(
     val playback by playerViewModel.state.collectAsState()
     return LibraryUiState(
         title = title,
+        folderId = folderId?.toString(),
         canGoUp = canGoUp,
         items = items,
         loading = loading,

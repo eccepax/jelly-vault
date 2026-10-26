@@ -68,6 +68,8 @@ import org.jellyfin.mobile.common.R as CommonR
 /** Everything the library screen shows. */
 data class LibraryUiState(
     val title: String,
+    /** The folder shown (null at the root), which tells apart folders sharing a [title]. */
+    val folderId: String? = null,
     val canGoUp: Boolean = false,
     val items: List<LibraryItem> = emptyList(),
     val loading: Boolean = false,
@@ -254,7 +256,7 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
                 state.hiddenIds,
                 actions,
                 // Another folder, sort, filter or search is a different list
-                scrollKey = "${state.title}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
+                scrollKey = "${state.folderId}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
             )
         }
         PullRefreshIndicator(
