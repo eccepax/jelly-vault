@@ -1,21 +1,16 @@
 package org.jellyfin.mobile.books.reader
 
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -34,17 +29,12 @@ fun BookReaderRoute(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
     val nightMode = isSystemInDarkTheme()
     var scrollMode by rememberSaveable { mutableStateOf(true) }
     var textSettings by remember { mutableStateOf(appPreferences.readTextSettings()) }
-    val pages = remember(viewModel) { ReaderPages(context, viewModel, scope, scrollMode) { textSettings } }
 
     // Asked again on rotation: the view model already has the book open, as the reader left it
     LaunchedEffect(viewModel, bookId) { viewModel.loadBook(bookId, nightMode) }
-    LaunchedEffect(pages) {
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { pages.follow() }
-    }
     LaunchedEffect(viewModel) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.error.collect { error ->
@@ -58,19 +48,12 @@ fun BookReaderRoute(
     fun changeTextSettings(save: () -> Unit) {
         save()
         textSettings = appPreferences.readTextSettings()
-        pages.refresh()
     }
 
     val actions = BookReaderActions(
         onBack = onBack,
-        onToggleScrollMode = {
-            scrollMode = !scrollMode
-            pages.scrollMode = scrollMode
-        },
-        onToggleNightMode = {
-            viewModel.toggleNightMode()
-            pages.refresh()
-        },
+        onToggleScrollMode = { scrollMode = !scrollMode },
+        onToggleNightMode = viewModel::toggleNightMode,
         onGoTo = viewModel::setPage,
         onOpenTocEntry = viewModel::openTocEntry,
         onFontScale = { changeTextSettings { appPreferences.epubFontScale = it } },
@@ -81,15 +64,7 @@ fun BookReaderRoute(
         onDeleteBookmark = viewModel::deleteBookmark,
     )
     BookReaderScreen(readerState(viewModel, scrollMode, textSettings), actions) {
-        AndroidView(
-            factory = {
-                // A recomposed screen takes the same views back
-                (pages.view.parent as? ViewGroup)?.removeView(pages.view)
-                pages.view
-            },
-            // Left to wrap, the pages (which only fill their parent) would get no room at all
-            modifier = Modifier.fillMaxSize(),
-        )
+        ReaderPages(viewModel, scrollMode, textSettings)
     }
 }
 

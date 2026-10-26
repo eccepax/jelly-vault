@@ -133,6 +133,9 @@ class BookReaderViewModel(
         pdfCore.renderPage(pageIndex, targetWidth, _nightMode.value)
     }.getOrNull()
 
+    /** A PDF page's width over its height, or 0 if it isn't known (an EPUB, or no such page). */
+    fun pageAspectRatio(pageIndex: Int): Float = pdfCore.pageAspectRatio(pageIndex)
+
     fun getChapterFile(index: Int): File? = epubRenderer.getChapterFile(index)
 
     fun getBookDir(): File? = epubRenderer.bookDir
