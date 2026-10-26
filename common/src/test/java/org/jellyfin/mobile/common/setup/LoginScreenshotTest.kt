@@ -1,23 +1,27 @@
 package org.jellyfin.mobile.common.setup
 
 import android.app.Application
-import androidx.fragment.app.testing.launchFragmentInContainer
+import android.view.View
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.common.MainViewModel
-import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.ServerState
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.setup.quickconnect.QuickConnect
+import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
 import org.junit.After
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.viewModel
@@ -30,6 +34,9 @@ import org.robolectric.annotation.GraphicsMode
 @Config(application = Application::class, sdk = [SCREENSHOT_SDK], qualifiers = PHONE_QUALIFIERS)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class LoginScreenshotTest {
+
+    @get:Rule
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @After
     fun tearDown() {
@@ -51,13 +58,14 @@ class LoginScreenshotTest {
                         }
                     }
                     viewModel { LoginViewModel(get(), get(), get(), get()) }
-                    // common's own accent, as before the brand came from the app
-                    single { VaultBrand.Jellyfin }
                 },
             )
         }
-        launchFragmentInContainer<LoginFragment>(themeResId = R.style.AppTheme).use { scenario ->
-            scenario.onFragment { it.requireView().captureWithSystemBars("sign-in") }
+        // As VaultRoot shows it
+        composeRule.setContent {
+            AppTheme(VaultBrand.Jellyfin) { LoginRoute(koinViewModel()) }
         }
+        composeRule.waitForIdle()
+        composeRule.activity.findViewById<View>(android.R.id.content).captureWithSystemBars("sign-in")
     }
 }

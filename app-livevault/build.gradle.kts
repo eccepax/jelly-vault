@@ -40,8 +40,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.fragment)
-    // Hosts common's View-based LoginFragment inside the otherwise all-Compose UI.
 
     // Lifecycle
     implementation(libs.bundles.androidx.lifecycle)
@@ -68,6 +66,7 @@ dependencies {
 
     // Monitoring
     implementation(libs.timber)
+    debugImplementation(libs.leakcanary)
 
     // Testing
     testImplementation(project(":common-testing"))
