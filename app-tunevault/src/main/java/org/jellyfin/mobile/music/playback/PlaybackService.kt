@@ -2,6 +2,7 @@ package org.jellyfin.mobile.music.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -22,7 +23,9 @@ import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.music.TuneMainActivity
+import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
+import org.jellyfin.mobile.player.session.withPlayableUri
 import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 
@@ -71,8 +74,11 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
         this.session = session
-        // Stream urls already carry the token (see JellyfinMusicCatalog.streamUrl), so they go as they are
-        casting = SessionCasting.attach(session, player, get<Casting>())
+        // The cast device gets its own url for each song: one asking only for what it plays
+        val catalog = get<JellyfinMusicCatalog>()
+        casting = SessionCasting.attach(session, player, get<Casting>(), castUri = { uri ->
+            TrackCacheKey.trackIdOf(uri)?.let { Uri.parse(catalog.castStreamUrl(it)) } ?: uri
+        })
     }
 
     /** Fully downloaded songs play from the device; anything else streams. */

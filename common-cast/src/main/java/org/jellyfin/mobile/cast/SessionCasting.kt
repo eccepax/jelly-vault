@@ -14,10 +14,20 @@ import androidx.media3.session.MediaSession
  * and this, not the session's player, which may be either.
  */
 @OptIn(UnstableApi::class)
-class SessionCasting private constructor(private val castPlayer: CastPlayer) {
+class SessionCasting private constructor(
+    private val castPlayer: CastPlayer,
+    private val onCastDevice: () -> Boolean,
+    private val casting: Casting,
+) {
 
+    /**
+     * Released while playback is on the cast device (the service stopping, say after the app is
+     * swiped away while paused), the cast ends too: nothing could control it, and the next service
+     * wouldn't know the queue it holds.
+     */
     fun release() {
         castPlayer.setSessionAvailabilityListener(null)
+        if (onCastDevice()) casting.stopCasting()
         castPlayer.release()
     }
 
@@ -46,7 +56,7 @@ class SessionCasting private constructor(private val castPlayer: CastPlayer) {
             )
             // The service can start while a cast session is already up
             if (castPlayer.isCastSessionAvailable) switcher.switchTo(remote)
-            return SessionCasting(castPlayer)
+            return SessionCasting(castPlayer, onCastDevice = { switcher.player !== local }, casting)
         }
     }
 }

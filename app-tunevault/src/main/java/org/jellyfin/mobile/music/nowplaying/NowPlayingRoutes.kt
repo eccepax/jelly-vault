@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.nowplaying
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import org.jellyfin.mobile.cast.CastButton
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.playback.SleepTimer
@@ -26,6 +27,8 @@ fun PlayerShell(
     val state by viewModel.state.collectAsState()
     val casting: Casting = koinInject()
     val castDevice by casting.castDevice.collectAsState()
+    // Now Playing recomposes as the song plays: the same lambda keeps the top bar from redrawing
+    val castButton: @Composable () -> Unit = remember(casting) { { CastButton(casting) } }
     PlayerScaffold(
         hasTrack = state.track != null,
         library = library,
@@ -65,7 +68,7 @@ fun PlayerShell(
                         sleepTimer = sleepTimer,
                         castDevice = castDevice,
                         onStopCasting = casting::stopCasting,
-                        castButton = { CastButton(casting) },
+                        castButton = castButton,
                     )
                 },
                 queue = { onBack -> QueueRoute(onBack = onBack) },

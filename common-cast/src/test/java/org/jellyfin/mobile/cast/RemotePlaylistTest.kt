@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Looper
 import androidx.annotation.OptIn
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -199,6 +200,89 @@ class RemotePlaylistTest {
         settle()
 
         heard shouldBe emptyList()
+    }
+
+    @Test
+    fun `the song playing reads as sent while the queue around it changes, as an app's queue edits do`() {
+        val placeholders = RemotePlaylist(Placeholders(player))
+        placeholders.setMediaItems(listOf("a", "b", "c").map(::item), 1, 0L)
+        settle()
+
+        // How TuneVault swaps out everything around the playing song (Play next, shuffle, ...)
+        placeholders.removeMediaItems(2, 3)
+        placeholders.removeMediaItems(0, 1)
+        placeholders.addMediaItems(0, listOf(item("x")))
+        placeholders.addMediaItems(listOf(item("y"), item("z")))
+        settle()
+
+        placeholders.currentMediaItem?.mediaId shouldBe "b"
+        placeholders.ids shouldBe listOf("x", "b", "y", "z")
+    }
+
+    @Test
+    fun `a long queue goes to the cast device a message at a time, the song to play first`() {
+        val messages = Messages(player)
+        val playlist = RemotePlaylist(messages)
+        val songs = List(50) { item("s$it") }
+
+        playlist.setMediaItems(songs, 25, 10_000L)
+
+        // The first message: the song to play and those after it
+        messages.sizes.first() shouldBe SONGS_PER_MESSAGE
+        settleAll()
+        player.ids shouldBe songs.map { it.mediaId }
+        player.currentMediaItem?.mediaId shouldBe "s25"
+        player.currentPosition shouldBe 10_000L
+        messages.sizes.all { it <= SONGS_PER_MESSAGE } shouldBe true
+        playlist.items.map { it.mediaId } shouldBe songs.map { it.mediaId }
+        playlist.currentMediaItem?.mediaId shouldBe "s25"
+    }
+
+    @Test
+    fun `a change while a long queue is still being sent reaches the cast device too`() {
+        val songs = List(50) { item("s$it") }
+        playlist.setMediaItems(songs, 0, 0L)
+
+        playlist.addMediaItems(listOf(item("x")))
+        settleAll()
+
+        player.ids shouldBe songs.map { it.mediaId } + "x"
+        player.currentMediaItem?.mediaId shouldBe "s0"
+        playlist.items.map { it.mediaId } shouldBe player.ids
+    }
+
+    @Test
+    fun `a long queue set without a place starts at its first song`() {
+        val songs = List(30) { item("s$it") }
+
+        playlist.setMediaItems(songs)
+        settleAll()
+
+        player.ids shouldBe songs.map { it.mediaId }
+        player.currentMediaItemIndex shouldBe 0
+    }
+
+    /** Until the cast device has every part of a long queue: each part goes once the last arrives. */
+    private fun settleAll() = repeat(SONGS_PER_MESSAGE) { settle() }
+
+    /** How many songs each message to the cast device carried. */
+    private class Messages(player: Player) : ForwardingPlayer(player) {
+        val sizes = mutableListOf<Int>()
+
+        override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            sizes += mediaItems.size
+            super.setMediaItems(mediaItems, startIndex, startPositionMs)
+        }
+
+        override fun addMediaItems(mediaItems: List<MediaItem>) {
+            sizes += mediaItems.size
+            super.addMediaItems(mediaItems)
+        }
+
+        override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
+            sizes += mediaItems.size
+            super.addMediaItems(index, mediaItems)
+        }
     }
 
     @Test

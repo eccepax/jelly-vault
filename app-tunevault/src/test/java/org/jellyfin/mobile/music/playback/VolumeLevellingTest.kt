@@ -130,6 +130,15 @@ class VolumeLevellingTest {
     }
 
     @Test
+    fun `while casting, a fade leaves the cast device's volume alone even with levelling not running`() = runTest {
+        casting(true)
+
+        volume.setFade(0.5f)
+
+        playback.volumes shouldBe emptyList()
+    }
+
+    @Test
     fun `back from casting, the song playing here is levelled for itself`() = runTest {
         levelling()
         playing(loud, quiet)

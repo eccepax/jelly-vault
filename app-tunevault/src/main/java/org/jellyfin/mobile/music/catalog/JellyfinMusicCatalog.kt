@@ -22,6 +22,14 @@ import java.util.UUID
 private val DIRECT_PLAY_CONTAINERS = listOf("flac", "mp3", "aac", "m4a", "mp4", "ogg", "opus", "wav")
 
 /**
+ * What cast devices play (Google's supported media list): a container that can also hold a codec
+ * they can't (m4a and mp4 hold ALAC too) is named with the codec they can.
+ */
+private val CAST_CONTAINERS = listOf(
+    "flac", "mp3", "aac", "m4a|aac", "mp4|aac", "ogg|vorbis", "ogg|opus", "opus", "webm|opus", "wav",
+)
+
+/**
  * [MusicCatalog] backed by the Jellyfin API. Every query is scoped to the user's music libraries
  * (see [JellyfinMusicItems.musicLibraryIds]).
  * Results merged across libraries are de-duplicated by id, since overlapping libraries (two over the
@@ -122,6 +130,22 @@ class JellyfinMusicCatalog(
         // The SDK's URL builder can't include credentials, and ExoPlayer requests don't carry the
         // SDK's auth header, so authenticate via the query string.
         withAccessToken(downloadUri(trackId, streamingQuality()), apiClient.accessToken)
+
+    /**
+     * The song as a cast device gets it: it fetches the song itself, so the token is in the url, and
+     * anything it can't play comes as MP3.
+     */
+    fun castStreamUrl(trackId: String): String = withAccessToken(
+        apiClient.universalAudioApi.getUniversalAudioStreamUrl(
+            itemId = trackId.toUUID(),
+            container = CAST_CONTAINERS,
+            maxStreamingBitrate = streamingQuality().maxBitrate,
+            transcodingContainer = "mp3",
+            transcodingProtocol = MediaStreamProtocol.HTTP,
+            audioCodec = "mp3",
+        ),
+        apiClient.accessToken,
+    )
 
     /**
      * Where to fetch [trackId] from at [quality], without a token: downloads store this URI for as

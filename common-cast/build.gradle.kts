@@ -27,6 +27,7 @@ dependencies {
     implementation(libs.bundles.coroutines)
     implementation(libs.bundles.compose)
     implementation(libs.timber)
+    implementation(project(":common-media"))
 
     // Testing
     testImplementation(libs.junit.api)

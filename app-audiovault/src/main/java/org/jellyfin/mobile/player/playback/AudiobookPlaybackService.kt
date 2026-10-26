@@ -31,6 +31,7 @@ import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.player.forAudiobooks
+import org.jellyfin.mobile.player.session.withPlayableUri
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 

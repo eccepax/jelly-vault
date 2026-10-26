@@ -27,13 +27,13 @@ fun levelFor(gainDb: Float?): Float =
  * fade. Each sets its own part, so neither overwrites the other.
  *
  * A cast device's volume is its own (the player's volume there is the TV's or speaker's), so while
- * casting nothing is sent; back here, this device's player gets the volume the parts now make.
+ * casting nothing is sent, whoever sets a part; back here, [refresh] gives this device's player the
+ * volume the parts now make.
  */
 class PlaybackVolume(private val playback: PlaybackController) {
     private var level = 1f
     private var fade = 1f
     private var applied = 1f
-    private var remote = false
 
     fun setLevel(level: Float) {
         this.level = level
@@ -45,14 +45,13 @@ class PlaybackVolume(private val playback: PlaybackController) {
         apply()
     }
 
-    fun setRemote(remote: Boolean) {
-        this.remote = remote
-        apply()
-    }
+    /** Sends the volume the parts make, as when playback comes back from a cast device. */
+    fun refresh() = apply()
 
     private fun apply() {
+        if (playback.state.value.isRemote) return
         val volume = level * fade
-        if (remote || volume == applied) return
+        if (volume == applied) return
         applied = volume
         playback.setVolume(volume)
     }
@@ -67,7 +66,7 @@ class VolumeLeveller(
 ) {
     fun start(): Job = scope.launch {
         launch {
-            playback.state.map { it.isRemote }.distinctUntilChanged().collect(volume::setRemote)
+            playback.state.map { it.isRemote }.distinctUntilChanged().collect { volume.refresh() }
         }
         val currentGain = playback.state
             .map { state -> state.queue.entries.getOrNull(state.queue.currentIndex)?.track?.normalizationGainDb }

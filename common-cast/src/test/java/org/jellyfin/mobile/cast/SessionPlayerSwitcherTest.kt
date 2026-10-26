@@ -5,12 +5,14 @@ import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
 import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.test.core.app.ApplicationProvider
+import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -50,7 +52,9 @@ class SessionPlayerSwitcherTest {
     }
 
     private fun items(vararg ids: String) = ids.map {
-        MediaItem.Builder().setMediaId(it).setUri("https://vault.test/$it").build()
+        MediaItem.Builder().setMediaId(it).setUri("https://vault.test/$it")
+            .setMediaMetadata(MediaMetadata.Builder().setDurationMs(SONG_MS).build())
+            .build()
     }
 
     private fun Player.load(index: Int, positionMs: Long, play: Boolean) {
@@ -190,6 +194,96 @@ class SessionPlayerSwitcherTest {
         local.playWhenReady shouldBe false
     }
 
+    /** Casts, then plays on the cast device from [index] at [positionMs] until it lets go, seen [laterMs] after. */
+    private fun castDeviceLetGo(
+        index: Int,
+        positionMs: Long,
+        laterMs: Long,
+        speed: Float = 1f,
+        repeatMode: Int = Player.REPEAT_MODE_OFF,
+    ): Long {
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+        remote.repeatMode = repeatMode
+        remote.setPlaybackSpeed(speed)
+        remote.seekTo(index, positionMs)
+        remote.play()
+        advance(remote).untilState(Player.STATE_READY)
+        settle()
+        val seenAt = remote.currentPosition
+        remote.clearMediaItems()
+        settle()
+        now += laterMs
+        return seenAt
+    }
+
+    @Test
+    fun `a cast device that let go while playing faster is picked up as far on as that got it`() {
+        val seenAt = castDeviceLetGo(index = 1, positionMs = 20_000L, laterMs = 5_000L, speed = 2f)
+
+        switcher.switchTo(local)
+        settle()
+
+        local.currentMediaItemIndex shouldBe 1
+        local.currentPosition shouldBe seenAt + 10_000L
+    }
+
+    @Test
+    fun `a cast device that let go near a song's end is picked up in the songs after, not past the end`() {
+        val seenAt = castDeviceLetGo(index = 0, positionMs = 95_000L, laterMs = 110_000L)
+
+        switcher.switchTo(local)
+        settle()
+
+        // The rest of a, all of b, and on into c
+        local.currentMediaItemIndex shouldBe 2
+        local.currentPosition shouldBe seenAt + 110_000L - 2 * SONG_MS
+    }
+
+    @Test
+    fun `a cast device that let go after the last song had ended is picked up at its end`() {
+        castDeviceLetGo(index = 2, positionMs = 95_000L, laterMs = 60_000L)
+
+        switcher.switchTo(local)
+        settle()
+
+        local.currentMediaItemIndex shouldBe 2
+        // ExoPlayer reads a place at the very end as its last millisecond
+        local.currentPosition shouldBeGreaterThanOrEqual SONG_MS - 1
+    }
+
+    @Test
+    fun `a cast device repeating a song is picked up in that song`() {
+        val seenAt =
+            castDeviceLetGo(index = 1, positionMs = 95_000L, laterMs = 10_000L, repeatMode = Player.REPEAT_MODE_ONE)
+
+        switcher.switchTo(local)
+        settle()
+
+        local.currentMediaItemIndex shouldBe 1
+        local.currentPosition shouldBe seenAt + 10_000L - SONG_MS
+    }
+
+    @Test
+    fun `ending the cast picks up where the cast device was last seen, even if the cast player went back to the start`() {
+        val resetting = Resetting(remote)
+        val cast = RemotePlaylist(resetting)
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+        remote.seekTo(2, 40_000L)
+        settle()
+        // As the session ends, the cast player can read back the start of the queue, saying nothing
+        resetting.reset = true
+
+        switcher.switchTo(local)
+        settle()
+
+        local.currentMediaItemIndex shouldBe 2
+        local.currentPosition shouldBe 40_000L
+    }
+
     @Test
     fun `back from casting, playback waits here rather than starting out loud`() {
         local.load(index = 0, positionMs = 0L, play = true)
@@ -231,4 +325,18 @@ class SessionPlayerSwitcherTest {
     }
 
     private class Wrapped(player: Player) : ForwardingPlayer(player)
+
+    /** A cast player that, once [reset], reads back the start of its queue without telling anyone. */
+    private class Resetting(player: Player) : ForwardingPlayer(player) {
+        var reset = false
+
+        override fun getCurrentMediaItemIndex(): Int = if (reset) 0 else super.getCurrentMediaItemIndex()
+
+        override fun getCurrentPosition(): Long = if (reset) 0L else super.getCurrentPosition()
+    }
+
+    private companion object {
+        /** How long every song lasts (see FakeAudioSourceFactory), as its metadata says. */
+        const val SONG_MS = 100_000L
+    }
 }

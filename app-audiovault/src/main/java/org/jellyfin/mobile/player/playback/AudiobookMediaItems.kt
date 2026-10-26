@@ -62,10 +62,3 @@ fun MediaItem.toAudiobookTrack(): AudiobookTrack {
 /** Where each of the item's chapters starts, in order; empty when it has none. */
 val MediaMetadata.chapterStartsMs: List<Long>
     get() = extras?.getLongArray(EXTRA_CHAPTER_STARTS)?.toList().orEmpty()
-
-/** Session side: restores the stream uri from requestMetadata if the controller stripped it. */
-fun MediaItem.withPlayableUri(): MediaItem {
-    if (localConfiguration != null) return this
-    val uri = requestMetadata.mediaUri ?: return this
-    return buildUpon().setUri(uri).build()
-}

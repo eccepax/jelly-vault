@@ -6,6 +6,7 @@ import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.MediaQueueItem
+import org.jellyfin.mobile.player.session.playableUri
 
 /**
  * Turns the app's items into what the Default Media Receiver plays. The receiver fetches the stream
@@ -23,8 +24,7 @@ internal class VaultMediaItemConverter(
     private val default = DefaultMediaItemConverter()
 
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
-        // A MediaController -> MediaSession hop strips the uri; it travels in requestMetadata too
-        val uri = mediaItem.localConfiguration?.uri ?: mediaItem.requestMetadata.mediaUri
+        val uri = mediaItem.playableUri
         val mimeType = mediaItem.localConfiguration?.mimeType ?: fallbackMimeType
         val forCast = mediaItem.buildUpon()
             .setUri(uri?.let(castUri))

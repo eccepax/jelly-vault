@@ -2,10 +2,13 @@ package org.jellyfin.mobile.cast
 
 import android.os.SystemClock
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import org.jellyfin.mobile.player.session.playableUri
+import org.jellyfin.mobile.player.session.withPlayableUri
 
 /**
  * Moves a media session's playback between players: this device's and a cast device's. The queue,
@@ -14,11 +17,11 @@ import androidx.media3.common.util.UnstableApi
  * Playing carries over onto a cast device; back here, playback waits paused rather than starting
  * out of the phone's speaker.
  *
- * A cast player empties as soon as its session ends, before playback can be moved back, so the
- * switcher keeps the playing player's last state and picks up from that (as far on as it would have
- * got, if it was playing). A cast player's queue is read from [RemotePlaylist], as it was sent; a
- * song that still can't say how to play it is left out rather than handed to this device's player,
- * which would crash on it.
+ * A cast player can't be trusted once its session ends, before playback can be moved back: it
+ * empties, or reads back the start of its queue. So leaving a cast device, the switcher picks up from
+ * the last state that player reported (as far on as it would have got, if it was playing). A cast
+ * player's queue is read from [RemotePlaylist], as it was sent; a song that still can't say how to
+ * play it is left out rather than handed to this device's player, which would crash on it.
  */
 class SessionPlayerSwitcher(
     private val local: Player,
@@ -45,7 +48,8 @@ class SessionPlayerSwitcher(
     fun switchTo(next: Player) {
         if (next === player) return
         val previous = player
-        val state = (PlaybackState.of(previous, now()) ?: lastSeen?.after(now()))?.playable()
+        val live = PlaybackState.of(previous, now())
+        val state = (if (previous === local) live else lastSeen?.after(now()) ?: live)?.playable()
         previous.removeListener(watcher)
         previous.stop()
         player = next
@@ -73,10 +77,36 @@ class SessionPlayerSwitcher(
         val playbackParameters: PlaybackParameters,
         val isPlaying: Boolean,
         val seenAtMs: Long,
+        /** How long the song at [index] lasts, as the player said; C.TIME_UNSET if it didn't. */
+        val durationMs: Long,
     ) {
-        /** Where playback would be by [nowMs]: further on if it was playing. */
-        fun after(nowMs: Long): PlaybackState =
-            if (isPlaying) copy(positionMs = positionMs + (nowMs - seenAtMs), seenAtMs = nowMs) else this
+        /**
+         * Where playback would be by [nowMs], if it was playing: further on at its speed, through the
+         * songs whose lengths are known (the player's for this one, the metadata's for the rest), and
+         * as repeat would take it. After the last song, at its end.
+         */
+        fun after(nowMs: Long): PlaybackState {
+            if (!isPlaying) return this
+            var index = index
+            var position = positionMs + ((nowMs - seenAtMs) * playbackParameters.speed).toLong()
+            var duration = durationMs
+            while (duration > 0 && position >= duration) {
+                val next = when {
+                    repeatMode == Player.REPEAT_MODE_ONE -> index
+                    index < items.lastIndex -> index + 1
+                    repeatMode == Player.REPEAT_MODE_ALL -> 0
+                    else -> null
+                }
+                if (next == null) {
+                    position = duration
+                    break
+                }
+                position -= duration
+                index = next
+                duration = items[index].mediaMetadata.durationMs ?: C.TIME_UNSET
+            }
+            return copy(index = index, positionMs = position, seenAtMs = nowMs, durationMs = duration)
+        }
 
         /**
          * Only the songs a player can play: each needs a uri (restored from requestMetadata if a
@@ -84,7 +114,7 @@ class SessionPlayerSwitcher(
          * Null if none are left.
          */
         fun playable(): PlaybackState? {
-            val kept = items.mapIndexedNotNull { i, item -> item.withUri()?.let { i to it } }
+            val kept = items.mapIndexedNotNull { i, item -> item.playableUri?.let { i to item.withPlayableUri() } }
             if (kept.isEmpty()) return null
             val newIndex = kept.indexOfFirst { (i, _) -> i >= index }.takeIf { it >= 0 } ?: kept.lastIndex
             val sameSong = kept[newIndex].first == index
@@ -93,12 +123,6 @@ class SessionPlayerSwitcher(
                 index = newIndex,
                 positionMs = if (sameSong) positionMs else 0L,
             )
-        }
-
-        private fun MediaItem.withUri(): MediaItem? = when {
-            localConfiguration != null -> this
-            requestMetadata.mediaUri != null -> buildUpon().setUri(requestMetadata.mediaUri).build()
-            else -> null
         }
 
         companion object {
@@ -115,6 +139,7 @@ class SessionPlayerSwitcher(
                     playbackParameters = player.playbackParameters,
                     isPlaying = player.isPlaying,
                     seenAtMs = nowMs,
+                    durationMs = player.duration,
                 )
             }
         }

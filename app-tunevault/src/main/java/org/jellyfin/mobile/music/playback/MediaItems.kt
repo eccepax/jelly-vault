@@ -5,6 +5,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import org.jellyfin.mobile.music.domain.QueueEntry
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
+import org.jellyfin.mobile.player.session.playableUri
 
 /**
  * The player-side form of a queue slot. The media id is the entry's uid (not the track id) so the
@@ -25,6 +26,7 @@ fun QueueEntry.toMediaItem(streamUrl: (trackId: String) -> String): MediaItem {
                 .setAlbumTitle(track.albumTitle)
                 .setTrackNumber(track.trackNumber)
                 .setDiscNumber(track.discNumber)
+                .setDurationMs(track.durationMs.takeIf { it > 0 })
                 .setArtworkUri(track.coverUrl?.let(Uri::parse))
                 .setIsPlayable(true)
                 .setIsBrowsable(false)
@@ -38,11 +40,4 @@ val MediaItem.queueUid: Long? get() = mediaId.toLongOrNull()
 
 /** The song this item plays, from its stream url (the media id is the queue slot's), or null if it has none. */
 val MediaItem.trackId: String?
-    get() = (localConfiguration?.uri ?: requestMetadata.mediaUri)?.let(TrackCacheKey::trackIdOf)
-
-/** Session side: restores the stream uri from requestMetadata if the controller stripped it. */
-fun MediaItem.withPlayableUri(): MediaItem {
-    if (localConfiguration != null) return this
-    val uri = requestMetadata.mediaUri ?: return this
-    return buildUpon().setUri(uri).build()
-}
+    get() = playableUri?.let(TrackCacheKey::trackIdOf)
