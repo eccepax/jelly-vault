@@ -63,6 +63,8 @@ fun ReaderPages(
     val loading by viewModel.loading.collectAsState()
     val pageCount by viewModel.totalPages.collectAsState()
     val nightMode by viewModel.nightMode.collectAsState()
+    // Where the pages open; they follow the place themselves after that
+    val place by viewModel.currentPage.collectAsState()
     val zoom = remember { PageZoomState() }
     // A PDF's pages are pictures: they zoom, where an EPUB's text has text settings
     val zoomable = bookType == BookType.PDF
@@ -74,14 +76,14 @@ fun ReaderPages(
         if (loading) return@Box
         when (bookType) {
             BookType.PDF -> if (scrollMode) {
-                PdfScroll(viewModel, pageCount, nightMode)
+                PdfScroll(viewModel, place, pageCount, nightMode)
             } else {
                 // The zoom is the whole pager's: a new page (a swipe once zoomed out, or a jump) starts whole
-                ReaderPager(viewModel, pageCount, userScrollEnabled = true, onTurn = zoom::reset) { page ->
+                ReaderPager(viewModel, place, pageCount, userScrollEnabled = true, onTurn = zoom::reset) { page ->
                     PdfPage(viewModel, page, nightMode, Modifier.fillMaxSize())
                 }
             }
-            BookType.EPUB -> EpubChapters(viewModel, pageCount, scrollMode, textSettings, nightMode)
+            BookType.EPUB -> EpubChapters(viewModel, place, pageCount, scrollMode, textSettings, nightMode)
             BookType.UNKNOWN -> Unit
         }
     }
@@ -92,8 +94,8 @@ fun ReaderPages(
  * reader's own scrolling moves the place: a jump there, or settling at the end, doesn't.
  */
 @Composable
-private fun PdfScroll(viewModel: BookReaderViewModel, pageCount: Int, nightMode: Boolean) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = viewModel.currentPage.value)
+private fun PdfScroll(viewModel: BookReaderViewModel, startPage: Int, pageCount: Int, nightMode: Boolean) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage)
     var following by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) following = true }
@@ -123,12 +125,13 @@ private fun PdfScroll(viewModel: BookReaderViewModel, pageCount: Int, nightMode:
 @Composable
 private fun ReaderPager(
     viewModel: BookReaderViewModel,
+    startPage: Int,
     pageCount: Int,
     userScrollEnabled: Boolean,
     onTurn: () -> Unit = {},
     page: @Composable (Int) -> Unit,
 ) {
-    val pagerState = rememberPagerState(initialPage = viewModel.currentPage.value) { pageCount }
+    val pagerState = rememberPagerState(initialPage = startPage) { pageCount }
     // Jumps from outside the pager (contents, bookmarks, the page-jump dialog, the chapter arrows)
     LaunchedEffect(pagerState) {
         viewModel.currentPage.collect { if (it != pagerState.currentPage) pagerState.scrollToPage(it) }
@@ -163,6 +166,7 @@ private fun PdfPage(viewModel: BookReaderViewModel, page: Int, nightMode: Boolea
 @Composable
 private fun EpubChapters(
     viewModel: BookReaderViewModel,
+    startChapter: Int,
     chapterCount: Int,
     scrollMode: Boolean,
     textSettings: EpubTextSettings,
@@ -174,7 +178,7 @@ private fun EpubChapters(
     LaunchedEffect(viewModel) {
         viewModel.tocJumps.collect { tocJump = TocJump(tocJump.count + 1, it.spineIndex) }
     }
-    ReaderPager(viewModel, chapterCount, userScrollEnabled = !scrollMode) { chapter ->
+    ReaderPager(viewModel, startChapter, chapterCount, userScrollEnabled = !scrollMode) { chapter ->
         val load = ChapterLoad(
             anchor = chosenTocEntry?.takeIf { it.spineIndex == chapter }?.anchor,
             jump = tocJump.takeIf { it.spineIndex == chapter }?.count ?: 0,
