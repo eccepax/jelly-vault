@@ -66,7 +66,7 @@ class PlayerPlaybackController(
             return
         }
         when (player.playbackState) {
-            Player.STATE_ENDED -> player.seekTo(queue.currentIndex, 0L)
+            Player.STATE_ENDED -> player.seekTo(playerIndexOf(queue), 0L)
             Player.STATE_IDLE -> player.prepare()
         }
         player.play()
@@ -142,8 +142,23 @@ class PlayerPlaybackController(
     }
 
     private fun seekToEntryOf(target: PlayQueue) {
-        if (target.currentIndex != queue.currentIndex) player.seekTo(target.currentIndex, 0L)
+        if (target.currentIndex != queue.currentIndex) player.seekTo(playerIndexOf(target), 0L)
     }
+
+    /**
+     * Where [target]'s current entry is in the player's playlist: its index in the queue, unless the
+     * playlist lacks a song (back from a cast device, one it couldn't say how to play is left out).
+     */
+    private fun playerIndexOf(target: PlayQueue): Int {
+        val uid = target.entries.getOrNull(target.currentIndex)?.uid
+        if (player.getMediaItemAtOrNull(target.currentIndex)?.queueUid == uid) return target.currentIndex
+        return (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).queueUid == uid }
+            ?: target.currentIndex
+    }
+
+    private fun Player.getMediaItemAtOrNull(index: Int) = if (index in 0 until mediaItemCount) getMediaItemAt(
+        index,
+    ) else null
 
     private fun syncFromPlayer() {
         val playingUid = player.currentMediaItem?.queueUid

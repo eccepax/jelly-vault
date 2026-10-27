@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLDecoder
+import java.util.UUID
 
 /**
  * What a cast device is sent: the Default Media Receiver fetches the song itself, so the url works
@@ -44,11 +45,11 @@ class JellyfinCastStreamContractTest {
         }
     }
 
+    /** Every container asked for, whether the url lists them in one parameter or repeats it. */
     private fun containersAskedFor(url: String): List<String> = URI(url).rawQuery.split('&')
         .map { it.split('=', limit = 2) }
-        .first { (name, _) -> name.equals("container", ignoreCase = true) }[1]
-        .let { URLDecoder.decode(it, "UTF-8") }
-        .split(',')
+        .filter { (name, _) -> name.equals("container", ignoreCase = true) }
+        .flatMap { URLDecoder.decode(it[1], "UTF-8").split(',') }
 
     @Test
     fun `the cast url serves the song on its own`() = runBlocking<Unit> {
@@ -76,6 +77,35 @@ class JellyfinCastStreamContractTest {
             // m4a and mp4 also hold ALAC, which cast devices can't play
             containersAskedFor(castUrlOf(aTrack())) shouldNotContainAnyOf listOf("m4a", "mp4")
         }
+
+    private fun parameter(url: String, name: String): String? = URI(url).rawQuery.split('&')
+        .map { it.split('=', limit = 2) }
+        .firstOrNull { (key, _) -> key.equals(name, ignoreCase = true) }
+        ?.let { URLDecoder.decode(it[1], "UTF-8") }
+
+    @Test
+    fun `a lossless song comes as flac within what cast devices decode, transcoded down if it's more`() {
+        listOf("flac", "wav").forEach { container ->
+            val stream = catalog.castStream(UUID.randomUUID().toString(), container)
+
+            stream.mimeType shouldBe "audio/flac"
+            containersAskedFor(stream.url) shouldBe listOf("flac")
+            parameter(stream.url, "maxAudioSampleRate") shouldBe "96000"
+            parameter(stream.url, "maxAudioBitDepth") shouldBe "24"
+            // So that whatever the server sends is the type the cast device was told
+            parameter(stream.url, "transcodingContainer") shouldBe "flac"
+        }
+    }
+
+    @Test
+    fun `a container that holds several codecs is asked for only with those cast devices play, else made one`() {
+        val stream = catalog.castStream(UUID.randomUUID().toString(), "ogg")
+
+        stream.mimeType shouldBe "audio/ogg"
+        containersAskedFor(stream.url) shouldBe listOf("ogg|vorbis", "ogg|opus")
+        parameter(stream.url, "transcodingContainer") shouldBe "ogg"
+        parameter(stream.url, "audioCodec") shouldBe "opus"
+    }
 
     @Test
     fun `cast and stream urls for a song share one cache key`() = runBlocking<Unit> {

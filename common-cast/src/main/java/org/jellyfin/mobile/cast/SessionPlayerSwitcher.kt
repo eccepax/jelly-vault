@@ -39,7 +39,11 @@ class SessionPlayerSwitcher(
         override fun onEvents(player: Player, events: Player.Events) {
             // Only a cast player's is needed: this device's is read as playback leaves it
             val playing = this@SessionPlayerSwitcher.player
-            if (playing !== local) PlaybackState.of(playing, now())?.let { lastSeen = it }
+            if (playing === local) return
+            // Gone idle, it's stopped (as its session ends, back at the start of its queue): what it
+            // said before stands
+            if (playing.playbackState == Player.STATE_IDLE && lastSeen != null) return
+            PlaybackState.of(playing, now())?.let { lastSeen = it }
         }
     }
 

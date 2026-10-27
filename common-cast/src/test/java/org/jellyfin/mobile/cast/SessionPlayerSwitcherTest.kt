@@ -286,6 +286,27 @@ class SessionPlayerSwitcherTest {
     }
 
     @Test
+    fun `a cast player that goes idle at the start of its queue as its session ends isn't where it was last seen`() {
+        val resetting = Resetting(remote)
+        val cast = RemotePlaylist(resetting)
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+        remote.seekTo(2, 40_000L)
+        settle()
+        // As the session ends, the cast player stops and reads back the start of its queue, and says so
+        resetting.reset = true
+        remote.stop()
+        settle()
+
+        switcher.switchTo(local)
+        settle()
+
+        local.currentMediaItemIndex shouldBe 2
+        local.currentPosition shouldBe 40_000L
+    }
+
+    @Test
     fun `back from casting, playback waits here rather than starting out loud`() {
         local.load(index = 0, positionMs = 0L, play = true)
         switcher.switchTo(cast)

@@ -36,6 +36,14 @@ import kotlin.math.min
  * for, which a part arriving in front moves onto another song. If the cast device's queue stops
  * matching what was sent (another sender changed it, or it dropped a song), it's sent again; after
  * [MAX_RESENDS] the cast device's own answers stand.
+ *
+ * Changes to a queue the cast device has all of go one at a time, each once the cast device has the
+ * last: Media3's cast player turns indexes into the ids of the items there as the cast device last
+ * said, so a burst of them (an app's, around the song playing) would otherwise land on the wrong
+ * songs. Meanwhile this answers for the queue as changed, and a skip goes after them. Changes that
+ * don't arrive within [EDITS_ARRIVE_WITHIN_MS] send the queue again instead.
+ *
+ * Nothing here sets the player's volume: on a cast device that's the TV's or speaker's own.
  */
 // One override per playlist call Player has: each must be mirrored
 @Suppress("TooManyFunctions")
@@ -44,6 +52,11 @@ internal class RemotePlaylist(
     player: Player,
     /** How long a change waits for the rest of its burst before the queue is sent again. */
     private val resendAfterMs: Long = RESEND_AFTER_MS,
+    /**
+     * How long changes wait for the cast device to say it has them before the queue is sent again;
+     * null, however long (Media3's test helpers run delayed tasks early, moving the clock on).
+     */
+    private val editsArriveWithinMs: Long? = EDITS_ARRIVE_WITHIN_MS,
 ) : ForwardingPlayer(player) {
 
     private val tracked = mutableListOf<MediaItem>()
@@ -83,13 +96,35 @@ internal class RemotePlaylist(
 
     private class Resend(val playing: MediaItem?, val index: Int, val positionMs: Long)
 
+    /** Changes to a short queue on their way to the cast device, one at a time (see [forwardEdits]). */
+    private var editing: Edits? = null
+
+    /**
+     * Changes the cast device hasn't had yet, and the song to answer with until it has: the one
+     * playing as they began, or the one skipped to since. [onDevice] is what it's playing meanwhile.
+     */
+    private class Edits(var playing: Resend) {
+        val onDevice = playing.playing
+        val steps = ArrayDeque<Edit>()
+
+        /** How many songs the cast device has once the change sent last arrives; null once it has. */
+        var awaiting: Int? = null
+        var forwarding = false
+    }
+
+    /** One change for the cast device, and how many songs it leaves there (null for a skip: nothing to see arrive). */
+    private class Edit(val count: Int?, val forward: () -> Unit)
+
     private val handler = Handler(player.applicationLooper)
     private val resend = Runnable(::resendNow)
+    private val editsLate = Runnable(::resendEdits)
 
-    /** Whether the cast device holds only part of [tracked]: a long queue still on its way. */
-    private val sending
-        get() = !gaveUp &&
-            (pendingResend != null || arriving > 0 || unsentBefore.isNotEmpty() || unsentAfter.isNotEmpty())
+    /** Whether a long queue is still on its way, or the queue's to go again. */
+    private val sendingQueue
+        get() = pendingResend != null || arriving > 0 || unsentBefore.isNotEmpty() || unsentAfter.isNotEmpty()
+
+    /** Whether the cast device holds only part of [tracked], or not its latest changes. */
+    private val sending get() = !gaveUp && (sendingQueue || editing != null)
 
     /**
      * Where the cast device's queue starts in [tracked] now. A part sent in front moves it, but only
@@ -106,7 +141,7 @@ internal class RemotePlaylist(
         // Each part of a long queue goes once the cast device has reported the last
         wrappedPlayer.addListener(
             object : Player.Listener {
-                override fun onTimelineChanged(timeline: Timeline, reason: Int) = onDeviceQueue(timeline.windowCount)
+                override fun onTimelineChanged(timeline: Timeline, reason: Int) = onDeviceQueue(timeline)
 
                 override fun onEvents(player: Player, events: Player.Events) = forgetConfirmedSeek()
             },
@@ -135,6 +170,7 @@ internal class RemotePlaylist(
     override fun getCurrentMediaItemIndex(): Int {
         if (!sending) return super.getCurrentMediaItemIndex()
         pendingResend?.let { return it.indexNow() }
+        editing?.let { return it.playing.indexNow() }
         return when {
             !started -> startIndex
             else -> seekingTo?.let { song -> tracked.indexOfFirst { it === song }.takeIf { it >= 0 } }
@@ -146,6 +182,21 @@ internal class RemotePlaylist(
     private fun inQueue(index: Int) = (deviceFrom + index).coerceIn(0, max(0, tracked.lastIndex))
 
     override fun getCurrentPeriodIndex(): Int = if (sending) currentMediaItemIndex else super.getCurrentPeriodIndex()
+
+    /** While the cast device isn't on the song answered with, that song's length as its metadata says. */
+    override fun getDuration(): Long {
+        if (!sending) return super.getDuration()
+        val song = tracked.getOrNull(currentMediaItemIndex) ?: return C.TIME_UNSET
+        val onDevice = when {
+            editing != null -> editing?.onDevice
+            pendingResend != null || !started -> null
+            else -> tracked.getOrNull(inQueue(super.getCurrentMediaItemIndex()))
+        }
+        return if (song === onDevice) super.getDuration() else song.mediaMetadata.durationMs ?: C.TIME_UNSET
+    }
+
+    /** The cast device's own, which isn't this app's to change. */
+    override fun setVolume(volume: Float) = Unit
 
     override fun getCurrentTimeline(): Timeline = reported(super.getCurrentTimeline())
 
@@ -195,7 +246,7 @@ internal class RemotePlaylist(
     /** [position] (the cast device's) in the whole queue, while a long one is on its way. */
     private fun reported(position: Player.PositionInfo): Player.PositionInfo {
         if (!sending) return position
-        val index = inQueue(position.mediaItemIndex)
+        val index = if (editing != null) currentMediaItemIndex else inQueue(position.mediaItemIndex)
         return Player.PositionInfo(
             index,
             index,
@@ -209,7 +260,7 @@ internal class RemotePlaylist(
         )
     }
 
-    private fun queueTimeline(): Timeline = QueueTimeline(tracked.toList(), currentMediaItemIndex, super.getDuration())
+    private fun queueTimeline(): Timeline = QueueTimeline(tracked.toList(), currentMediaItemIndex, duration)
 
     override fun seekToDefaultPosition(mediaItemIndex: Int) = seekTo(mediaItemIndex, C.TIME_UNSET)
 
@@ -217,8 +268,15 @@ internal class RemotePlaylist(
         if (!sending) return super.seekTo(mediaItemIndex, positionMs)
         if (tracked.isEmpty()) return
         val index = mediaItemIndex.coerceIn(0, tracked.lastIndex)
+        val edits = editing
         when {
             pendingResend != null -> send(index, positionMs)
+            // Once the changes before it have arrived, the song is where it is now
+            edits != null -> {
+                edits.playing = Resend(tracked[index], index, positionMs)
+                edits.steps.addLast(Edit(null) { super.seekTo(index, positionMs) })
+                forwardEdits()
+            }
             // In the part on its way: once it's there
             !started && index - sentFrom in 0 until arriving -> {
                 startIndex = index
@@ -329,29 +387,83 @@ internal class RemotePlaylist(
     }
 
     override fun stop() {
-        // Left behind (playback moved to this device): nothing more goes to the cast device
-        handler.removeCallbacks(resend)
+        // Left behind (playback moved to this device): nothing more goes to the cast device, and what
+        // it held is no guide to the next cast session's
+        reset()
+        tracked.clear()
+        sentCount = 0
         super.stop()
     }
 
     /**
-     * Makes a change to the queue: to [tracked] by [mirror], and to the cast device by [forward].
-     * While a long queue is still on its way, or the change adds more songs than one message holds,
-     * the queue is sent again instead, from the song playing: once for a burst of changes.
+     * Makes a change to the queue: to [tracked] by [mirror], and to the cast device by [forward],
+     * once it has the changes before (see [forwardEdits]). While a long queue is still on its way,
+     * or the change adds more songs than one message holds, the queue is sent again instead, from
+     * the song playing: once for a burst of changes.
      */
-    private inline fun edit(adding: Int, mirror: () -> Unit, forward: () -> Unit) {
-        if (gaveUp || (!sending && adding <= SONGS_PER_MESSAGE)) {
+    private inline fun edit(adding: Int, mirror: () -> Unit, noinline forward: () -> Unit) {
+        if (gaveUp) {
             mirror()
             forward()
-            if (!gaveUp) sentCount = tracked.size
             return
         }
-        if (pendingResend == null) {
-            val index = currentMediaItemIndex
-            pendingResend = Resend(tracked.getOrNull(index), index, currentPosition)
-            handler.postDelayed(resend, resendAfterMs)
+        if (sendingQueue || adding > SONGS_PER_MESSAGE) {
+            if (pendingResend == null) {
+                pendingResend = editing?.playing ?: playingNow()
+                editing = null
+                handler.removeCallbacks(editsLate)
+                handler.postDelayed(resend, resendAfterMs)
+            }
+            mirror()
+            return
         }
+        val playing = editing?.playing ?: playingNow()
+        val before = tracked.toList()
         mirror()
+        // Nothing changed: nothing the cast device could say it has
+        if (tracked == before) return
+        sentCount = tracked.size
+        val edits = editing ?: Edits(playing).also { editing = it }
+        edits.steps.addLast(Edit(tracked.size, forward))
+        forwardEdits()
+    }
+
+    private fun playingNow(): Resend {
+        val index = currentMediaItemIndex
+        return Resend(tracked.getOrNull(index), index, currentPosition)
+    }
+
+    /**
+     * Sends the changes waiting, each once the cast device has the one before: its queue is then as
+     * it was here when the change was made, so the indexes mean what they did. Done, the cast
+     * device's answers stand again.
+     */
+    private fun forwardEdits() {
+        val edits = editing ?: return
+        // A player that has a change at once (not a cast device's) reports it while it's being sent
+        if (edits.forwarding) return
+        edits.forwarding = true
+        while (edits.awaiting == null && editing === edits) {
+            val edit = edits.steps.removeFirstOrNull() ?: break
+            edits.awaiting = edit.count
+            edit.forward()
+        }
+        edits.forwarding = false
+        if (editing !== edits) return
+        handler.removeCallbacks(editsLate)
+        if (edits.awaiting == null && edits.steps.isEmpty()) {
+            editing = null
+        } else {
+            editsArriveWithinMs?.let { handler.postDelayed(editsLate, it) }
+        }
+    }
+
+    /** Changes the cast device never said it had: the queue goes again, as it is here. */
+    private fun resendEdits() {
+        val edits = editing ?: return
+        editing = null
+        pendingResend = edits.playing
+        resendNow()
     }
 
     /** Where the song playing as a burst of changes began is now; next in line if it went. */
@@ -391,11 +503,19 @@ internal class RemotePlaylist(
         super.setMediaItems(queue.subList(from, to), 0, startPositionMs)
     }
 
-    /** The cast device reported a queue of [count] songs: a part has arrived, or it no longer matches. */
-    private fun onDeviceQueue(count: Int) {
+    /** The cast device reported its queue: a change or a part has arrived, or it no longer matches. */
+    private fun onDeviceQueue(timeline: Timeline) {
+        val count = timeline.windowCount
+        editing?.let { edits ->
+            if (count == edits.awaiting) {
+                edits.awaiting = null
+                forwardEdits()
+            }
+            return
+        }
         if (!sending || pendingResend != null) return
         when {
-            count == sentCount -> {
+            count == sentCount && holdsWhatWasSent(timeline) -> {
                 started = true
                 arriving = 0
                 seekOnArrival?.let { (index, positionMs) ->
@@ -416,6 +536,18 @@ internal class RemotePlaylist(
                 reset()
                 gaveUp = true
             }
+        }
+    }
+
+    /**
+     * Whether the cast device's queue is the songs sent, not one of the same length from before.
+     * Songs the cast player can't name (MediaItem.EMPTY) can't say otherwise.
+     */
+    private fun holdsWhatWasSent(timeline: Timeline): Boolean {
+        val window = Timeline.Window()
+        return (0 until timeline.windowCount).all { i ->
+            val id = timeline.getWindow(i, window).mediaItem.mediaId
+            id.isEmpty() || id == tracked.getOrNull(sentFrom + i)?.mediaId
         }
     }
 
@@ -440,7 +572,9 @@ internal class RemotePlaylist(
     /** Nothing on its way: what's sent is all there is, from the start of [tracked]. */
     private fun reset() {
         handler.removeCallbacks(resend)
+        handler.removeCallbacks(editsLate)
         pendingResend = null
+        editing = null
         unsentBefore.clear()
         unsentAfter.clear()
         sentFrom = 0
@@ -571,3 +705,6 @@ internal const val MAX_RESENDS = 2
 
 /** Long enough for an app's burst of queue changes (each its own message to the session) to arrive. */
 internal const val RESEND_AFTER_MS = 200L
+
+/** Long enough for a change to reach a cast device and its answer to come back, on a slow network. */
+internal const val EDITS_ARRIVE_WITHIN_MS = 3_000L

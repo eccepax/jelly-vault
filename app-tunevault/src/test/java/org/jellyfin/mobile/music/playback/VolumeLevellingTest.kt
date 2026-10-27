@@ -152,13 +152,15 @@ class VolumeLevellingTest {
     }
 
     @Test
-    fun `back from casting, this device's volume is set again only if it changed`() = runTest {
+    fun `back from casting, this device's volume is set again, even one sent before casting showed`() = runTest {
         levelling()
+        // Casting had begun, but the controller didn't say so yet: this went to the cast player (which drops it)
         playing(loud)
         casting(true)
 
         casting(false)
 
-        playback.volumes.size shouldBe 1
+        playback.volumes.size shouldBe 2
+        playback.volumes.last() shouldBe (0.5f plusOrMinus 0.001f)
     }
 }

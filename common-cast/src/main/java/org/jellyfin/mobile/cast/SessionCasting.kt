@@ -12,14 +12,15 @@ import androidx.media3.session.MediaSession
 /**
  * Puts a playback service's session on the cast device while one is connected, and back on the
  * service's own player after (see [SessionPlayerSwitcher]). The service releases its own player
- * and this, not the session's player, which may be either.
+ * and this, not the session's player, which may be either. Until the Cast framework has started
+ * (see [casting]) the session stays on the service's player.
  */
 @OptIn(UnstableApi::class)
-class SessionCasting private constructor(
-    private val castPlayer: CastPlayer,
-    private val onCastDevice: () -> Boolean,
-    private val casting: Casting,
-) {
+class SessionCasting private constructor(private val casting: Casting) {
+
+    private var castPlayer: CastPlayer? = null
+    private var switcher: SessionPlayerSwitcher? = null
+    private var released = false
 
     /**
      * Released while playback is on the cast device (the service stopping, say after the app is
@@ -27,9 +28,31 @@ class SessionCasting private constructor(
      * wouldn't know the queue it holds.
      */
     fun release() {
+        released = true
+        val castPlayer = castPlayer ?: return
         castPlayer.setSessionAvailabilityListener(null)
-        if (onCastDevice()) casting.stopCasting()
+        if (switcher?.player is RemotePlaylist) casting.stopCasting()
         castPlayer.release()
+    }
+
+    private fun start(
+        castPlayer: CastPlayer,
+        session: MediaSession,
+        local: Player,
+        wrap: (Player) -> Player,
+    ) {
+        this.castPlayer = castPlayer
+        val remote = RemotePlaylist(castPlayer)
+        val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
+        this.switcher = switcher
+        castPlayer.setSessionAvailabilityListener(
+            object : SessionAvailabilityListener {
+                override fun onCastSessionAvailable() = switcher.switchTo(remote)
+                override fun onCastSessionUnavailable() = switcher.switchTo(local)
+            },
+        )
+        // The service can start while a cast session is already up
+        if (castPlayer.isCastSessionAvailable) switcher.switchTo(remote)
     }
 
     companion object {
@@ -48,18 +71,13 @@ class SessionCasting private constructor(
             castStream: ((MediaItem) -> CastStream?)? = null,
         ): SessionCasting? {
             val castPlayers = casting as? CastPlayers ?: return null
-            val castPlayer = castPlayers.newCastPlayer(VaultMediaItemConverter(castUri, fallbackMimeType, castStream))
-            val remote = RemotePlaylist(castPlayer)
-            val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
-            castPlayer.setSessionAvailabilityListener(
-                object : SessionAvailabilityListener {
-                    override fun onCastSessionAvailable() = switcher.switchTo(remote)
-                    override fun onCastSessionUnavailable() = switcher.switchTo(local)
-                },
-            )
-            // The service can start while a cast session is already up
-            if (castPlayer.isCastSessionAvailable) switcher.switchTo(remote)
-            return SessionCasting(castPlayer, onCastDevice = { switcher.player !== local }, casting)
+            val attached = SessionCasting(casting)
+            castPlayers.whenReady {
+                if (attached.released) return@whenReady
+                val converter = VaultMediaItemConverter(castUri, fallbackMimeType, castStream)
+                attached.start(castPlayers.newCastPlayer(converter), session, local, wrap)
+            }
+            return attached
         }
     }
 }

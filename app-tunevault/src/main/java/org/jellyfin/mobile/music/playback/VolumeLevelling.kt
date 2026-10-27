@@ -27,8 +27,9 @@ fun levelFor(gainDb: Float?): Float =
  * fade. Each sets its own part, so neither overwrites the other.
  *
  * A cast device's volume is its own (the player's volume there is the TV's or speaker's), so while
- * casting nothing is sent, whoever sets a part; back here, [refresh] gives this device's player the
- * volume the parts now make.
+ * casting nothing is sent, whoever sets a part (and the cast player drops any that is: the
+ * controller only says it's casting a moment after it is); back here, [refresh] gives this
+ * device's player the volume the parts now make, whatever was sent last.
  */
 class PlaybackVolume(private val playback: PlaybackController) {
     private var level = 1f
@@ -49,7 +50,11 @@ class PlaybackVolume(private val playback: PlaybackController) {
     fun refresh() = apply()
 
     private fun apply() {
-        if (playback.state.value.isRemote) return
+        if (playback.state.value.isRemote) {
+            // What was sent last may have gone to the cast player, not this device's
+            applied = Float.NaN
+            return
+        }
         val volume = level * fade
         if (volume == applied) return
         applied = volume

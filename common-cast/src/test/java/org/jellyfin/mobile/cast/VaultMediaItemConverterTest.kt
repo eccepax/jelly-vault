@@ -77,6 +77,17 @@ class VaultMediaItemConverterTest {
     }
 
     @Test
+    fun `an item that can't say how to play it is still sent, rather than crash the playback service`() {
+        val converter = VaultMediaItemConverter(castStream = { null })
+        // As another controller (system UI, Android Auto) can add one: no uri, nothing to restore it from
+        val bare = MediaItem.Builder().setMediaId("42").build()
+
+        val sent = converter.toMediaQueueItem(bare)
+
+        converter.toMediaItem(sent).mediaId shouldBe "42"
+    }
+
+    @Test
     fun `items come back from the cast device with their id, uri and metadata`() {
         val converter = VaultMediaItemConverter(castUri = { Uri.parse("$it?ApiKey=token") })
 

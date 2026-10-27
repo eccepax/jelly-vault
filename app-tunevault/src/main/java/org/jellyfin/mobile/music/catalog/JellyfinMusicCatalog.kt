@@ -23,19 +23,37 @@ import java.util.UUID
 private val DIRECT_PLAY_CONTAINERS = listOf("flac", "mp3", "aac", "m4a", "mp4", "ogg", "opus", "wav")
 
 /**
- * Containers a cast device plays as they are (Google's supported media list), and the type each is
- * served as. Not m4a or mp4: they hold ALAC too, which cast devices can't play, and the container
- * doesn't say which.
+ * How a cast device gets a song in a format it plays (Google's supported media list): the [asked]
+ * containers come as they are, each only with the codecs named (`container|codec`) where it holds
+ * others too; anything else, or more than a cast device decodes (over 96 kHz or 24 bits), is
+ * transcoded to [transcodeTo] in [transcodeCodec]. Either way it's served as [mimeType], so the type
+ * the cast device is told is the one it gets. Not m4a or mp4: they hold ALAC too, which cast devices
+ * can't play, and the server can't be asked for them by codec alone.
  */
-private val CAST_AS_IT_IS = mapOf(
-    "flac" to "audio/flac",
-    "mp3" to "audio/mpeg",
-    "aac" to "audio/aac",
-    "ogg" to "audio/ogg",
-    "opus" to "audio/ogg",
-    "webm" to "audio/webm",
-    "wav" to "audio/wav",
+private class CastFormat(
+    val asked: List<String>,
+    val transcodeTo: String,
+    val transcodeCodec: String,
+    val mimeType: String,
 )
+
+private val CAST_FLAC = CastFormat(listOf("flac"), "flac", "flac", "audio/flac")
+private val CAST_MP3 = CastFormat(listOf("mp3"), "mp3", "mp3", "audio/mpeg")
+
+/** By the song's container; lossless ones (wav too) as FLAC, which is smaller and plays alike. */
+private val CAST_FORMATS = mapOf(
+    "flac" to CAST_FLAC,
+    "wav" to CAST_FLAC,
+    "mp3" to CAST_MP3,
+    "aac" to CastFormat(listOf("aac"), "aac", "aac", "audio/aac"),
+    "ogg" to CastFormat(listOf("ogg|vorbis", "ogg|opus"), "ogg", "opus", "audio/ogg"),
+    "opus" to CastFormat(listOf("opus|opus"), "ogg", "opus", "audio/ogg"),
+    "webm" to CastFormat(listOf("webm|opus", "webm|vorbis"), "webm", "opus", "audio/webm"),
+)
+
+/** The most a cast device decodes (Google's supported media list: FLAC up to 96 kHz, 24 bits). */
+private const val CAST_MAX_SAMPLE_RATE = 96_000
+private const val CAST_MAX_BIT_DEPTH = 24
 
 /**
  * [MusicCatalog] backed by the Jellyfin API. Every query is scoped to the user's music libraries
@@ -141,22 +159,26 @@ class JellyfinMusicCatalog(
 
     /**
      * The song as a cast device gets it, and the type it comes as (the receiver needs one): it
-     * fetches the song itself, so the token is in the url. A [container] it plays comes as it is at
-     * the original quality; anything else, or at a lower quality, as MP3. Either way the type is
-     * known before the server answers.
+     * fetches the song itself, so the token is in the url. At the original quality, in its own
+     * format where a cast device plays that (see [CastFormat]); anything else, or at a lower
+     * quality, as MP3. Either way the type is known before the server answers.
      */
     fun castStream(trackId: String, container: String?): CastStream {
         val quality = streamingQuality()
-        val asItIs = container?.lowercase()?.takeIf { quality == StreamingQuality.ORIGINAL && it in CAST_AS_IT_IS }
-        val url = universalAudioUri(
-            trackId,
-            containers = listOf(asItIs ?: "mp3"),
-            quality = quality,
-            transcodeTo = "mp3",
-            transcodeCodec = "mp3",
+        val format = container?.lowercase()?.takeIf { quality == StreamingQuality.ORIGINAL }
+            ?.let(CAST_FORMATS::get)
+            ?: CAST_MP3
+        val url = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
+            itemId = trackId.toUUID(),
+            container = format.asked,
+            maxStreamingBitrate = quality.maxBitrate,
+            transcodingContainer = format.transcodeTo,
+            transcodingProtocol = MediaStreamProtocol.HTTP,
+            audioCodec = format.transcodeCodec,
+            maxAudioSampleRate = CAST_MAX_SAMPLE_RATE,
+            maxAudioBitDepth = CAST_MAX_BIT_DEPTH,
         )
-        val mimeType = asItIs?.let(CAST_AS_IT_IS::getValue) ?: "audio/mpeg"
-        return CastStream(withAccessToken(url, apiClient.accessToken), mimeType)
+        return CastStream(withAccessToken(url, apiClient.accessToken), format.mimeType)
     }
 
     /**

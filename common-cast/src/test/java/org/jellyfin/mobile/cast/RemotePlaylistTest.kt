@@ -343,11 +343,132 @@ class RemotePlaylistTest {
         (playlist.currentTimeline.getUidOfPeriod(1) is Int) shouldBe false
     }
 
+    @Test
+    fun `a burst of changes to a short queue reaches a cast device that answers a round trip later, in order`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device, editsArriveWithinMs = null)
+        playlist.setMediaItems(listOf("a", "b", "c", "d", "e").map(::item), 2, 0L)
+        device.deliverAll()
+
+        // How TuneVault shuffles around the playing song: each index is the queue's after the last change
+        playlist.removeMediaItems(3, 5)
+        playlist.removeMediaItems(0, 2)
+        playlist.addMediaItems(0, listOf(item("e"), item("a")))
+        playlist.addMediaItems(listOf(item("d"), item("b")))
+        playlist.currentMediaItem?.mediaId shouldBe "c"
+        device.deliverAll()
+
+        player.ids shouldBe listOf("e", "a", "c", "d", "b")
+        player.currentMediaItem?.mediaId shouldBe "c"
+        playlist.items.map { it.mediaId } shouldBe player.ids
+        // Made on the cast device, not by sending the queue again (which would restart the song)
+        device.loads shouldBe 1
+    }
+
+    @Test
+    fun `a skip made while changes are on their way lands on the song asked for`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device, editsArriveWithinMs = null)
+        playlist.setMediaItems(listOf("a", "b", "c").map(::item), 0, 0L)
+        device.deliverAll()
+
+        playlist.removeMediaItems(1, 3)
+        playlist.addMediaItems(listOf(item("x"), item("y")))
+        playlist.seekTo(2, 0L)
+        playlist.currentMediaItem?.mediaId shouldBe "y"
+        device.deliverAll()
+
+        player.ids shouldBe listOf("a", "x", "y")
+        player.currentMediaItem?.mediaId shouldBe "y"
+        playlist.currentMediaItem?.mediaId shouldBe "y"
+    }
+
+    @Test
+    fun `changes a cast device never says it has send the queue again, as it is here`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(listOf("a", "b", "c").map(::item), 1, 0L)
+        device.deliverAll()
+
+        playlist.removeMediaItems(2, 3)
+        playlist.addMediaItems(listOf(item("x")))
+        // The first change is lost on the way
+        device.drop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(EDITS_ARRIVE_WITHIN_MS))
+        device.deliverAll()
+
+        device.loads shouldBe 2
+        player.ids shouldBe listOf("a", "b", "x")
+        player.currentMediaItem?.mediaId shouldBe "b"
+    }
+
+    @Test
+    fun `left behind while a long queue is on its way, it forgets that queue`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(List(50) { item("s$it") }, 30, 0L)
+        device.deliver()
+
+        playlist.stop()
+
+        playlist.items shouldBe emptyList()
+        playlist.mediaItemCount shouldBe player.mediaItemCount
+    }
+
+    @Test
+    fun `a report about the queue from before doesn't count as the first part arriving`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(List(SONGS_PER_MESSAGE) { item("old$it") })
+        device.deliverAll()
+
+        playlist.setMediaItems(List(50) { item("s$it") }, 0, 0L)
+        // The cast device says something about what it still holds: as many songs as the first part
+        player.replaceMediaItem(0, item("older"))
+        settle()
+
+        device.adds shouldBe 0
+        device.deliverAll()
+        player.ids shouldBe List(50) { "s$it" }
+    }
+
+    @Test
+    fun `nothing here sets a cast device's volume`() {
+        playlist.setMediaItems(listOf(item("a")))
+        settle()
+
+        playlist.volume = 0.2f
+
+        player.volume shouldBe 1f
+    }
+
+    @Test
+    fun `while a long queue is on its way, the song playing lasts as long as that song does`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        val songs = List(50) { i ->
+            item(
+                "s$i",
+            ).buildUpon().setMediaMetadata(MediaMetadata.Builder().setDurationMs(200_000L + i).build()).build()
+        }
+        playlist.setMediaItems(songs, 0, 0L)
+        device.deliver()
+        playlist.prepare()
+        device.deliver()
+
+        // Not on the cast device yet: the cast player still says how long the song it's on lasts
+        playlist.seekTo(40, 0L)
+
+        playlist.currentMediaItemIndex shouldBe 40
+        playlist.duration shouldBe 200_040L
+    }
+
     /**
      * Like a cast device behind Media3's cast player: each change reaches it only once [deliver]ed,
      * and until then the player answers as before, except that a skip answers with the index asked
      * for. Delivered, a skip goes to the song that was at that index, as the cast player jumps to an
-     * item id.
+     * item id; so do adds in place, removes and moves, which the cast player turns into the ids of
+     * the items at those indexes as it last heard of them.
      */
     private class SlowDevice(private val device: ExoPlayer) : ForwardingPlayer(device) {
         private val undelivered = ArrayDeque<() -> Unit>()
@@ -356,17 +477,46 @@ class RemotePlaylistTest {
         /** Times the whole queue was sent, rather than added to. */
         var loads = 0
 
+        /** Times songs were added to the queue. */
+        var adds = 0
+
+        private val Player.ids get() = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId }
+
+        private fun indexOf(id: String?) = id?.let { device.ids.indexOf(it) }?.takeIf { it >= 0 }
+
         override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
             loads++
             undelivered += { super.setMediaItems(mediaItems, startIndex, startPositionMs) }
         }
 
         override fun addMediaItems(mediaItems: List<MediaItem>) {
+            adds++
             undelivered += { super.addMediaItems(mediaItems) }
         }
 
         override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
-            undelivered += { super.addMediaItems(index, mediaItems) }
+            adds++
+            // Inserted before the item there now; at the end if there's none. A device that no longer has it drops them
+            val before = device.ids.getOrNull(index)
+            undelivered += {
+                when (val at = indexOf(before)) {
+                    null -> if (before == null) super.addMediaItems(mediaItems)
+                    else -> super.addMediaItems(at, mediaItems)
+                }
+            }
+        }
+
+        override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
+            val removed = device.ids.subList(
+                fromIndex.coerceAtMost(mediaItemCount),
+                toIndex.coerceAtMost(mediaItemCount),
+            )
+                .toList()
+            undelivered += { removed.mapNotNull(::indexOf).sortedDescending().forEach(device::removeMediaItem) }
+        }
+
+        override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {
+            undelivered += { super.moveMediaItems(fromIndex, toIndex, newIndex) }
         }
 
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
@@ -392,6 +542,11 @@ class RemotePlaylistTest {
 
         fun deliverAll() {
             while (undelivered.isNotEmpty()) deliver()
+        }
+
+        /** The next change never reaches the cast device. */
+        fun drop() {
+            undelivered.removeFirstOrNull()
         }
     }
 

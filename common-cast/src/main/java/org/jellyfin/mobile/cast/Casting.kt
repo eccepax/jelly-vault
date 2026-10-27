@@ -10,6 +10,8 @@ import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,8 +19,11 @@ import timber.log.Timber
 
 /** Casting as an app sees it: whether it can cast here, and to what while it does. */
 interface Casting {
-    /** False where casting can't work (no Google Play services): no cast button then. */
-    val isAvailable: Boolean
+    /**
+     * False where casting can't work (no Google Play services), and until the Cast framework has
+     * started: no cast button then.
+     */
+    val isAvailable: StateFlow<Boolean>
 
     /** The name of the cast device playback is on; null while it's on this device. */
     val castDevice: StateFlow<String?>
@@ -30,44 +35,62 @@ interface Casting {
 /** Makes players for the cast device (see [SessionCasting]); kept in this module with Media3's unstable cast API. */
 @UnstableApi
 internal interface CastPlayers {
+    /** Runs [onReady] once the Cast framework has started (at once if it has); never if it can't. */
+    fun whenReady(onReady: () -> Unit)
+
     fun newCastPlayer(converter: MediaItemConverter): CastPlayer
 }
 
-/** The app's casting: through the Cast framework where Google Play services can run it. */
+/**
+ * The app's casting: through the Cast framework where Google Play services can run it. It starts
+ * in the background (loading it takes a while, and the app's first screen shouldn't wait), so
+ * casting is available a moment later. Called on the main thread, like the rest of the framework.
+ */
 @OptIn(UnstableApi::class)
-fun casting(context: Context): Casting = castContextOrNull(context)?.let(::CastContextCasting) ?: NoCasting
-
-/** Must be called on the main thread, like everything else in the Cast framework. */
-private fun castContextOrNull(context: Context): CastContext? {
+fun casting(context: Context): Casting {
     val playServices = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
-    if (playServices != ConnectionResult.SUCCESS) return null
-    // Not only IllegalStateException: Play services present but unusable (e.g. mid-update) throws
-    // other runtime errors, and either way the app should simply not cast.
-    @Suppress("TooGenericExceptionCaught")
-    return try {
-        @Suppress("DEPRECATION") // The Task-returning version only defers this; the app needs it now
-        CastContext.getSharedInstance(context)
-    } catch (e: RuntimeException) {
-        Timber.w(e, "Cast isn't available")
-        null
-    }
+    return if (playServices == ConnectionResult.SUCCESS) CastContextCasting(context.applicationContext) else NoCasting
 }
 
 /** Where casting can't work. */
 object NoCasting : Casting {
-    override val isAvailable = false
+    override val isAvailable: StateFlow<Boolean> = MutableStateFlow(false)
     override val castDevice: StateFlow<String?> = MutableStateFlow(null)
     override fun stopCasting() = Unit
 }
 
 @UnstableApi
-private class CastContextCasting(private val castContext: CastContext) : Casting, CastPlayers {
-    override val isAvailable = true
+private class CastContextCasting(context: Context) : Casting, CastPlayers {
+    private var castContext: CastContext? = null
+    private val waiting = mutableListOf<() -> Unit>()
 
-    private val device = MutableStateFlow(castContext.sessionManager.currentCastSession?.deviceName)
+    private val available = MutableStateFlow(false)
+    override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
+
+    private val device = MutableStateFlow<String?>(null)
     override val castDevice: StateFlow<String?> = device.asStateFlow()
 
     init {
+        // Not only IllegalStateException: Play services present but unusable (e.g. mid-update) throws
+        // other runtime errors, and either way the app should simply not cast.
+        @Suppress("TooGenericExceptionCaught")
+        try {
+            CastContext.getSharedInstance(context, Dispatchers.IO.asExecutor())
+                .addOnSuccessListener(::started)
+                .addOnFailureListener { Timber.w(it, "Cast isn't available") }
+        } catch (e: RuntimeException) {
+            Timber.w(e, "Cast isn't available")
+        }
+    }
+
+    override fun whenReady(onReady: () -> Unit) {
+        if (castContext != null) onReady() else waiting += onReady
+    }
+
+    /** On the main thread, where the Task delivers it. */
+    private fun started(castContext: CastContext) {
+        this.castContext = castContext
+        device.value = castContext.sessionManager.currentCastSession?.deviceName
         castContext.sessionManager.addSessionManagerListener(
             object : SessionManagerListener<CastSession> {
                 override fun onSessionStarted(session: CastSession, sessionId: String) {
@@ -91,11 +114,17 @@ private class CastContextCasting(private val castContext: CastContext) : Casting
             },
             CastSession::class.java,
         )
+        available.value = true
+        waiting.toList().forEach { it() }
+        waiting.clear()
     }
 
-    override fun stopCasting() = castContext.sessionManager.endCurrentSession(true)
+    override fun stopCasting() {
+        castContext?.sessionManager?.endCurrentSession(true)
+    }
 
-    override fun newCastPlayer(converter: MediaItemConverter): CastPlayer = CastPlayer(castContext, converter)
+    override fun newCastPlayer(converter: MediaItemConverter): CastPlayer =
+        CastPlayer(checkNotNull(castContext) { "The Cast framework hasn't started" }, converter)
 
     private val CastSession.deviceName: String? get() = castDevice?.friendlyName
 }

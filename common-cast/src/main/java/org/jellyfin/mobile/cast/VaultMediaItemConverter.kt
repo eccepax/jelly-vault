@@ -15,6 +15,9 @@ import org.jellyfin.mobile.player.session.playableUri
  * without one is sent as [fallbackMimeType]. An app that knows what each song's url serves says
  * both through [castStream] instead. Everything else goes the way Media3's own converter sends it,
  * which also brings items back with their id, uri and metadata.
+ *
+ * An item with no way to play it at all (another controller can add one) goes with its id for a
+ * uri: the cast device can't play it, but Media3's converter would throw on it in the service.
  */
 @UnstableApi
 internal class VaultMediaItemConverter(
@@ -28,13 +31,16 @@ internal class VaultMediaItemConverter(
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
         val stream = castStream?.invoke(mediaItem)
         val forCast = mediaItem.buildUpon()
-            .setUri(stream?.url?.let(Uri::parse) ?: mediaItem.playableUri?.let(castUri))
+            .setUri(stream?.url?.let(Uri::parse) ?: mediaItem.playableUri?.let(castUri) ?: unplayable(mediaItem))
             .setMimeType(stream?.mimeType ?: mediaItem.localConfiguration?.mimeType ?: fallbackMimeType)
             .build()
         return default.toMediaQueueItem(forCast)
     }
 
     override fun toMediaItem(mediaQueueItem: MediaQueueItem): MediaItem = default.toMediaItem(mediaQueueItem)
+
+    /** A uri for an item that has none; the cast framework needs one that isn't empty. */
+    private fun unplayable(mediaItem: MediaItem): Uri = Uri.parse(mediaItem.mediaId.ifEmpty { "unplayable" })
 }
 
 /** What a cast device is sent for a song: where it fetches it, and the type that url serves. */
