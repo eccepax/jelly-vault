@@ -76,6 +76,7 @@ class AudioVaultScreenshotTest {
         val library = mockk<LibraryViewModel>(relaxed = true).apply {
             every { items } returns MutableStateFlow(audiobooks)
             every { downloadedIds } returns MutableStateFlow(emptySet())
+            every { waitingIds } returns MutableStateFlow(emptySet())
             every { hiddenIds } returns MutableStateFlow(emptySet())
             every { title } returns MutableStateFlow("All Audiobooks")
             every { canGoUp } returns MutableStateFlow(false)

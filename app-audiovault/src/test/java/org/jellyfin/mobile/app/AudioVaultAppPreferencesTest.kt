@@ -66,9 +66,27 @@ class AudioVaultAppPreferencesTest {
     }
 
     @Test
+    fun `an old choice of networks kept as text or a long still carries over`() {
+        val kept = listOf<SharedPreferences.Editor.() -> Unit>(
+            { putString(OLD_DOWNLOAD_METHOD, "0") },
+            { putLong(OLD_DOWNLOAD_METHOD, OLD_WIFI_ONLY.toLong()) },
+        )
+        for (keep in kept) {
+            val upgraded = FakeSharedPreferences()
+            upgraded.edit().apply(keep).apply()
+            val context = mockk<Context>(relaxed = true) {
+                every { getSharedPreferences(any(), any()) } returns upgraded
+            }
+
+            AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe true
+            upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
+        }
+    }
+
+    @Test
     fun `an old choice of networks that isn't a number is let go instead of failing every launch`() {
         val upgraded = FakeSharedPreferences()
-        upgraded.edit().putString(OLD_DOWNLOAD_METHOD, "1").apply()
+        upgraded.edit().putString(OLD_DOWNLOAD_METHOD, "wifi").apply()
         val context = mockk<Context>(relaxed = true) {
             every { getSharedPreferences(any(), any()) } returns upgraded
         }

@@ -6,9 +6,11 @@ import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.offline.DownloadService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
@@ -45,6 +47,23 @@ private fun ApiClient.trackUri(trackId: String): String =
 private fun Context.deleteOldTrackCache() {
     File(filesDir, "MediaCache").takeIf { it.isDirectory }?.deleteRecursively()
     File(filesDir, "Downloads").takeIf { it.isDirectory }?.deleteRecursively()
+}
+
+/** How long signing out waits for listening to reach the server, as it does for ending the session. */
+private const val SEND_LISTENING_ON_SIGN_OUT_MS = 5_000L
+
+/**
+ * What can be sent in time, without holding up signing out or stopping it: a slow or unreachable
+ * server, or a failure, leaves the rest to be forgotten with the account.
+ */
+private suspend fun OfflineListeningSync.sendBeforeSigningOut() {
+    try {
+        withTimeoutOrNull(SEND_LISTENING_ON_SIGN_OUT_MS) { sync() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        Timber.w(e, "Couldn't send the listening before signing out")
+    }
 }
 
 @UnstableApi
@@ -113,8 +132,7 @@ val audioDownloadsModule = module {
     // Signing out keeps downloads unless the user asked otherwise in Settings
     single {
         val downloads = get<AudiobookDownloads>()
-        // Listening that couldn't be sent by now is the account's, not the next one's
-        val downloadsOnSignOut = DownloadsOnSignOut(get()) { downloads.removeAll(forgetUnsentListening = true) }
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), downloads::removeAll)
         val sleepTimer = get<SleepTimer>()
         val reporter = get<AudiobookProgressReporter>()
         val offlineListening = get<OfflineListeningSync>()
@@ -124,9 +142,13 @@ val audioDownloadsModule = module {
             whileSignedIn = {
                 sleepTimer.cancel()
                 reporter.finishAndStop()
-                offlineListening.sync()
+                offlineListening.sendBeforeSigningOut()
             },
-            forgetAccount = { downloadsOnSignOut() },
+            forgetAccount = {
+                // Listening that couldn't be sent by now is the account's, not the next one's
+                downloads.forgetUnsentListening()
+                downloadsOnSignOut()
+            },
         )
     }
 }

@@ -19,7 +19,7 @@ import timber.log.Timber
 class DownloadsViewModel(
     finished: Flow<List<DownloadEntity>>,
     private val downloadTracks: suspend (trackIds: List<String>) -> Unit,
-    private val removeTrack: suspend (trackId: String) -> Unit,
+    private val removeTracks: suspend (trackIds: List<String>) -> Unit,
     private val repairDownloads: suspend () -> Unit,
 ) : ViewModel() {
     val downloads: StateFlow<List<DownloadEntity>> =
@@ -33,7 +33,7 @@ class DownloadsViewModel(
     }
 
     fun remove(trackIds: List<String>) {
-        viewModelScope.launch { trackIds.forEach { removeTrack(it) } }
+        viewModelScope.launch { removeTracks(trackIds) }
     }
 
     // Kept by its track's id, not by DownloadEntity.itemId, which is the media source's

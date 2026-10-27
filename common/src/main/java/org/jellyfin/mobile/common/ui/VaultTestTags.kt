@@ -17,6 +17,9 @@ object VaultTestTags {
     /** The mark on an item that's downloaded to the device. */
     const val DOWNLOADED_MARK = "downloaded_mark"
 
+    /** The mark on an item whose download waits for Wi-Fi. */
+    const val WAITING_FOR_WIFI_MARK = "waiting_for_wifi_mark"
+
     /** A screen's search box. */
     const val SEARCH_FIELD = "search_field"
 

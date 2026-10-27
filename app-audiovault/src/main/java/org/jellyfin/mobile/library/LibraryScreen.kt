@@ -61,6 +61,7 @@ import org.jellyfin.mobile.common.ui.components.MiniPlayerBar
 import org.jellyfin.mobile.common.ui.components.SearchField
 import org.jellyfin.mobile.common.ui.components.SettingsActionRow
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
+import org.jellyfin.mobile.common.ui.components.WaitingForWifiMark
 import java.util.UUID
 import kotlin.math.roundToInt
 import org.jellyfin.mobile.common.R as CommonR
@@ -75,6 +76,8 @@ data class LibraryUiState(
     val loading: Boolean = false,
     val error: String? = null,
     val downloadedIds: Set<String> = emptySet(),
+    /** Tracks whose download waits for Wi-Fi. */
+    val waitingIds: Set<String> = emptySet(),
     val hiddenIds: Set<String> = emptySet(),
     val query: String = "",
     val sort: SortOption = SortOption.TITLE,
@@ -255,6 +258,7 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
                 state.downloadedIds,
                 state.hiddenIds,
                 actions,
+                waitingIds = state.waitingIds,
                 // Another folder, sort, filter or search is a different list; at the root (no folder)
                 // the title tells the folder view from All Audiobooks
                 scrollKey = "${state.folderId}|${state.title}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
@@ -269,7 +273,7 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
 }
 
 /**
- * The items, each row given only whether it's downloaded and hidden: a download finishing then
+ * The items, each row given only its download's state and whether it's hidden: a download finishing then
  * redraws just its own row (with the whole id set, every row would redraw, as the list adapter
  * once did, reloading every cover). [row] draws one row; tests swap it to count redraws. A new
  * [scrollKey] goes back to the top.
@@ -281,8 +285,9 @@ internal fun LibraryList(
     hiddenIds: Set<String>,
     actions: LibraryActions,
     scrollKey: String = "",
-    row: @Composable (item: LibraryItem, downloaded: Boolean, hidden: Boolean) -> Unit = { item, downloaded, hidden ->
-        LibraryRow(item, downloaded, hidden, actions)
+    waitingIds: Set<String> = emptySet(),
+    row: @Composable (item: LibraryItem, download: RowDownload, hidden: Boolean) -> Unit = { item, download, hidden ->
+        LibraryRow(item, download, hidden, actions)
     },
 ) {
     val listState = rememberLazyListState()
@@ -294,13 +299,13 @@ internal fun LibraryList(
     }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(VaultTestTags.LIBRARY_LIST)) {
         items(items, key = { it.id }) { item ->
-            row(item, item.isDownloaded(downloadedIds), item.id.toString() in hiddenIds)
+            row(item, item.downloadIn(downloadedIds, waitingIds), item.id.toString() in hiddenIds)
         }
     }
 }
 
 @Composable
-private fun LibraryRow(item: LibraryItem, downloaded: Boolean, hidden: Boolean, actions: LibraryActions) {
+private fun LibraryRow(item: LibraryItem, download: RowDownload, hidden: Boolean, actions: LibraryActions) {
     val progress = item.progressPercent?.takeIf { it > 0f }
     val runtime = item.runTimeTicks?.let { ticks ->
         val length = formatRuntime(ticks)
@@ -318,7 +323,11 @@ private fun LibraryRow(item: LibraryItem, downloaded: Boolean, hidden: Boolean, 
         },
         progress = progress?.let { it / PERCENT },
         trailing = {
-            if (downloaded) DownloadedMark(Modifier.testTag(VaultTestTags.DOWNLOADED_MARK))
+            when (download) {
+                RowDownload.WAITING -> WaitingForWifiMark(Modifier.testTag(VaultTestTags.WAITING_FOR_WIFI_MARK))
+                RowDownload.DOWNLOADED -> DownloadedMark(Modifier.testTag(VaultTestTags.DOWNLOADED_MARK))
+                RowDownload.NONE -> Unit
+            }
             if (hidden) {
                 Icon(Icons.Filled.VisibilityOff, contentDescription = stringResource(R.string.hidden_item_desc))
             }
@@ -363,9 +372,19 @@ private fun MiniPlayer(nowPlaying: NowPlayingBar, actions: LibraryActions) {
     }
 }
 
-internal fun LibraryItem.isDownloaded(downloadedIds: Set<String>): Boolean = when (this) {
-    is LibraryItem.AudiobookBundle -> trackIds.any { it.toString() in downloadedIds }
-    is LibraryItem.AudioFile -> id.toString() in downloadedIds
+/** What a row says of its download; waiting for Wi-Fi wins, so a book part way down doesn't look done. */
+internal enum class RowDownload { NONE, WAITING, DOWNLOADED }
+
+internal fun LibraryItem.downloadIn(downloadedIds: Set<String>, waitingIds: Set<String>): RowDownload = when {
+    hasTrackIn(waitingIds) -> RowDownload.WAITING
+    hasTrackIn(downloadedIds) -> RowDownload.DOWNLOADED
+    else -> RowDownload.NONE
+}
+
+/** Whether any of the item's tracks is in [ids]. */
+internal fun LibraryItem.hasTrackIn(ids: Set<String>): Boolean = when (this) {
+    is LibraryItem.AudiobookBundle -> trackIds.any { it.toString() in ids }
+    is LibraryItem.AudioFile -> id.toString() in ids
     else -> false
 }
 

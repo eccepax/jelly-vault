@@ -90,6 +90,7 @@ val applicationModule = module {
             get(),
             downloads::playable,
             get<OfflineListeningSync>()::sync,
+            downloads.waitingIds,
         )
     }
     viewModel { AudiobookPlayerViewModel(get(), get(), get(), get(), get()) }

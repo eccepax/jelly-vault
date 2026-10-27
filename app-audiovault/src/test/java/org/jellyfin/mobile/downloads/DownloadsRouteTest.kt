@@ -48,7 +48,7 @@ class DownloadsRouteTest {
         val viewModel = DownloadsViewModel(
             downloads,
             downloadTracks = {},
-            removeTrack = { removed += it },
+            removeTracks = { removed += it },
             repairDownloads = {},
         )
         composeRule.setContent {
@@ -121,7 +121,7 @@ class DownloadsRouteTest {
         val viewModel = DownloadsViewModel(
             downloads,
             downloadTracks = {},
-            removeTrack = { removed += it },
+            removeTracks = { removed += it },
             repairDownloads = {},
         )
         restoration.setContent {

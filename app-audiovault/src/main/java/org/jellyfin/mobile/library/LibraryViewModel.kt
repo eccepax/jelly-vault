@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -59,6 +60,8 @@ class LibraryViewModel(
      * points and progress reflect it. Gives up quietly when the server can't be reached.
      */
     private val syncListening: suspend () -> Unit,
+    /** Tracks whose download waits for Wi-Fi (see AudiobookDownloads.waitingIds). */
+    private val waitingTrackIds: Flow<Set<String>> = flowOf(emptySet()),
 ) : ViewModel() {
 
     private val _rawItems = MutableStateFlow<List<LibraryItem>>(emptyList())
@@ -69,6 +72,10 @@ class LibraryViewModel(
     val showDownloadedOnly = MutableStateFlow(false)
     private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
+
+    /** Tracks whose download waits for Wi-Fi, so the library says so instead of looking stuck. */
+    val waitingIds: StateFlow<Set<String>> =
+        waitingTrackIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /** When false (default), items hidden via [toggleHidden] are excluded from [items]. */
     val showHiddenItems = MutableStateFlow(false)

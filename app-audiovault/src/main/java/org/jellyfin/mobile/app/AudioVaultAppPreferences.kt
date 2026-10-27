@@ -16,9 +16,14 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
             sharedPreferences.edit { RETIRED_PREFS.forEach { remove(it) } }
         }
         // Before the Wi-Fi only switch, a choice of networks: any but Wi-Fi only let mobile data in.
-        // Read without getInt, which would throw on every launch for a value kept as anything else.
+        // Read without getInt, which would throw on every launch for a value kept as anything else:
+        // a list setting kept it as text ("0"), and a restored backup may bring a Long.
         if (sharedPreferences.contains(OLD_DOWNLOAD_METHOD)) {
-            val method = sharedPreferences.all[OLD_DOWNLOAD_METHOD] as? Int
+            val method = when (val old = sharedPreferences.all[OLD_DOWNLOAD_METHOD]) {
+                is Number -> old.toInt()
+                is String -> old.trim().toIntOrNull()
+                else -> null
+            }
             sharedPreferences.edit {
                 if (method != null) putBoolean(PREF_DOWNLOAD_WIFI_ONLY, method == OLD_WIFI_ONLY)
                 remove(OLD_DOWNLOAD_METHOD)

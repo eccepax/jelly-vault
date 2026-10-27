@@ -43,6 +43,7 @@
     <string name="vault_play">Play</string>
     <string name="vault_pause">Pause</string>
     <string name="vault_downloaded">Downloaded</string>
+    <string name="vault_waiting_for_wifi">Waiting for Wi-Fi</string>
     <string name="vault_pref_download_wifi_only">Download over Wi-Fi only</string>
     <string name="vault_downloads_nothing">Nothing downloaded</string>
     <string name="vault_downloads_use">Downloads use %1$s</string>

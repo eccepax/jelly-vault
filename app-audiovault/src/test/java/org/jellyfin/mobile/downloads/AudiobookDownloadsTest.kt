@@ -154,7 +154,7 @@ class AudiobookDownloadsTest {
         downloads.download(listOf(chapter1, chapter2))
         items.complete(chapter1, chapter2)
 
-        downloads.remove(chapter1)
+        downloads.remove(listOf(chapter1))
 
         items.removals shouldBe listOf(chapter1)
         savedDetails() shouldBe listOf(chapter2.replace("-", ""))
@@ -217,7 +217,7 @@ class AudiobookDownloadsTest {
         items.complete(chapter1)
         listenedOffline(chapter1)
 
-        downloads.remove(chapter1)
+        downloads.remove(listOf(chapter1))
 
         items.removals shouldBe listOf(chapter1)
         savedDetails() shouldBe listOf(chapter1.replace("-", ""))
@@ -225,14 +225,67 @@ class AudiobookDownloadsTest {
     }
 
     @Test
-    fun `removing everything for the next account forgets unsent listening too`() = runTest {
+    fun `signing out forgets unsent listening, and a removed track's details with it`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+        listenedOffline(chapter1)
+        listenedOffline(chapter2)
+        downloads.remove(listOf(chapter1))
+
+        downloads.forgetUnsentListening()
+
+        savedDetails() shouldBe listOf(chapter2.replace("-", ""))
+        downloads.playable(UUID.fromString(chapter2))?.positionSavedAt shouldBe null
+    }
+
+    @Test
+    fun `removing everything after forgetting unsent listening leaves nothing`() = runTest {
         downloads.download(listOf(chapter1))
         items.complete(chapter1)
         listenedOffline(chapter1)
 
-        downloads.removeAll(forgetUnsentListening = true)
+        downloads.forgetUnsentListening()
+        downloads.removeAll()
 
         savedDetails().shouldBeEmpty()
+    }
+
+    @Test
+    fun `downloading a removed track again keeps the listening the server hasn't heard about yet`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        database.downloadDao.insert(
+            details(chapter1)!!.apply {
+                mediaSource.startTime = 2400.seconds
+                mediaSource.positionSavedAt = Instant.EPOCH
+            },
+        )
+        downloads.remove(listOf(chapter1))
+
+        downloads.download(listOf(chapter1))
+
+        val kept = database.downloadDao.getAllDownloads().first().single().mediaSource
+        kept.startTime shouldBe 2400.seconds
+        kept.positionSavedAt shouldBe Instant.EPOCH
+    }
+
+    @Test
+    fun `removing several tracks at once removes each`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+
+        downloads.remove(listOf(chapter1, chapter2))
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a track held back for Wi-Fi is waiting`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.set(chapter1, ItemDownload.State.WAITING)
+
+        downloads.waitingIds.first() shouldBe setOf(chapter1)
     }
 
     @Test

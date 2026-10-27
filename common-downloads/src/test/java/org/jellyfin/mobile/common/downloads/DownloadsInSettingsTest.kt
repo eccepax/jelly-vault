@@ -67,4 +67,13 @@ class DownloadsInSettingsTest {
         }
         settings.events shouldBe listOf("removeAll")
     }
+
+    @Test
+    fun `a failure while no screen shows them isn't said later`() = runTest(UnconfinedTestDispatcher()) {
+        settings.removeFails = true
+        val downloads = inSettings()
+        downloads.removeAll()
+
+        downloads.removeFailures.test { expectNoEvents() }
+    }
 }

@@ -2,12 +2,13 @@ package org.jellyfin.mobile.common.downloads
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -28,10 +29,14 @@ class DownloadsInSettings(private val scope: CoroutineScope, private val setting
     val space: StateFlow<DownloadSpace?> = combine(settings.bytesUsed, settings.hasDownloads, ::DownloadSpace)
         .stateIn(scope, SharingStarted.WhileSubscribed(STOP_FOLLOWING_AFTER_MS), null)
 
-    private val _removeFailures = Channel<Unit>(Channel.CONFLATED)
+    private val _removeFailures =
+        MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-    /** Each time removing them all failed, to say so; it can be tried again. */
-    val removeFailures: Flow<Unit> = _removeFailures.receiveAsFlow()
+    /**
+     * Each time removing them all failed, to say so while the screen shows; it can be tried again.
+     * One that failed after the screen closed isn't kept to pop up the next time it opens.
+     */
+    val removeFailures: Flow<Unit> = _removeFailures.asSharedFlow()
 
     fun removeAll() {
         scope.launch {
@@ -41,7 +46,7 @@ class DownloadsInSettings(private val scope: CoroutineScope, private val setting
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Couldn't remove the downloads")
-                _removeFailures.send(Unit)
+                _removeFailures.tryEmit(Unit)
             }
         }
     }
