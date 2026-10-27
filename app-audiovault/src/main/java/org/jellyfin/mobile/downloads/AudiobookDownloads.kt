@@ -4,7 +4,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
@@ -24,6 +26,17 @@ class AudiobookDownloads(
 ) {
     /** Tracks whose file is fully on the device. */
     val downloadedIds: Flow<Set<String>> = groups.downloadedItemIds
+
+    /** Tracks held back from downloading, waiting for Wi-Fi (Settings' Wi-Fi only). */
+    val waitingIds: Flow<Set<String>> = groups.statuses.map { statuses ->
+        statuses.filterValues { it is GroupStatus.Waiting }.keys
+    }
+
+    /** How much space the tracks' files take. */
+    val bytesUsed: Flow<Long> = groups.bytesUsed
+
+    /** Whether any track is downloaded or on its way, even one waiting for Wi-Fi. */
+    val hasDownloads: Flow<Boolean> = groups.hasDownloads
 
     /** Downloaded tracks' details, for the downloads screen: only those whose file is complete. */
     val finished: Flow<List<DownloadEntity>> = combine(dao.getAllDownloads(), downloadedIds) { all, done ->
@@ -51,25 +64,65 @@ class AudiobookDownloads(
                 Timber.w("Not downloading %s: its details couldn't be loaded", trackId)
                 continue
             }
-            dao.insert(details)
+            dao.insert(details.keepingUnsentListening(dao.get(details.itemId)))
             groups.save(trackId, listOf(trackId))
             groups.retry(trackId)
         }
     }
 
-    suspend fun remove(trackId: String) {
-        groups.remove(trackId)
-        dao.getAllDownloads().first()
-            .filter { it.mediaSource.itemId.toString() == trackId }
-            .forEach { dao.delete(it.itemId) }
+    /**
+     * Deletes [trackIds]' files and their details, except listening the server hasn't heard about
+     * yet: that stays until [OfflineListeningSync] sends it.
+     */
+    suspend fun remove(trackIds: List<String>) {
+        trackIds.forEach { groups.remove(it) }
+        val removed = trackIds.toSet()
+        dao.delete(
+            dao.getAllDownloads().first()
+                .filter { it.mediaSource.itemId.toString() in removed && it.mediaSource.positionSavedAt == null }
+                .map { it.itemId },
+        )
     }
 
-    /** Deletes every downloaded track and its details. */
+    /**
+     * Deletes every downloaded track and its details. Listening the server hasn't heard about yet
+     * stays to be sent, unless [forgetUnsentListening] went first.
+     */
     suspend fun removeAll() {
         groups.removeAll()
-        dao.deleteAll()
+        dao.delete(dao.getAllDownloads().first().filter { it.mediaSource.positionSavedAt == null }.map { it.itemId })
     }
+
+    /**
+     * Signing out: listening that couldn't be sent is the account's, not the next one's. A removed
+     * track's details, kept only to send it, go with it.
+     */
+    suspend fun forgetUnsentListening() {
+        val unsent = dao.getAllDownloads().first().filter { it.mediaSource.positionSavedAt != null }
+        val (kept, removed) = unsent.partition { isKept(it.mediaSource.itemId) }
+        dao.delete(removed.map { it.itemId })
+        kept.forEach { download ->
+            download.mediaSource.positionSavedAt = null
+            download.mediaSource.finished = false
+            dao.insert(download)
+        }
+    }
+
+    /** Whether [trackId] is downloaded or on its way, rather than removed. */
+    suspend fun isKept(trackId: UUID): Boolean = groups.contains(trackId.toString())
 
     /** At launch: fetches again any downloaded track whose file is gone. */
     suspend fun repair() = groups.repair()
+}
+
+/**
+ * Fresh details from the server, with the place in [kept] if the server hasn't heard about it
+ * yet: downloading a removed track again before that's sent mustn't lose it.
+ */
+private fun DownloadEntity.keepingUnsentListening(kept: DownloadEntity?): DownloadEntity {
+    val unsent = kept?.mediaSource?.takeIf { it.positionSavedAt != null } ?: return this
+    mediaSource.startTime = unsent.startTime
+    mediaSource.finished = unsent.finished
+    mediaSource.positionSavedAt = unsent.positionSavedAt
+    return this
 }

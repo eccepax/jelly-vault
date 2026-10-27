@@ -22,6 +22,7 @@ dependencies {
     // The download-group tables and DAO; each app adds them to its own Room database
     api(libs.bundles.androidx.room)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.timber)
 
     // Testing
     testImplementation(libs.junit.api)

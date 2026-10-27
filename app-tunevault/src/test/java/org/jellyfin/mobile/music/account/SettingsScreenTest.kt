@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.jellyfin.mobile.music.catalog.Account
 import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.junit.Rule
@@ -154,7 +155,7 @@ class SettingsScreenTest {
 
     @Test
     fun `shows the space used, and removing all asks first`() {
-        show(signedIn.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
+        show(signedIn.copy(downloadSpace = DownloadSpace(bytes = 1_500_000_000L, hasDownloads = true)))
 
         composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
@@ -166,7 +167,7 @@ class SettingsScreenTest {
 
     @Test
     fun `with nothing downloaded there is nothing to remove`() {
-        show(signedIn.copy(downloadBytes = 0L))
+        show(signedIn.copy(downloadSpace = DownloadSpace(bytes = 0L, hasDownloads = false)))
 
         composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").assertDoesNotExist()

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.common.account.SigningOut
 import org.jellyfin.mobile.common.downloads.DownloadSettings
+import org.jellyfin.mobile.common.downloads.DownloadSpace
+import org.jellyfin.mobile.common.downloads.DownloadsInSettings
 import org.jellyfin.mobile.music.app.PlaybackPreferences
 import org.jellyfin.mobile.music.catalog.Account
 import org.jellyfin.mobile.music.catalog.AccountInfo
@@ -31,9 +33,8 @@ data class SettingsUiState(
     val downloadQuality: StreamingQuality = StreamingQuality.ORIGINAL,
     val downloadOnWifiOnly: Boolean = true,
     val removeDownloadsOnSignOut: Boolean = false,
-    val downloadBytes: Long = 0L,
-    /** Anything to remove, even downloads waiting for Wi-Fi that take no space yet. */
-    val hasDownloads: Boolean = false,
+    /** The space downloads take; null until known, and then nothing is said about it. */
+    val downloadSpace: DownloadSpace? = null,
     val showSleepTimer: Boolean = true,
     val volumeLevelling: Boolean = true,
 )
@@ -70,21 +71,17 @@ class SettingsViewModel(
     /** Each sign out that failed, to say so; signing out can be tried again. */
     val signOutFailures: Flow<Unit> = signingOut.failures
 
+    private val downloadsInSettings = DownloadsInSettings(viewModelScope, downloads)
+
+    /** The space downloads take, while the screen shows it; null until known. */
+    val downloadSpace: StateFlow<DownloadSpace?> = downloadsInSettings.space
+
+    /** Each time removing all downloads failed, to say so. */
+    val removeDownloadsFailures: Flow<Unit> = downloadsInSettings.removeFailures
+
     init {
         viewModelScope.launch {
             signingOut.inProgress.collect { busy -> _state.update { it.copy(signingOut = busy) } }
-        }
-        viewModelScope.launch {
-            downloads.bytesUsed.collect { bytes ->
-                _state.update {
-                    it.copy(
-                        downloadBytes = bytes,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            downloads.hasDownloads.collect { has -> _state.update { it.copy(hasDownloads = has) } }
         }
         viewModelScope.launch {
             try {
@@ -128,9 +125,7 @@ class SettingsViewModel(
         _state.update { it.copy(volumeLevelling = on) }
     }
 
-    fun removeAllDownloads() {
-        viewModelScope.launch { downloads.removeAll() }
-    }
+    fun removeAllDownloads() = downloadsInSettings.removeAll()
 
     fun signOut() = signingOut.start()
 }

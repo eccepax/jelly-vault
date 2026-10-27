@@ -48,9 +48,9 @@ class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPre
             ?: StreamingQuality.ORIGINAL
         set(value) = sharedPreferences.edit { putString(PREF_DOWNLOAD_QUALITY, value.name) }
 
-    override var downloadOnWifiOnly: Boolean
-        get() = sharedPreferences.getBoolean(PREF_DOWNLOAD_WIFI_ONLY, true)
-        set(value) = sharedPreferences.edit { putBoolean(PREF_DOWNLOAD_WIFI_ONLY, value) }
+    // Downloads show when they're waiting for Wi-Fi (see DownloadButton)
+    override val downloadOnWifiOnlyByDefault: Boolean
+        get() = true
 
     override var volumeLevelling: Boolean
         get() = sharedPreferences.getBoolean(PREF_VOLUME_LEVELLING, true)
@@ -72,6 +72,5 @@ class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPre
         const val PREF_ALBUM_SORT = "album_sort"
         const val PREF_STREAMING_QUALITY = "streaming_quality"
         const val PREF_DOWNLOAD_QUALITY = "download_quality"
-        const val PREF_DOWNLOAD_WIFI_ONLY = "download_wifi_only"
     }
 }

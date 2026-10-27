@@ -2,23 +2,21 @@ package org.jellyfin.mobile.settings
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
-import org.jellyfin.mobile.downloads.DownloadMethod
 import org.jellyfin.mobile.player.playback.FakeAudiobookController
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.sdk.model.ClientInfo
 import org.junit.Rule
 import org.junit.Test
@@ -38,7 +36,7 @@ class SettingsRouteTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val appPreferences = AudioVaultAppPreferences(context)
-    private val downloadManager = mockk<DownloadManager>(relaxed = true)
+    private val downloads = FakeDownloadSettings()
     private val playback = FakeAudiobookController()
     private val signingOut = CompletableDeferred<Unit>()
     private var signOuts = 0
@@ -49,7 +47,7 @@ class SettingsRouteTest {
     private val viewModel by lazy {
         SettingsViewModel(
             preferences = appPreferences,
-            downloadManager = downloadManager,
+            downloads = downloads,
             playback = playback,
             signOut = {
                 signOuts++
@@ -119,15 +117,57 @@ class SettingsRouteTest {
     }
 
     @Test
-    fun `choosing mobile data saves it, and applies it to downloads already waiting`() {
+    fun `switching wi-fi only goes through the download settings, which save and apply it`() {
+        downloads.wifiOnly = false
+        downloads.events.clear()
         show()
 
-        click(R.string.network_title)
-        composeRule.onNodeWithText(context.getString(R.string.mobile_data)).performClick()
+        click(CommonR.string.vault_pref_download_wifi_only)
+        composeRule.onNodeWithText(context.getString(CommonR.string.vault_pref_download_wifi_only)).assertIsOn()
+
+        downloads.events shouldBe listOf("wifiOnly true")
+    }
+
+    @Test
+    fun `shows the space downloads take, and removing them all empties it`() {
+        downloads.bytesUsed.value = 32_400_000L
+        show()
+
+        composeRule.onNodeWithText("Downloads use 32 MB").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        downloads.events shouldBe listOf("removeAll")
+    }
+
+    @Test
+    fun `downloads waiting for wi-fi can be removed though they take no space yet`() {
+        downloads.queued.value = true
+        show()
+
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
+        downloads.events shouldBe listOf("removeAll")
+    }
+
+    @Test
+    fun `removing all downloads that fails says so, and can be tried again`() {
+        downloads.bytesUsed.value = 32_400_000L
+        downloads.removeFails = true
+        show()
+
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        appPreferences.downloadMethod shouldBe DownloadMethod.MOBILE_DATA
-        verify { downloadManager.requirements = any() }
+        ShadowToast.getTextOfLatestToast() shouldBe context.getString(CommonR.string.vault_downloads_remove_all_failed)
+        downloads.removeFails = false
+        composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
+        composeRule.onNodeWithText("Yes, remove all").performScrollTo().performClick()
+        composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
     }
 
     @Test

@@ -1,13 +1,10 @@
 package org.jellyfin.mobile.downloads
 
 import android.app.Application
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
-import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
-import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
@@ -17,7 +14,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** Downloading a book from the library: which networks it may use is asked once, then kept. */
+/** Downloading or removing a book from the library. */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class DownloadRequestsTest {
@@ -27,7 +24,6 @@ class DownloadRequestsTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val preferences = AudioVaultAppPreferences(context)
-    private val applied = mutableListOf<Int>()
     private val downloaded = mutableListOf<List<String>>()
     private val removed = mutableListOf<String>()
     private lateinit var requests: DownloadRequests
@@ -37,7 +33,6 @@ class DownloadRequestsTest {
             AppTheme(VaultBrand.AudioVault) {
                 requests = rememberDownloadRequests(
                     preferences = preferences,
-                    applyMethod = { applied += it },
                     download = { downloaded += it },
                     remove = { removed += it },
                 )
@@ -45,38 +40,15 @@ class DownloadRequestsTest {
         }
     }
 
-    private fun string(resId: Int) = context.getString(resId)
-
     @Test
-    fun `the first download asks which networks it may use, and goes once one's chosen`() {
+    fun `downloading goes at once, without asking which networks (Settings has Wi-Fi only for that)`() {
         show()
 
         composeRule.runOnIdle { requests.download(listOf("a", "b")) }
-        composeRule.onNodeWithText(string(R.string.network_message)).assertExists()
-        // Offered as the settings offer them
-        composeRule.onNodeWithText(string(R.string.wifi_only_summary)).assertExists()
-        composeRule.onNodeWithText(string(R.string.mobile_data_summary)).assertExists()
-        downloaded.shouldBeEmpty()
-        composeRule.onNodeWithText(string(R.string.mobile_data)).performClick()
         composeRule.waitForIdle()
 
-        preferences.downloadMethod shouldBe DownloadMethod.MOBILE_DATA
-        applied shouldBe listOf(DownloadMethod.MOBILE_DATA)
         downloaded shouldBe listOf(listOf("a", "b"))
-        composeRule.onNodeWithText(string(R.string.network_message)).assertDoesNotExist()
-    }
-
-    @Test
-    fun `once chosen, downloads go without asking`() {
-        preferences.downloadMethod = DownloadMethod.WIFI_ONLY
-        show()
-
-        composeRule.runOnIdle { requests.download(listOf("a")) }
-        composeRule.waitForIdle()
-
-        composeRule.onNodeWithText(string(R.string.network_message)).assertDoesNotExist()
-        applied shouldBe listOf(DownloadMethod.WIFI_ONLY)
-        downloaded shouldBe listOf(listOf("a"))
+        composeRule.onNode(isDialog()).assertDoesNotExist()
     }
 
     @Test

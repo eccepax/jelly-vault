@@ -35,6 +35,7 @@ import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.InlineConfirm
+import org.jellyfin.mobile.common.ui.components.RemoveDownloadsFailures
 import org.jellyfin.mobile.common.ui.components.SecondaryText
 import org.jellyfin.mobile.common.ui.components.SettingsNote
 import org.jellyfin.mobile.common.ui.components.SettingsRadioGroup
@@ -135,7 +136,7 @@ private fun DownloadsSection(state: SettingsUiState, actions: DownloadSettingsAc
         state.removeDownloadsOnSignOut,
         actions.onRemoveOnSignOut,
     )
-    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAll)
+    state.downloadSpace?.let { DownloadsSpaceSetting(it.bytes, it.hasDownloads, actions.onRemoveAll) }
 }
 
 /** A setting that's on or off: the whole row toggles it. */
@@ -203,11 +204,13 @@ private val SettingsTextPadding = PaddingValues(horizontal = VaultSpacing.Large,
 @Composable
 fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
+    val downloadSpace by viewModel.downloadSpace.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
     LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
     SignOutFailures(viewModel.signOutFailures)
+    RemoveDownloadsFailures(viewModel.removeDownloadsFailures)
     SettingsScreen(
-        state = state,
+        state = state.copy(downloadSpace = downloadSpace),
         onBack = onBack,
         onStreamingQuality = viewModel::setStreamingQuality,
         onSignOut = viewModel::signOut,

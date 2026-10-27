@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Instant
 import java.util.UUID
 import kotlin.time.Duration.Companion.seconds
 
@@ -153,7 +154,7 @@ class AudiobookDownloadsTest {
         downloads.download(listOf(chapter1, chapter2))
         items.complete(chapter1, chapter2)
 
-        downloads.remove(chapter1)
+        downloads.remove(listOf(chapter1))
 
         items.removals shouldBe listOf(chapter1)
         savedDetails() shouldBe listOf(chapter2.replace("-", ""))
@@ -193,6 +194,111 @@ class AudiobookDownloadsTest {
         items.removals.toSet() shouldBe setOf(chapter1, chapter2)
         savedDetails().shouldBeEmpty()
         downloads.downloadedIds.first().shouldBeEmpty()
+    }
+
+    @Test
+    fun `removing everything keeps the listening the server hasn't heard about yet, to send it later`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+        listenedOffline(chapter1)
+
+        downloads.removeAll()
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails() shouldBe listOf(chapter1.replace("-", ""))
+        downloads.downloadedIds.first().shouldBeEmpty()
+        downloads.finished.first().shouldBeEmpty()
+        downloads.isKept(UUID.fromString(chapter1)) shouldBe false
+    }
+
+    @Test
+    fun `removing a track keeps the listening the server hasn't heard about yet`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        listenedOffline(chapter1)
+
+        downloads.remove(listOf(chapter1))
+
+        items.removals shouldBe listOf(chapter1)
+        savedDetails() shouldBe listOf(chapter1.replace("-", ""))
+        downloads.playable(UUID.fromString(chapter1)) shouldBe null
+    }
+
+    @Test
+    fun `signing out forgets unsent listening, and a removed track's details with it`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+        listenedOffline(chapter1)
+        listenedOffline(chapter2)
+        downloads.remove(listOf(chapter1))
+
+        downloads.forgetUnsentListening()
+
+        savedDetails() shouldBe listOf(chapter2.replace("-", ""))
+        downloads.playable(UUID.fromString(chapter2))?.positionSavedAt shouldBe null
+    }
+
+    @Test
+    fun `removing everything after forgetting unsent listening leaves nothing`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        listenedOffline(chapter1)
+
+        downloads.forgetUnsentListening()
+        downloads.removeAll()
+
+        savedDetails().shouldBeEmpty()
+    }
+
+    @Test
+    fun `downloading a removed track again keeps the listening the server hasn't heard about yet`() = runTest {
+        downloads.download(listOf(chapter1))
+        items.complete(chapter1)
+        database.downloadDao.insert(
+            details(chapter1)!!.apply {
+                mediaSource.startTime = 2400.seconds
+                mediaSource.positionSavedAt = Instant.EPOCH
+            },
+        )
+        downloads.remove(listOf(chapter1))
+
+        downloads.download(listOf(chapter1))
+
+        val kept = database.downloadDao.getAllDownloads().first().single().mediaSource
+        kept.startTime shouldBe 2400.seconds
+        kept.positionSavedAt shouldBe Instant.EPOCH
+    }
+
+    @Test
+    fun `removing several tracks at once removes each`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.complete(chapter1, chapter2)
+
+        downloads.remove(listOf(chapter1, chapter2))
+
+        items.removals.toSet() shouldBe setOf(chapter1, chapter2)
+        savedDetails().shouldBeEmpty()
+    }
+
+    @Test
+    fun `a track held back for Wi-Fi is waiting`() = runTest {
+        downloads.download(listOf(chapter1, chapter2))
+        items.set(chapter1, ItemDownload.State.WAITING)
+
+        downloads.waitingIds.first() shouldBe setOf(chapter1)
+    }
+
+    @Test
+    fun `a track is kept while it's downloaded or on its way`() = runTest {
+        downloads.download(listOf(chapter1))
+
+        downloads.isKept(UUID.fromString(chapter1)) shouldBe true
+        downloads.isKept(UUID.fromString(chapter2)) shouldBe false
+    }
+
+    /** Played offline: a position the server hasn't been sent (see OfflineListeningSync). */
+    private suspend fun listenedOffline(trackId: String) {
+        database.downloadDao.insert(details(trackId)!!.apply { mediaSource.positionSavedAt = Instant.EPOCH })
     }
 
     @Test

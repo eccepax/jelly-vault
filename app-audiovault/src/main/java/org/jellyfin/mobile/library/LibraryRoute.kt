@@ -101,6 +101,7 @@ private fun libraryState(
     val loading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val downloadedIds by viewModel.downloadedIds.collectAsState()
+    val waitingIds by viewModel.waitingIds.collectAsState()
     val hiddenIds by viewModel.hiddenIds.collectAsState()
     val sort by viewModel.sortOption.collectAsState()
     val downloadedOnly by viewModel.showDownloadedOnly.collectAsState()
@@ -116,6 +117,7 @@ private fun libraryState(
         loading = loading,
         error = error,
         downloadedIds = downloadedIds,
+        waitingIds = waitingIds,
         hiddenIds = hiddenIds,
         query = query,
         sort = sort,

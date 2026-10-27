@@ -37,7 +37,8 @@ class OfflineListeningSyncTest {
         .allowMainThreadQueries()
         .build()
     private val server = FakeServerPositions()
-    private val sync = OfflineListeningSync(database.downloadDao, server)
+    private val removed = mutableSetOf<UUID>()
+    private val sync = OfflineListeningSync(database.downloadDao, server, isKept = { it !in removed })
 
     private val morning = Instant.parse("2026-10-15T08:00:00Z")
     private val noon = Instant.parse("2026-10-15T12:00:00Z")
@@ -153,6 +154,29 @@ class OfflineListeningSyncTest {
         val stored = database.downloadDao.getAllDownloads().first().single().mediaSource
         stored.startTime shouldBe 13.minutes
         stored.positionSavedAt shouldBe noon
+    }
+
+    @Test
+    fun `once sent, the details of a track removed from the device are let go`() = runTest {
+        val chapter = saved(position = 12.minutes, savedAt = noon)
+        val kept = saved(position = 3.minutes, savedAt = noon)
+        removed += chapter
+
+        sync.sync()
+
+        server.recorded.map { it.itemId }.toSet() shouldBe setOf(chapter, kept)
+        database.downloadDao.getAllDownloads().first().map { it.mediaSource.itemId } shouldBe listOf(kept)
+    }
+
+    @Test
+    fun `a removed track's listening that couldn't be sent is kept for next time`() = runTest {
+        val chapter = saved(position = 12.minutes, savedAt = noon)
+        removed += chapter
+        server.unreachable = true
+
+        sync.sync()
+
+        database.downloadDao.getAllDownloads().first().single().mediaSource.positionSavedAt shouldBe noon
     }
 
     private suspend fun saved(

@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,8 +16,10 @@ import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
+import org.jellyfin.mobile.testing.endtoend.WAIT_TIMEOUT_MS
 import org.junit.Before
 import org.junit.Test
+import org.jellyfin.mobile.common.R as CommonR
 
 // "Download" on a multi-track audiobook queues every track in parallel, and even the first to finish
 // is a real network transfer, so this needs a generous timeout.
@@ -48,29 +51,44 @@ class DownloadE2ETest : LoggedInE2ETest() {
 
     @Test
     fun downloadingALibraryItemPersistsItLocally() {
-        loginAndWaitForLibrary()
-        assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
-
-        // A book of short tracks: the test waits for one whole track, and the first item in the
-        // library can be a book of 200 MB files that the emulator can't fetch within the timeout
-        searchLibrary(SMALL_TRACKS_BOOK)
-        libraryItems()[0].performTouchInput { longClick() }
-
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        composeRule.onNodeWithText(context.getString(R.string.download_action)).performClick()
-
-        // First-ever download on a fresh install: the library (DownloadRequests) asks which
-        // network types are allowed before it'll proceed at all. Mobile data allows any network,
-        // so whether the emulator's network counts as metered can't hold the download back.
-        composeRule.onNodeWithText(context.getString(R.string.mobile_data)).performClick()
-
-        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadedIds().isNotEmpty() }
+        downloadATrack()
 
         val track = downloadedIds().first()
         val file = checkNotNull(onMain { koinGet<ItemDownloads>().fileFor(track) }) { "$track has no file" }
         assert(file.length() > 0) { "Expected $track's file to hold the track" }
         // The player finds the download by the track's own stream url, whatever it carries
         assert(audioItemIdOf(Uri.parse("http://vault/Audio/${track.replace("-", "")}/universal")) == track)
+    }
+
+    @Test
+    fun settingsShowsTheSpaceDownloadsTakeAndRemovesThemAll() {
+        downloadATrack()
+
+        chooseFromLibraryMenu(context.getString(R.string.activity_name_settings))
+        waitForComposeText(context.getString(CommonR.string.vault_downloads_remove_all))
+        composeRule.onNodeWithText(context.getString(CommonR.string.vault_downloads_remove_all)).performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText(context.getString(CommonR.string.vault_downloads_remove_all_yes)).performScrollTo()
+            .performClick()
+
+        composeRule.waitUntil(timeoutMillis = WAIT_TIMEOUT_MS) { downloadedIds().isEmpty() }
+        waitForComposeText(context.getString(CommonR.string.vault_downloads_nothing))
+    }
+
+    /** Signs in and downloads a book of short tracks, until the first track is on the device. */
+    private fun downloadATrack() {
+        loginAndWaitForLibrary()
+        assert(downloadedIds().isEmpty()) { "Expected no downloads before the test (state should be reset by LoggedInE2ETest)" }
+        // Downloads use any network unless Settings says Wi-Fi only, so whether the emulator's
+        // network counts as metered can't hold this one back
+
+        // A book of short tracks: the test waits for one whole track, and the first item in the
+        // library can be a book of 200 MB files that the emulator can't fetch within the timeout
+        searchLibrary(SMALL_TRACKS_BOOK)
+        libraryItems()[0].performTouchInput { longClick() }
+        composeRule.onNodeWithText(context.getString(R.string.download_action)).performClick()
+
+        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { downloadedIds().isNotEmpty() }
     }
 
     private fun downloadedIds(): Set<String> = runBlocking { koinGet<AudiobookDownloads>().downloadedIds.first() }
