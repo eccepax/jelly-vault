@@ -3,7 +3,9 @@ package org.jellyfin.mobile.music.catalog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jellyfin.mobile.cast.CAST_MP3
 import org.jellyfin.mobile.cast.CastStream
+import org.jellyfin.mobile.cast.castFormatOf
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
@@ -21,39 +23,6 @@ import java.util.UUID
 
 /** Containers ExoPlayer plays natively, so the server can direct-stream them untouched. */
 private val DIRECT_PLAY_CONTAINERS = listOf("flac", "mp3", "aac", "m4a", "mp4", "ogg", "opus", "wav")
-
-/**
- * How a cast device gets a song in a format it plays (Google's supported media list): the [asked]
- * containers come as they are, each only with the codecs named (`container|codec`) where it holds
- * others too; anything else, or more than a cast device decodes (over 96 kHz or 24 bits), is
- * transcoded to [transcodeTo] in [transcodeCodec]. Either way it's served as [mimeType], so the type
- * the cast device is told is the one it gets. Not m4a or mp4: they hold ALAC too, which cast devices
- * can't play, and the server can't be asked for them by codec alone.
- */
-private class CastFormat(
-    val asked: List<String>,
-    val transcodeTo: String,
-    val transcodeCodec: String,
-    val mimeType: String,
-)
-
-private val CAST_FLAC = CastFormat(listOf("flac"), "flac", "flac", "audio/flac")
-private val CAST_MP3 = CastFormat(listOf("mp3"), "mp3", "mp3", "audio/mpeg")
-
-/** By the song's container; lossless ones (wav too) as FLAC, which is smaller and plays alike. */
-private val CAST_FORMATS = mapOf(
-    "flac" to CAST_FLAC,
-    "wav" to CAST_FLAC,
-    "mp3" to CAST_MP3,
-    "aac" to CastFormat(listOf("aac"), "aac", "aac", "audio/aac"),
-    "ogg" to CastFormat(listOf("ogg|vorbis", "ogg|opus"), "ogg", "opus", "audio/ogg"),
-    "opus" to CastFormat(listOf("opus|opus"), "ogg", "opus", "audio/ogg"),
-    "webm" to CastFormat(listOf("webm|opus", "webm|vorbis"), "webm", "opus", "audio/webm"),
-)
-
-/** The most a cast device decodes (Google's supported media list: FLAC up to 96 kHz, 24 bits). */
-private const val CAST_MAX_SAMPLE_RATE = 96_000
-private const val CAST_MAX_BIT_DEPTH = 24
 
 /**
  * [MusicCatalog] backed by the Jellyfin API. Every query is scoped to the user's music libraries
@@ -160,23 +129,20 @@ class JellyfinMusicCatalog(
     /**
      * The song as a cast device gets it, and the type it comes as (the receiver needs one): it
      * fetches the song itself, so the token is in the url. At the original quality, in its own
-     * format where a cast device plays that (see [CastFormat]); anything else, or at a lower
+     * format where a cast device plays that (see [castFormatOf]); anything else, or at a lower
      * quality, as MP3. Either way the type is known before the server answers.
      */
     fun castStream(trackId: String, container: String?): CastStream {
         val quality = streamingQuality()
-        val format = container?.lowercase()?.takeIf { quality == StreamingQuality.ORIGINAL }
-            ?.let(CAST_FORMATS::get)
-            ?: CAST_MP3
-        val url = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-            itemId = trackId.toUUID(),
-            container = format.asked,
-            maxStreamingBitrate = quality.maxBitrate,
-            transcodingContainer = format.transcodeTo,
-            transcodingProtocol = MediaStreamProtocol.HTTP,
-            audioCodec = format.transcodeCodec,
-            maxAudioSampleRate = CAST_MAX_SAMPLE_RATE,
-            maxAudioBitDepth = CAST_MAX_BIT_DEPTH,
+        val format = if (quality == StreamingQuality.ORIGINAL) castFormatOf(container) else CAST_MP3
+        val url = universalAudioUri(
+            trackId,
+            format.asked,
+            quality,
+            format.transcodeTo,
+            format.transcodeCodec,
+            maxSampleRate = format.maxSampleRate,
+            maxBitDepth = format.maxBitDepth,
         )
         return CastStream(withAccessToken(url, apiClient.accessToken), format.mimeType)
     }
@@ -188,13 +154,19 @@ class JellyfinMusicCatalog(
     fun downloadUri(trackId: String, quality: StreamingQuality): String =
         universalAudioUri(trackId, DIRECT_PLAY_CONTAINERS, quality, transcodeTo = "m4a", transcodeCodec = "aac")
 
-    /** [trackId] as it is if it's in one of [containers] (and within [quality]), else as [transcodeTo]. */
+    /**
+     * [trackId] as it is if it's in one of [containers] (and within [quality], [maxSampleRate] and
+     * [maxBitDepth]), else as [transcodeTo].
+     */
+    @Suppress("LongParameterList")
     private fun universalAudioUri(
         trackId: String,
         containers: List<String>,
         quality: StreamingQuality,
         transcodeTo: String,
         transcodeCodec: String,
+        maxSampleRate: Int? = null,
+        maxBitDepth: Int? = null,
     ): String = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
         itemId = trackId.toUUID(),
         container = containers,
@@ -202,6 +174,8 @@ class JellyfinMusicCatalog(
         transcodingContainer = transcodeTo,
         transcodingProtocol = MediaStreamProtocol.HTTP,
         audioCodec = transcodeCodec,
+        maxAudioSampleRate = maxSampleRate,
+        maxAudioBitDepth = maxBitDepth,
     )
 
     private suspend fun albumItems(parentId: UUID, albumArtistId: UUID? = null): List<BaseItemDto> =

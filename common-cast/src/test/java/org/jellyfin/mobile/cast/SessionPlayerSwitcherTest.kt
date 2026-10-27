@@ -86,6 +86,73 @@ class SessionPlayerSwitcherTest {
     }
 
     @Test
+    fun `a queue emptied while casting stays empty once the cast ends, rather than the one before coming back`() {
+        local.load(index = 1, positionMs = 30_000L, play = true)
+        switcher.switchTo(cast)
+        settle()
+
+        // As an app stops playback (signing out, say)
+        cast.stop()
+        cast.clearMediaItems()
+        settle()
+        switcher.switchTo(local)
+        settle()
+
+        local.mediaItemCount shouldBe 0
+    }
+
+    @Test
+    fun `a new queue the cast device never takes up still replaces the one before, back here`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        switcher.switchTo(cast)
+        settle()
+
+        // The cast device has stopped (an error, say), so it never reports the queue sent next
+        remote.stop()
+        settle()
+        cast.setMediaItems(items("x", "y"), 1, 0L)
+        settle()
+        switcher.switchTo(local)
+        settle()
+
+        local.ids shouldBe listOf("x", "y")
+        local.currentMediaItemIndex shouldBe 1
+    }
+
+    @Test
+    fun `a volume asked for while casting is this device's once playback is back, and not the cast device's`() {
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+
+        // The sleep timer's fade, say
+        cast.volume = 0.3f
+        switcher.switchTo(local)
+        settle()
+
+        local.volume shouldBe 0.3f
+        remote.volume shouldBe 1f
+    }
+
+    @Test
+    fun `without a volume asked for while casting, this device's stays as it was, even after an earlier cast's`() {
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+        cast.volume = 0.3f
+        switcher.switchTo(local)
+        settle()
+        local.volume = 0.8f
+
+        switcher.switchTo(cast)
+        settle()
+        switcher.switchTo(local)
+        settle()
+
+        local.volume shouldBe 0.8f
+    }
+
+    @Test
     fun `casting carries repeat and speed over`() {
         local.load(index = 0, positionMs = 0L, play = false)
         local.repeatMode = Player.REPEAT_MODE_ALL

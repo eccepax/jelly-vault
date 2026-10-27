@@ -5,6 +5,7 @@ import io.kotest.matchers.collections.shouldNotContainAnyOf
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.music.domain.StreamingQuality
 import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
 import org.jellyfin.mobile.testing.VaultTestServer
@@ -105,6 +106,19 @@ class JellyfinCastStreamContractTest {
         containersAskedFor(stream.url) shouldBe listOf("ogg|vorbis", "ogg|opus")
         parameter(stream.url, "transcodingContainer") shouldBe "ogg"
         parameter(stream.url, "audioCodec") shouldBe "opus"
+    }
+
+    @Test
+    fun `below the original quality, a song is cast as an mp3 the server can make`() = runBlocking<Unit> {
+        val lowQuality = JellyfinMusicCatalog(VaultTestServer.apiClient, streamingQuality = { StreamingQuality.LOW })
+        val flac = catalog.albums().firstNotNullOfOrNull { album ->
+            catalog.albumTracks(album.id).firstOrNull { it.container == "flac" }
+        }.shouldNotBeNull()
+
+        val stream = lowQuality.castStream(flac.id, flac.container)
+
+        stream.mimeType shouldBe "audio/mpeg"
+        contentTypeOf(stream.url) shouldBe "audio/mpeg"
     }
 
     @Test

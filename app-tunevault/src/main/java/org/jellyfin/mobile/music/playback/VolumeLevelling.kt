@@ -26,10 +26,9 @@ fun levelFor(gainDb: Float?): Float =
  * The player's volume, made of two parts that multiply: volume levelling and the sleep timer's
  * fade. Each sets its own part, so neither overwrites the other.
  *
- * A cast device's volume is its own (the player's volume there is the TV's or speaker's), so while
- * casting nothing is sent, whoever sets a part (and the cast player drops any that is: the
- * controller only says it's casting a moment after it is); back here, [refresh] gives this
- * device's player the volume the parts now make, whatever was sent last.
+ * Sent while casting too: the cast player leaves the cast device's own volume alone, and keeps it
+ * for this device's player once playback is back (common-cast's RemotePlaylist and
+ * SessionPlayerSwitcher).
  */
 class PlaybackVolume(private val playback: PlaybackController) {
     private var level = 1f
@@ -46,15 +45,7 @@ class PlaybackVolume(private val playback: PlaybackController) {
         apply()
     }
 
-    /** Sends the volume the parts make, as when playback comes back from a cast device. */
-    fun refresh() = apply()
-
     private fun apply() {
-        if (playback.state.value.isRemote) {
-            // What was sent last may have gone to the cast player, not this device's
-            applied = Float.NaN
-            return
-        }
         val volume = level * fade
         if (volume == applied) return
         applied = volume
@@ -70,9 +61,6 @@ class VolumeLeveller(
     private val scope: CoroutineScope,
 ) {
     fun start(): Job = scope.launch {
-        launch {
-            playback.state.map { it.isRemote }.distinctUntilChanged().collect { volume.refresh() }
-        }
         val currentGain = playback.state
             .map { state -> state.queue.entries.getOrNull(state.queue.currentIndex)?.track?.normalizationGainDb }
             .distinctUntilChanged()

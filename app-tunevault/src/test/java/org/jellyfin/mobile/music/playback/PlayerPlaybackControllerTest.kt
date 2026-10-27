@@ -319,6 +319,35 @@ class PlayerPlaybackControllerTest {
     }
 
     @Test
+    fun `skipping to a song the player's playlist lacks plays that song, rather than the one after it`() {
+        controller.play(abc)
+        run(player).untilState(Player.STATE_READY)
+        // As when playback comes back from a cast device without a song it couldn't say how to play
+        player.removeMediaItem(1)
+        settle()
+
+        controller.skipTo(1)
+        settle()
+
+        state.currentTrack?.id shouldBe "b"
+        playerTrackIds()[player.currentMediaItemIndex] shouldBe "b"
+    }
+
+    @Test
+    fun `skipping to the last song when the player's playlist lacks it plays that song too`() {
+        controller.play(abc)
+        run(player).untilState(Player.STATE_READY)
+        player.removeMediaItem(2)
+        settle()
+
+        controller.skipTo(2)
+        settle()
+
+        state.currentTrack?.id shouldBe "c"
+        playerTrackIds()[player.currentMediaItemIndex] shouldBe "c"
+    }
+
+    @Test
     fun `stop clears the queue and the player`() {
         controller.play(abc)
         run(player).untilState(Player.STATE_READY)

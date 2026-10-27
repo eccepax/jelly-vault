@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.cast
 
 import android.os.Handler
+import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -43,7 +44,9 @@ import kotlin.math.min
  * songs. Meanwhile this answers for the queue as changed, and a skip goes after them. Changes that
  * don't arrive within [EDITS_ARRIVE_WITHIN_MS] send the queue again instead.
  *
- * Nothing here sets the player's volume: on a cast device that's the TV's or speaker's own.
+ * Nothing here sets the player's volume: on a cast device that's the TV's or speaker's own. The
+ * volume asked for is kept instead, for this device's player once playback is back (see
+ * [volumeAskedFor] and SessionPlayerSwitcher).
  */
 // One override per playlist call Player has: each must be mirrored
 @Suppress("TooManyFunctions")
@@ -57,6 +60,7 @@ internal class RemotePlaylist(
      * null, however long (Media3's test helpers run delayed tasks early, moving the clock on).
      */
     private val editsArriveWithinMs: Long? = EDITS_ARRIVE_WITHIN_MS,
+    private val now: () -> Long = SystemClock::elapsedRealtime,
 ) : ForwardingPlayer(player) {
 
     private val tracked = mutableListOf<MediaItem>()
@@ -94,7 +98,45 @@ internal class RemotePlaylist(
     /** A change waiting to be sent, with the song playing (and where) as the burst of changes began. */
     private var pendingResend: Resend? = null
 
-    private class Resend(val playing: MediaItem?, val index: Int, val positionMs: Long)
+    /**
+     * Where to send the queue from: [playing] at [positionMs] as of [atMs], further on by now if it
+     * was [moving] (at [speed]).
+     */
+    private class Resend(
+        val playing: MediaItem?,
+        val index: Int,
+        val positionMs: Long,
+        val atMs: Long,
+        val moving: Boolean,
+        val speed: Float,
+    ) {
+        fun positionAt(nowMs: Long): Long = when {
+            positionMs == C.TIME_UNSET || !moving -> positionMs
+            else -> positionMs + ((nowMs - atMs) * speed).toLong()
+        }
+    }
+
+    private fun resendFrom(playing: MediaItem?, index: Int, positionMs: Long) =
+        Resend(playing, index, positionMs, now(), super.isPlaying(), playbackParameters.speed)
+
+    /** The volume last asked for while this was the session's player; null if none was. */
+    var volumeAskedFor: Float? = null
+        private set
+
+    /**
+     * Told of each change to the queue made here: true when it was replaced or emptied, false for
+     * an edit (see SessionPlayerSwitcher, which keeps what the cast device last said).
+     */
+    var onQueueChanged: ((replaced: Boolean) -> Unit)? = null
+
+    /** Emptied by the app (stopped, or cleared), not by the cast device: there's nothing to pick up. */
+    val emptiedHere: Boolean get() = emptiedByApp && tracked.isEmpty()
+    private var emptiedByApp = false
+
+    /** Bumped on each change to [tracked], so the queue reported isn't made again for each ask. */
+    private var queueVersion = 0
+    private var reportedQueue: QueueTimeline? = null
+    private var reportedQueueKey: Triple<Int, Int, Long>? = null
 
     /** Changes to a short queue on their way to the cast device, one at a time (see [forwardEdits]). */
     private var editing: Edits? = null
@@ -195,8 +237,10 @@ internal class RemotePlaylist(
         return if (song === onDevice) super.getDuration() else song.mediaMetadata.durationMs ?: C.TIME_UNSET
     }
 
-    /** The cast device's own, which isn't this app's to change. */
-    override fun setVolume(volume: Float) = Unit
+    /** The cast device's own isn't this app's to change: kept for this device's player instead. */
+    override fun setVolume(volume: Float) {
+        volumeAskedFor = volume
+    }
 
     override fun getCurrentTimeline(): Timeline = reported(super.getCurrentTimeline())
 
@@ -260,7 +304,15 @@ internal class RemotePlaylist(
         )
     }
 
-    private fun queueTimeline(): Timeline = QueueTimeline(tracked.toList(), currentMediaItemIndex, duration)
+    /** The whole queue, made again only once it, the song playing or its length has changed. */
+    private fun queueTimeline(): Timeline {
+        val key = Triple(queueVersion, currentMediaItemIndex, duration)
+        reportedQueue?.takeIf { reportedQueueKey == key }?.let { return it }
+        return QueueTimeline(tracked.toList(), key.second, key.third).also {
+            reportedQueue = it
+            reportedQueueKey = key
+        }
+    }
 
     override fun seekToDefaultPosition(mediaItemIndex: Int) = seekTo(mediaItemIndex, C.TIME_UNSET)
 
@@ -273,7 +325,7 @@ internal class RemotePlaylist(
             pendingResend != null -> send(index, positionMs)
             // Once the changes before it have arrived, the song is where it is now
             edits != null -> {
-                edits.playing = Resend(tracked[index], index, positionMs)
+                edits.playing = resendFrom(tracked[index], index, positionMs)
                 edits.steps.addLast(Edit(null) { super.seekTo(index, positionMs) })
                 forwardEdits()
             }
@@ -346,7 +398,10 @@ internal class RemotePlaylist(
     override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
         tracked.clear()
         tracked.addAll(mediaItems)
+        queueVersion++
+        emptiedByApp = mediaItems.isEmpty()
         resends = 0
+        onQueueChanged?.invoke(true)
         send(startIndex, startPositionMs)
     }
 
@@ -381,8 +436,11 @@ internal class RemotePlaylist(
 
     override fun clearMediaItems() {
         tracked.clear()
+        queueVersion++
+        emptiedByApp = true
         reset()
         sentCount = 0
+        onQueueChanged?.invoke(true)
         super.clearMediaItems()
     }
 
@@ -391,8 +449,19 @@ internal class RemotePlaylist(
         // it held is no guide to the next cast session's
         reset()
         tracked.clear()
+        queueVersion++
+        emptiedByApp = true
         sentCount = 0
+        volumeAskedFor = null
+        onQueueChanged?.invoke(true)
         super.stop()
+    }
+
+    /** Nothing waiting runs on the player once it's released. */
+    override fun release() {
+        reset()
+        onQueueChanged = null
+        super.release()
     }
 
     /**
@@ -404,6 +473,7 @@ internal class RemotePlaylist(
     private inline fun edit(adding: Int, mirror: () -> Unit, noinline forward: () -> Unit) {
         if (gaveUp) {
             mirror()
+            changedHere()
             forward()
             return
         }
@@ -415,11 +485,13 @@ internal class RemotePlaylist(
                 handler.postDelayed(resend, resendAfterMs)
             }
             mirror()
+            changedHere()
             return
         }
         val playing = editing?.playing ?: playingNow()
         val before = tracked.toList()
         mirror()
+        changedHere()
         // Nothing changed: nothing the cast device could say it has
         if (tracked == before) return
         sentCount = tracked.size
@@ -428,9 +500,15 @@ internal class RemotePlaylist(
         forwardEdits()
     }
 
+    private fun changedHere() {
+        queueVersion++
+        if (tracked.isNotEmpty()) emptiedByApp = false
+        onQueueChanged?.invoke(false)
+    }
+
     private fun playingNow(): Resend {
         val index = currentMediaItemIndex
-        return Resend(tracked.getOrNull(index), index, currentPosition)
+        return resendFrom(tracked.getOrNull(index), index, currentPosition)
     }
 
     /**
@@ -458,11 +536,19 @@ internal class RemotePlaylist(
         }
     }
 
-    /** Changes the cast device never said it had: the queue goes again, as it is here. */
+    /**
+     * Changes the cast device never said it had: the queue goes again, as it is here, from where the
+     * song playing is now. Still on the song it was on, the cast device says where that is.
+     */
     private fun resendEdits() {
         val edits = editing ?: return
         editing = null
-        pendingResend = edits.playing
+        val playing = edits.playing
+        pendingResend = if (playing.playing === edits.onDevice) {
+            resendFrom(playing.playing, playing.index, super.getCurrentPosition())
+        } else {
+            playing
+        }
         resendNow()
     }
 
@@ -478,7 +564,7 @@ internal class RemotePlaylist(
             return
         }
         val stillPlaying = tracked.any { it === change.playing }
-        send(change.indexNow(), if (stillPlaying) change.positionMs else C.TIME_UNSET)
+        send(change.indexNow(), if (stillPlaying) change.positionAt(now()) else C.TIME_UNSET)
     }
 
     /** Sends [tracked] to play from [startIndex]: a long queue a part at a time (see [sendNextPart]). */
@@ -529,7 +615,7 @@ internal class RemotePlaylist(
             resends < MAX_RESENDS -> {
                 resends++
                 val index = currentMediaItemIndex
-                pendingResend = Resend(tracked.getOrNull(index), index, currentPosition)
+                pendingResend = resendFrom(tracked.getOrNull(index), index, currentPosition)
                 handler.post(resend)
             }
             else -> {

@@ -14,7 +14,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
 import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.test.core.app.ApplicationProvider
+import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -400,6 +402,75 @@ class RemotePlaylistTest {
         device.loads shouldBe 2
         player.ids shouldBe listOf("a", "b", "x")
         player.currentMediaItem?.mediaId shouldBe "b"
+    }
+
+    @Test
+    fun `changes sent again go from where the song playing is now, not where it was as they began`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(listOf("a", "b", "c").map(::item), 1, 0L)
+        device.deliverAll()
+
+        playlist.removeMediaItems(2, 3)
+        playlist.addMediaItems(listOf(item("x")))
+        // Meanwhile the song plays on (here, someone moved it on from the TV's remote)
+        player.seekTo(1, 20_000L)
+        device.drop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(EDITS_ARRIVE_WITHIN_MS))
+        device.deliverAll()
+
+        device.loads shouldBe 2
+        player.currentMediaItem?.mediaId shouldBe "b"
+        player.currentPosition shouldBe 20_000L
+    }
+
+    @Test
+    fun `a skip that's sent again goes from as far into the song as it would have got by then`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(listOf("a", "b", "c").map(::item), 0, 0L)
+        playlist.playWhenReady = true
+        playlist.prepare()
+        device.deliverAll()
+        advance(player).untilState(Player.STATE_READY)
+        player.isPlaying shouldBe true
+
+        playlist.removeMediaItems(2, 3)
+        playlist.seekTo(1, 10_000L)
+        device.drop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(EDITS_ARRIVE_WITHIN_MS))
+        device.deliverAll()
+
+        player.currentMediaItem?.mediaId shouldBe "b"
+        player.currentPosition shouldBeGreaterThanOrEqual 10_000L + EDITS_ARRIVE_WITHIN_MS
+    }
+
+    @Test
+    fun `released, nothing more is sent to the cast device`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(listOf("a", "b", "c").map(::item), 1, 0L)
+        device.deliverAll()
+        playlist.removeMediaItems(2, 3)
+        device.drop()
+
+        playlist.release()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(EDITS_ARRIVE_WITHIN_MS))
+
+        device.loads shouldBe 1
+    }
+
+    @Test
+    fun `while a long queue is on its way, the queue it reports is made once, not each time it's asked for`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(List(50) { item("s$it") }, 0, 0L)
+        val reported = playlist.currentTimeline
+
+        playlist.currentTimeline shouldBeSameInstanceAs reported
+        playlist.removeMediaItem(49)
+        (playlist.currentTimeline === reported) shouldBe false
+        playlist.currentTimeline.windowCount shouldBe 49
     }
 
     @Test

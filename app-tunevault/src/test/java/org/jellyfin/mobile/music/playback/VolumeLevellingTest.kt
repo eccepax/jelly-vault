@@ -113,54 +113,16 @@ class VolumeLevellingTest {
         playback.volumes shouldBe emptyList()
     }
 
-    private fun TestScope.casting(remote: Boolean) {
-        playback.state.value = playback.state.value.copy(isRemote = remote)
+    @Test
+    fun `while casting it's sent all the same, for the session's cast player to keep for this device`() = runTest {
+        // The cast player leaves the cast device's own volume alone, and SessionPlayerSwitcher gives
+        // it to this device's player once playback is back (common-cast's tests)
+        levelling()
+        playback.state.value = playback.state.value.copy(isRemote = true)
         runCurrent()
-    }
-
-    @Test
-    fun `while casting, the cast device's volume is left alone`() = runTest {
-        levelling()
-        casting(true)
 
         playing(loud)
-        volume.setFade(0.5f)
 
-        playback.volumes shouldBe emptyList()
-    }
-
-    @Test
-    fun `while casting, a fade leaves the cast device's volume alone even with levelling not running`() = runTest {
-        casting(true)
-
-        volume.setFade(0.5f)
-
-        playback.volumes shouldBe emptyList()
-    }
-
-    @Test
-    fun `back from casting, the song playing here is levelled for itself`() = runTest {
-        levelling()
-        playing(loud, quiet)
-        casting(true)
-        playing(loud, quiet, index = 1)
         playback.volumes.size shouldBe 1
-
-        casting(false)
-
-        playback.volumes.last() shouldBe 1f
-    }
-
-    @Test
-    fun `back from casting, this device's volume is set again, even one sent before casting showed`() = runTest {
-        levelling()
-        // Casting had begun, but the controller didn't say so yet: this went to the cast player (which drops it)
-        playing(loud)
-        casting(true)
-
-        casting(false)
-
-        playback.volumes.size shouldBe 2
-        playback.volumes.last() shouldBe (0.5f plusOrMinus 0.001f)
     }
 }

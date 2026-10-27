@@ -63,7 +63,7 @@ object NoCasting : Casting {
 @UnstableApi
 private class CastContextCasting(private val context: Context) : Casting, CastPlayers {
     private var castContext: CastContext? = null
-    private val waiting = mutableListOf<() -> Unit>()
+    private val gate = StartGate()
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -78,15 +78,17 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
         try {
             CastContext.getSharedInstance(context, Dispatchers.IO.asExecutor())
                 .addOnSuccessListener(::started)
-                .addOnFailureListener { Timber.w(it, "Cast isn't available") }
+                .addOnFailureListener {
+                    Timber.w(it, "Cast isn't available")
+                    gate.failed()
+                }
         } catch (e: RuntimeException) {
             Timber.w(e, "Cast isn't available")
+            gate.failed()
         }
     }
 
-    override fun whenReady(onReady: () -> Unit) {
-        if (castContext != null) onReady() else waiting += onReady
-    }
+    override fun whenReady(onReady: () -> Unit) = gate.whenReady(onReady)
 
     /** On the main thread, where the Task delivers it. */
     private fun started(castContext: CastContext) {
@@ -116,8 +118,7 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
             CastSession::class.java,
         )
         available.value = true
-        waiting.toList().forEach { it() }
-        waiting.clear()
+        gate.started()
     }
 
     override fun stopCasting() {

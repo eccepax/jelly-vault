@@ -21,7 +21,12 @@ import org.jellyfin.mobile.player.session.withPlayableUri
  * empties, or reads back the start of its queue. So leaving a cast device, the switcher picks up from
  * the last state that player reported (as far on as it would have got, if it was playing). A cast
  * player's queue is read from [RemotePlaylist], as it was sent; a song that still can't say how to
- * play it is left out rather than handed to this device's player, which would crash on it.
+ * play it is left out rather than handed to this device's player, which would crash on it. A queue
+ * the app replaces or empties while casting replaces what the cast device said before: emptied (the
+ * app stopped), nothing is picked up back here.
+ *
+ * A volume asked for while casting (a sleep timer's fade, say) isn't the cast device's (see
+ * [RemotePlaylist.volumeAskedFor]): back here, it's this device's player's.
  */
 class SessionPlayerSwitcher(
     private val local: Player,
@@ -35,6 +40,9 @@ class SessionPlayerSwitcher(
 
     private var lastSeen: PlaybackState? = null
 
+    /** Whether the queue may differ from [lastSeen]'s: the songs are copied again only then. */
+    private var queueChanged = true
+
     private val watcher = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             // Only a cast player's is needed: this device's is read as playback leaves it
@@ -43,8 +51,19 @@ class SessionPlayerSwitcher(
             // Gone idle, it's stopped (as its session ends, back at the start of its queue): what it
             // said before stands
             if (playing.playbackState == Player.STATE_IDLE && lastSeen != null) return
-            PlaybackState.of(playing, now())?.let { lastSeen = it }
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) queueChanged = true
+            val known = lastSeen?.items?.takeUnless { queueChanged }
+            PlaybackState.of(playing, now(), known)?.let {
+                lastSeen = it
+                queueChanged = false
+            }
         }
+    }
+
+    /** The app changed the cast queue: replaced or emptied, what the cast device said of the old one is no guide. */
+    private fun queueChangedHere(replaced: Boolean) {
+        queueChanged = true
+        if (replaced) lastSeen = null
     }
 
     init {
@@ -54,12 +73,22 @@ class SessionPlayerSwitcher(
     fun switchTo(next: Player) {
         if (next === player) return
         val previous = player
+        val remote = previous as? RemotePlaylist
         val live = PlaybackState.of(previous, now())
-        val state = (if (previous === local) live else lastSeen?.after(now()) ?: live)?.playable()
+        val state = when {
+            remote?.emptiedHere == true -> null
+            previous === local -> live
+            else -> lastSeen?.after(now()) ?: live
+        }?.playable()
+        val volume = remote?.volumeAskedFor
         previous.removeListener(watcher)
+        remote?.onQueueChanged = null
         previous.stop()
         player = next
         lastSeen = null
+        queueChanged = true
+        (next as? RemotePlaylist)?.onQueueChanged = ::queueChangedHere
+        if (next === local) volume?.let { local.volume = it }
         if (state != null) {
             next.setMediaItems(state.items, state.index, state.positionMs)
             next.repeatMode = state.repeatMode
@@ -132,13 +161,16 @@ class SessionPlayerSwitcher(
         }
 
         companion object {
+            /** [player]'s state, with [knownItems] for its queue if they're still it (copying it is costly). */
             @OptIn(UnstableApi::class)
-            fun of(player: Player, nowMs: Long): PlaybackState? {
+            fun of(player: Player, nowMs: Long, knownItems: List<MediaItem>? = null): PlaybackState? {
                 if (player.mediaItemCount == 0) return null
                 // As sent, unless it doesn't know the queue (this app started while casting)
-                val sent = (player as? RemotePlaylist)?.items?.takeIf { it.size == player.mediaItemCount }
+                val items = knownItems?.takeIf { it.size == player.mediaItemCount }
+                    ?: (player as? RemotePlaylist)?.items?.takeIf { it.size == player.mediaItemCount }
+                    ?: List(player.mediaItemCount, player::getMediaItemAt)
                 return PlaybackState(
-                    items = sent ?: List(player.mediaItemCount, player::getMediaItemAt),
+                    items = items,
                     index = player.currentMediaItemIndex,
                     positionMs = player.currentPosition,
                     playWhenReady = player.playWhenReady && player.playbackState != Player.STATE_ENDED,

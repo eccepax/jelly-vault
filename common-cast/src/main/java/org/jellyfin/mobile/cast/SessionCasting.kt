@@ -19,6 +19,7 @@ import androidx.media3.session.MediaSession
 class SessionCasting private constructor(private val casting: Casting) {
 
     private var castPlayer: CastPlayer? = null
+    private var remote: RemotePlaylist? = null
     private var switcher: SessionPlayerSwitcher? = null
     private var released = false
 
@@ -32,7 +33,8 @@ class SessionCasting private constructor(private val casting: Casting) {
         val castPlayer = castPlayer ?: return
         castPlayer.setSessionAvailabilityListener(null)
         if (switcher?.player is RemotePlaylist) casting.stopCasting()
-        castPlayer.release()
+        // Through the playlist, so nothing it has waiting runs on the released player
+        remote?.release() ?: castPlayer.release()
     }
 
     private fun start(
@@ -43,6 +45,7 @@ class SessionCasting private constructor(private val casting: Casting) {
     ) {
         this.castPlayer = castPlayer
         val remote = RemotePlaylist(castPlayer)
+        this.remote = remote
         val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
         this.switcher = switcher
         castPlayer.setSessionAvailabilityListener(
