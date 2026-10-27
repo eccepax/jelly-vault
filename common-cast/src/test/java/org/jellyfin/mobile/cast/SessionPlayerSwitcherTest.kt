@@ -13,6 +13,7 @@ import androidx.media3.test.utils.TestExoPlayerBuilder
 import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.longs.shouldBeInRange
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -257,7 +258,7 @@ class SessionPlayerSwitcherTest {
         settle()
 
         local.currentMediaItemIndex shouldBe 1
-        local.currentPosition shouldBe seenAt + 5_000L
+        local.currentPosition shouldTrailBy seenAt + 5_000L
         local.playWhenReady shouldBe false
     }
 
@@ -285,6 +286,13 @@ class SessionPlayerSwitcherTest {
         return seenAt
     }
 
+    /**
+     * [expectedMs], or a little short of it: the cast device's playback thread runs on its own, so
+     * it may move on between its last report (what the switcher picked up from) and the test
+     * reading its position afterwards. Never past it.
+     */
+    private infix fun Long.shouldTrailBy(expectedMs: Long) = this shouldBeInRange (expectedMs - SLACK_MS)..expectedMs
+
     @Test
     fun `a cast device that let go while playing faster is picked up as far on as that got it`() {
         val seenAt = castDeviceLetGo(index = 1, positionMs = 20_000L, laterMs = 5_000L, speed = 2f)
@@ -293,7 +301,7 @@ class SessionPlayerSwitcherTest {
         settle()
 
         local.currentMediaItemIndex shouldBe 1
-        local.currentPosition shouldBe seenAt + 10_000L
+        local.currentPosition shouldTrailBy seenAt + 10_000L
     }
 
     @Test
@@ -305,7 +313,7 @@ class SessionPlayerSwitcherTest {
 
         // The rest of a, all of b, and on into c
         local.currentMediaItemIndex shouldBe 2
-        local.currentPosition shouldBe seenAt + 110_000L - 2 * SONG_MS
+        local.currentPosition shouldTrailBy seenAt + 110_000L - 2 * SONG_MS
     }
 
     @Test
@@ -427,6 +435,9 @@ class SessionPlayerSwitcherTest {
     private companion object {
         /** How long every song lasts (see FakeAudioSourceFactory), as its metadata says. */
         const val SONG_MS = 100_000L
+
+        /** How far the cast device may get between its last report and the test reading it (at 2x, twice its own time). */
+        const val SLACK_MS = 1_000L
     }
 
     @Test

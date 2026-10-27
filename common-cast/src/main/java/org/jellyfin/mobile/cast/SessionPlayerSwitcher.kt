@@ -28,6 +28,8 @@ import org.jellyfin.mobile.player.session.withPlayableUri
  * A volume asked for while casting (a sleep timer's fade, say) isn't the cast device's (see
  * [RemotePlaylist.volumeAskedFor]): back here, it's this device's player's.
  */
+// It reads the cast player's queue and volume from RemotePlaylist, which wraps Media3's unstable cast player
+@OptIn(UnstableApi::class)
 class SessionPlayerSwitcher(
     private val local: Player,
     private val wrap: (Player) -> Player = { it },
@@ -162,7 +164,6 @@ class SessionPlayerSwitcher(
 
         companion object {
             /** [player]'s state, with [knownItems] for its queue if they're still it (copying it is costly). */
-            @OptIn(UnstableApi::class)
             fun of(player: Player, nowMs: Long, knownItems: List<MediaItem>? = null): PlaybackState? {
                 if (player.mediaItemCount == 0) return null
                 // As sent, unless it doesn't know the queue (this app started while casting)
