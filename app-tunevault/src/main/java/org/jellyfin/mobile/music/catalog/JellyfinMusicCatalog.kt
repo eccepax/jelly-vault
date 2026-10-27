@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.catalog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jellyfin.mobile.cast.CastStream
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
@@ -22,11 +23,18 @@ import java.util.UUID
 private val DIRECT_PLAY_CONTAINERS = listOf("flac", "mp3", "aac", "m4a", "mp4", "ogg", "opus", "wav")
 
 /**
- * What cast devices play (Google's supported media list): a container that can also hold a codec
- * they can't (m4a and mp4 hold ALAC too) is named with the codec they can.
+ * Containers a cast device plays as they are (Google's supported media list), and the type each is
+ * served as. Not m4a or mp4: they hold ALAC too, which cast devices can't play, and the container
+ * doesn't say which.
  */
-private val CAST_CONTAINERS = listOf(
-    "flac", "mp3", "aac", "m4a|aac", "mp4|aac", "ogg|vorbis", "ogg|opus", "opus", "webm|opus", "wav",
+private val CAST_AS_IT_IS = mapOf(
+    "flac" to "audio/flac",
+    "mp3" to "audio/mpeg",
+    "aac" to "audio/aac",
+    "ogg" to "audio/ogg",
+    "opus" to "audio/ogg",
+    "webm" to "audio/webm",
+    "wav" to "audio/wav",
 )
 
 /**
@@ -132,34 +140,47 @@ class JellyfinMusicCatalog(
         withAccessToken(downloadUri(trackId, streamingQuality()), apiClient.accessToken)
 
     /**
-     * The song as a cast device gets it: it fetches the song itself, so the token is in the url, and
-     * anything it can't play comes as MP3.
+     * The song as a cast device gets it, and the type it comes as (the receiver needs one): it
+     * fetches the song itself, so the token is in the url. A [container] it plays comes as it is at
+     * the original quality; anything else, or at a lower quality, as MP3. Either way the type is
+     * known before the server answers.
      */
-    fun castStreamUrl(trackId: String): String = withAccessToken(
-        apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-            itemId = trackId.toUUID(),
-            container = CAST_CONTAINERS,
-            maxStreamingBitrate = streamingQuality().maxBitrate,
-            transcodingContainer = "mp3",
-            transcodingProtocol = MediaStreamProtocol.HTTP,
-            audioCodec = "mp3",
-        ),
-        apiClient.accessToken,
-    )
+    fun castStream(trackId: String, container: String?): CastStream {
+        val quality = streamingQuality()
+        val asItIs = container?.lowercase()?.takeIf { quality == StreamingQuality.ORIGINAL && it in CAST_AS_IT_IS }
+        val url = universalAudioUri(
+            trackId,
+            containers = listOf(asItIs ?: "mp3"),
+            quality = quality,
+            transcodeTo = "mp3",
+            transcodeCodec = "mp3",
+        )
+        val mimeType = asItIs?.let(CAST_AS_IT_IS::getValue) ?: "audio/mpeg"
+        return CastStream(withAccessToken(url, apiClient.accessToken), mimeType)
+    }
 
     /**
      * Where to fetch [trackId] from at [quality], without a token: downloads store this URI for as
      * long as they last, and get the current token added to each request (see [withAccessToken]).
      */
     fun downloadUri(trackId: String, quality: StreamingQuality): String =
-        apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-            itemId = trackId.toUUID(),
-            container = DIRECT_PLAY_CONTAINERS,
-            maxStreamingBitrate = quality.maxBitrate,
-            transcodingContainer = "m4a",
-            transcodingProtocol = MediaStreamProtocol.HTTP,
-            audioCodec = "aac",
-        )
+        universalAudioUri(trackId, DIRECT_PLAY_CONTAINERS, quality, transcodeTo = "m4a", transcodeCodec = "aac")
+
+    /** [trackId] as it is if it's in one of [containers] (and within [quality]), else as [transcodeTo]. */
+    private fun universalAudioUri(
+        trackId: String,
+        containers: List<String>,
+        quality: StreamingQuality,
+        transcodeTo: String,
+        transcodeCodec: String,
+    ): String = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
+        itemId = trackId.toUUID(),
+        container = containers,
+        maxStreamingBitrate = quality.maxBitrate,
+        transcodingContainer = transcodeTo,
+        transcodingProtocol = MediaStreamProtocol.HTTP,
+        audioCodec = transcodeCodec,
+    )
 
     private suspend fun albumItems(parentId: UUID, albumArtistId: UUID? = null): List<BaseItemDto> =
         apiClient.itemsApi.getItems(

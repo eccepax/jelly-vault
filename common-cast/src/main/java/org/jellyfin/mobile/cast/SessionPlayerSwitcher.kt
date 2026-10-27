@@ -37,7 +37,9 @@ class SessionPlayerSwitcher(
 
     private val watcher = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            PlaybackState.of(this@SessionPlayerSwitcher.player, now())?.let { lastSeen = it }
+            // Only a cast player's is needed: this device's is read as playback leaves it
+            val playing = this@SessionPlayerSwitcher.player
+            if (playing !== local) PlaybackState.of(playing, now())?.let { lastSeen = it }
         }
     }
 
@@ -86,7 +88,7 @@ class SessionPlayerSwitcher(
          * as repeat would take it. After the last song, at its end.
          */
         fun after(nowMs: Long): PlaybackState {
-            if (!isPlaying) return this
+            if (!isPlaying || index !in items.indices) return this
             var index = index
             var position = positionMs + ((nowMs - seenAtMs) * playbackParameters.speed).toLong()
             var duration = durationMs
@@ -103,7 +105,7 @@ class SessionPlayerSwitcher(
                 }
                 position -= duration
                 index = next
-                duration = items[index].mediaMetadata.durationMs ?: C.TIME_UNSET
+                duration = items.getOrNull(index)?.mediaMetadata?.durationMs ?: C.TIME_UNSET
             }
             return copy(index = index, positionMs = position, seenAtMs = nowMs, durationMs = duration)
         }
@@ -129,7 +131,8 @@ class SessionPlayerSwitcher(
             @OptIn(UnstableApi::class)
             fun of(player: Player, nowMs: Long): PlaybackState? {
                 if (player.mediaItemCount == 0) return null
-                val sent = (player as? RemotePlaylist)?.items
+                // As sent, unless it doesn't know the queue (this app started while casting)
+                val sent = (player as? RemotePlaylist)?.items?.takeIf { it.size == player.mediaItemCount }
                 return PlaybackState(
                     items = sent ?: List(player.mediaItemCount, player::getMediaItemAt),
                     index = player.currentMediaItemIndex,

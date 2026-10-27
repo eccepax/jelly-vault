@@ -74,6 +74,19 @@ class MediaItemsTest {
     }
 
     @Test
+    fun `carries the song's container through a controller, for the cast device's type`() {
+        val entry = PlayQueue.of(listOf(track("a").copy(container = "flac"))).entries.single()
+        val item = entry.toMediaItem(streamUrl)
+        // MediaController -> MediaSession keeps requestMetadata, extras included, but not localConfiguration
+        val throughController = MediaItem.fromBundle(item.toBundleIncludeLocalConfiguration()).buildUpon()
+            .setUri(null as Uri?)
+            .build()
+
+        throughController.container shouldBe "flac"
+        PlayQueue.of(listOf(track("b"))).entries.single().toMediaItem(streamUrl).container shouldBe null
+    }
+
+    @Test
     fun `the session restores a uri that was stripped on the way from the controller`() {
         // MediaController -> MediaSession drops localConfiguration; the uri survives in requestMetadata.
         val stripped = MediaItem.Builder()

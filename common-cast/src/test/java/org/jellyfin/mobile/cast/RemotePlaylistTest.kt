@@ -21,6 +21,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 /** The cast queue kept as it was sent: every change to the player's playlist is made to it too. */
 @RunWith(RobolectricTestRunner::class)
@@ -40,7 +41,10 @@ class RemotePlaylistTest {
 
     private fun item(id: String) = MediaItem.Builder().setMediaId(id).setUri("https://vault.test/$id").build()
 
+    /** Until the player has done what it was told, and any queue waiting to go again has gone. */
     private fun settle() {
+        advance(player).untilPendingCommandsAreFullyHandled()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(RESEND_AFTER_MS))
         advance(player).untilPendingCommandsAreFullyHandled()
         shadowOf(Looper.getMainLooper()).idle()
     }
@@ -262,6 +266,114 @@ class RemotePlaylistTest {
         player.currentMediaItemIndex shouldBe 0
     }
 
+    @Test
+    fun `while a long queue is on its way, it answers for all of it`() {
+        val songs = List(50) { item("s$it") }
+
+        playlist.setMediaItems(songs, 30, 0L)
+        settle()
+
+        playlist.mediaItemCount shouldBe 50
+        playlist.currentMediaItemIndex shouldBe 30
+        playlist.currentMediaItem?.mediaId shouldBe "s30"
+        playlist.getMediaItemAt(45).mediaId shouldBe "s45"
+        val timeline = playlist.currentTimeline
+        List(timeline.windowCount) { timeline.getWindow(it, Timeline.Window()).mediaItem.mediaId } shouldBe
+            songs.map { it.mediaId }
+        playlist.nextMediaItemIndex shouldBe 31
+        playlist.previousMediaItemIndex shouldBe 29
+    }
+
+    @Test
+    fun `a seek to a song not on the cast device yet sends the queue again from there`() {
+        val songs = List(50) { item("s$it") }
+        playlist.setMediaItems(songs, 30, 0L)
+
+        playlist.seekTo(5, 0L)
+        settleAll()
+
+        player.ids shouldBe songs.map { it.mediaId }
+        player.currentMediaItem?.mediaId shouldBe "s5"
+        playlist.currentMediaItemIndex shouldBe 5
+    }
+
+    @Test
+    fun `a song not on the cast device yet is the one removed`() {
+        val songs = List(50) { item("s$it") }
+        playlist.setMediaItems(songs, 30, 0L)
+
+        playlist.removeMediaItem(2)
+        settleAll()
+
+        player.ids shouldBe songs.map { it.mediaId } - "s2"
+        player.currentMediaItem?.mediaId shouldBe "s30"
+    }
+
+    @Test
+    fun `swapping out everything around the song playing while a long queue is on its way goes once, without repeats`() {
+        val messages = Messages(player)
+        val playlist = RemotePlaylist(messages)
+        val songs = List(60) { item("s$it") }
+        playlist.setMediaItems(songs, 0, 0L)
+        val shuffled = songs.drop(1).reversed()
+
+        // How TuneVault swaps out everything around the playing song (shuffle, Play next, ...)
+        val playing = playlist.currentMediaItemIndex
+        playlist.removeMediaItems(playing + 1, playlist.mediaItemCount)
+        playlist.removeMediaItems(0, playing)
+        playlist.addMediaItems(0, emptyList())
+        playlist.addMediaItems(shuffled)
+        settleAll()
+
+        player.ids shouldBe listOf("s0") + shuffled.map { it.mediaId }
+        player.currentMediaItem?.mediaId shouldBe "s0"
+        messages.loads shouldBe 2
+    }
+
+    @Test
+    fun `adding more songs than a message holds sends the queue again a part at a time`() {
+        val messages = Messages(player)
+        val playlist = RemotePlaylist(messages)
+        playlist.setMediaItems(listOf(item("a")))
+        settle()
+        val more = List(45) { item("s$it") }
+
+        playlist.addMediaItems(more)
+        settleAll()
+
+        player.ids shouldBe listOf("a") + more.map { it.mediaId }
+        messages.sizes.all { it <= SONGS_PER_MESSAGE } shouldBe true
+    }
+
+    @Test
+    fun `a cast device that keeps dropping songs gets the queue again, then its own answers stand`() {
+        val dropping = DropsTheLastAdded(player)
+        val playlist = RemotePlaylist(dropping)
+        val songs = List(50) { item("s$it") }
+
+        playlist.setMediaItems(songs, 0, 0L)
+        settleAll()
+
+        dropping.loads shouldBe 1 + MAX_RESENDS
+        playlist.mediaItemCount shouldBe player.mediaItemCount
+        playlist.currentMediaItem?.mediaId shouldBe player.currentMediaItem?.mediaId
+    }
+
+    /** Like a receiver that loses a song from each part added to its queue. */
+    private class DropsTheLastAdded(player: Player) : ForwardingPlayer(player) {
+        var loads = 0
+
+        override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            loads++
+            super.setMediaItems(mediaItems, startIndex, startPositionMs)
+        }
+
+        override fun addMediaItems(mediaItems: List<MediaItem>) = super.addMediaItems(mediaItems.dropLast(1))
+
+        override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) =
+            super.addMediaItems(index, mediaItems.dropLast(1))
+    }
+
     /** Until the cast device has every part of a long queue: each part goes once the last arrives. */
     private fun settleAll() = repeat(SONGS_PER_MESSAGE) { settle() }
 
@@ -269,7 +381,11 @@ class RemotePlaylistTest {
     private class Messages(player: Player) : ForwardingPlayer(player) {
         val sizes = mutableListOf<Int>()
 
+        /** Times the whole queue was sent, rather than added to. */
+        var loads = 0
+
         override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            loads++
             sizes += mediaItems.size
             super.setMediaItems(mediaItems, startIndex, startPositionMs)
         }

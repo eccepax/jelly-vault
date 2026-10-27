@@ -5,6 +5,7 @@ import io.kotest.matchers.collections.shouldNotContainAnyOf
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.BeforeEach
@@ -15,7 +16,8 @@ import java.net.URLDecoder
 
 /**
  * What a cast device is sent: the Default Media Receiver fetches the song itself, so the url works
- * on its own, and asks only for what cast devices play (ALAC, say, comes as MP3 instead).
+ * on its own, asks only for what cast devices play (ALAC, say, comes as MP3 instead), and serves
+ * the type it's sent as.
  */
 class JellyfinCastStreamContractTest {
 
@@ -27,7 +29,9 @@ class JellyfinCastStreamContractTest {
         catalog = JellyfinMusicCatalog(VaultTestServer.apiClient)
     }
 
-    private suspend fun aTrackId() = catalog.albumTracks(catalog.albums().first().id).first().id
+    private suspend fun aTrack() = catalog.albumTracks(catalog.albums().first().id).first()
+
+    private fun castUrlOf(track: Track) = catalog.castStream(track.id, track.container).url
 
     private fun contentTypeOf(url: String): String? {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
@@ -48,7 +52,10 @@ class JellyfinCastStreamContractTest {
 
     @Test
     fun `the cast url serves the song on its own`() = runBlocking<Unit> {
-        contentTypeOf(catalog.castStreamUrl(aTrackId())).shouldNotBeNull()
+        val track = aTrack()
+        val stream = catalog.castStream(track.id, track.container)
+
+        contentTypeOf(stream.url) shouldBe stream.mimeType
     }
 
     @Test
@@ -58,20 +65,22 @@ class JellyfinCastStreamContractTest {
             track?.takeIf { contentTypeOf(catalog.streamUrl(it.id)) == "audio/flac" }
         }.shouldNotBeNull()
 
-        contentTypeOf(catalog.castStreamUrl(flac.id)) shouldBe "audio/flac"
+        flac.container shouldBe "flac"
+        catalog.castStream(flac.id, flac.container).mimeType shouldBe "audio/flac"
+        contentTypeOf(castUrlOf(flac)) shouldBe "audio/flac"
     }
 
     @Test
     fun `containers that can hold what cast devices can't play are asked for only with a codec they can`() =
         runBlocking<Unit> {
             // m4a and mp4 also hold ALAC, which cast devices can't play
-            containersAskedFor(catalog.castStreamUrl(aTrackId())) shouldNotContainAnyOf listOf("m4a", "mp4")
+            containersAskedFor(castUrlOf(aTrack())) shouldNotContainAnyOf listOf("m4a", "mp4")
         }
 
     @Test
     fun `cast and stream urls for a song share one cache key`() = runBlocking<Unit> {
-        val id = aTrackId()
+        val track = aTrack()
 
-        TrackCacheKey.trackIdOf(catalog.castStreamUrl(id)) shouldBe id
+        TrackCacheKey.trackIdOf(castUrlOf(track)) shouldBe track.id
     }
 }

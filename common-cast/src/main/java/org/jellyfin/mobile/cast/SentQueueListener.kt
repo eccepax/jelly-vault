@@ -18,7 +18,8 @@ import androidx.media3.common.util.UnstableApi
 
 /**
  * Passes every event on to [listener], with the queue in it as [RemotePlaylist] sent it: the
- * timeline through [sentTimeline], and the song moved to and its metadata from [sentCurrent]. A
+ * timeline through [sentTimeline], places in it through [sentPosition], and the song moved to and
+ * its metadata from [sentCurrent]. A
  * media session publishes the timeline an event hands it, so this is what keeps its controllers
  * (an app's own player screen, its progress sync) off the cast player's placeholders.
  */
@@ -28,6 +29,7 @@ import androidx.media3.common.util.UnstableApi
 internal class SentQueueListener(
     private val listener: Player.Listener,
     private val sentTimeline: (Timeline) -> Timeline,
+    private val sentPosition: (Player.PositionInfo) -> Player.PositionInfo,
     private val sentCurrent: () -> MediaItem?,
 ) : Player.Listener {
 
@@ -82,7 +84,7 @@ internal class SentQueueListener(
         newPosition: Player.PositionInfo,
         reason: Int,
     ) =
-        listener.onPositionDiscontinuity(oldPosition, newPosition, reason)
+        listener.onPositionDiscontinuity(sentPosition(oldPosition), sentPosition(newPosition), reason)
     override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) =
         listener.onPlaybackParametersChanged(playbackParameters)
     override fun onSeekBackIncrementChanged(seekBackIncrementMs: Long) =

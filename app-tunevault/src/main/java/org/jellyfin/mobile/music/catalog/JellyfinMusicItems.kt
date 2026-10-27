@@ -62,6 +62,7 @@ internal class JellyfinMusicItems(private val apiClient: ApiClient) {
         normalizationGainDb = item.normalizationGain,
         // The album artist's page lists this track's album; a featured artist's may not
         artistId = (item.albumArtists?.firstOrNull() ?: item.artistItems?.firstOrNull())?.id?.toString(),
+        container = item.container,
     )
 
     fun coverUrl(itemId: UUID, tag: String) = apiClient.imageApi.getItemImageUrl(

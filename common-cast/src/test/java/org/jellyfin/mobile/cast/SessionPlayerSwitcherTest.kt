@@ -339,4 +339,40 @@ class SessionPlayerSwitcherTest {
         /** How long every song lasts (see FakeAudioSourceFactory), as its metadata says. */
         const val SONG_MS = 100_000L
     }
+
+    @Test
+    fun `ending the cast while a long queue is still on its way picks up all of it here`() {
+        val songs = (0 until 50).map { "s$it" }
+        local.setMediaItems(items(*songs.toTypedArray()), 30, 5_000L)
+        local.prepare()
+        settle()
+
+        switcher.switchTo(cast)
+        switcher.switchTo(local)
+        settle()
+
+        local.ids shouldBe songs
+        local.currentMediaItemIndex shouldBe 30
+    }
+
+    @Test
+    fun `a cast device playing a queue this app didn't send (started while casting) is picked up from its own`() {
+        // Its own items say how to play them: no placeholders
+        val castOnly = RemotePlaylist(remote)
+        remote.setMediaItems(items("a", "b", "c"))
+        remote.repeatMode = Player.REPEAT_MODE_ALL
+        remote.playWhenReady = true
+        remote.prepare()
+        settle()
+        switcher.switchTo(castOnly)
+        // Something for the switcher to see it by
+        remote.seekTo(1_000L)
+        settle()
+
+        now += 4 * SONG_MS
+        switcher.switchTo(local)
+        settle()
+
+        local.ids shouldBe listOf("a", "b", "c")
+    }
 }

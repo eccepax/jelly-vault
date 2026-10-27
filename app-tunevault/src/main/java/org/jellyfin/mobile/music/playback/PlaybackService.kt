@@ -2,7 +2,6 @@ package org.jellyfin.mobile.music.playback
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -74,10 +73,10 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
         this.session = session
-        // The cast device gets its own url for each song: one asking only for what it plays
+        // The cast device gets its own url for each song, asking only for what it plays, and its type
         val catalog = get<JellyfinMusicCatalog>()
-        casting = SessionCasting.attach(session, player, get<Casting>(), castUri = { uri ->
-            TrackCacheKey.trackIdOf(uri)?.let { Uri.parse(catalog.castStreamUrl(it)) } ?: uri
+        casting = SessionCasting.attach(session, player, get<Casting>(), castStream = { item ->
+            item.trackId?.let { catalog.castStream(it, item.container) }
         })
     }
 

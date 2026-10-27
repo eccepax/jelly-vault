@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -34,7 +35,8 @@ class SessionCasting private constructor(
     companion object {
         /**
          * Null where casting can't work: the session stays on [local]. Items go to the cast device
-         * as [VaultMediaItemConverter] sends them, with [castUri] and [fallbackMimeType].
+         * as [VaultMediaItemConverter] sends them, with [castUri] and [fallbackMimeType], or
+         * [castStream] where it says.
          */
         fun attach(
             session: MediaSession,
@@ -43,9 +45,10 @@ class SessionCasting private constructor(
             castUri: (Uri) -> Uri = { it },
             fallbackMimeType: String = "audio/mpeg",
             wrap: (Player) -> Player = { it },
+            castStream: ((MediaItem) -> CastStream?)? = null,
         ): SessionCasting? {
             val castPlayers = casting as? CastPlayers ?: return null
-            val castPlayer = castPlayers.newCastPlayer(VaultMediaItemConverter(castUri, fallbackMimeType))
+            val castPlayer = castPlayers.newCastPlayer(VaultMediaItemConverter(castUri, fallbackMimeType, castStream))
             val remote = RemotePlaylist(castPlayer)
             val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
             castPlayer.setSessionAvailabilityListener(

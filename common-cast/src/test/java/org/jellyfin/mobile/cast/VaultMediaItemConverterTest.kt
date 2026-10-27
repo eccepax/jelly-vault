@@ -89,4 +89,27 @@ class VaultMediaItemConverterTest {
         back.mediaMetadata.albumTitle.toString() shouldBe "Album"
         back.mediaMetadata.artworkUri.toString() shouldBe "https://vault.test/cover.jpg"
     }
+
+    @Test
+    fun `an app that knows what a song's url serves sends that url and its type`() {
+        val converter = VaultMediaItemConverter(
+            castUri = { Uri.parse("$it?unused") },
+            castStream = { CastStream("https://vault.test/cast/${it.mediaId}", "audio/flac") },
+        )
+
+        val sent = converter.toMediaQueueItem(item("https://vault.test/Audio/1/universal"))
+
+        sent.media?.contentUrl shouldBe "https://vault.test/cast/42"
+        sent.media?.contentType shouldBe "audio/flac"
+    }
+
+    @Test
+    fun `a song the app can't say about goes the usual way`() {
+        val converter = VaultMediaItemConverter(fallbackMimeType = "audio/mpeg", castStream = { null })
+
+        val sent = converter.toMediaQueueItem(item("https://vault.test/Audio/1/universal"))
+
+        sent.media?.contentUrl shouldBe "https://vault.test/Audio/1/universal"
+        sent.media?.contentType shouldBe "audio/mpeg"
+    }
 }
