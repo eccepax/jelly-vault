@@ -298,6 +298,104 @@ class RemotePlaylistTest {
     }
 
     @Test
+    fun `skips made before the cast device has the queue don't send it again`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        val songs = List(50) { item("s$it") }
+        playlist.setMediaItems(songs, 0, 0L)
+
+        repeat(3) { playlist.seekToNextMediaItem() }
+        playlist.currentMediaItemIndex shouldBe 3
+        device.deliverAll()
+
+        device.loads shouldBe 1
+        player.ids shouldBe songs.map { it.mediaId }
+        player.currentMediaItem?.mediaId shouldBe "s3"
+        playlist.currentMediaItem?.mediaId shouldBe "s3"
+    }
+
+    @Test
+    fun `a skip the cast device hasn't made yet stays on its song while songs arrive in front of it`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        val songs = List(50) { item("s$it") }
+        playlist.setMediaItems(songs, 45, 0L)
+        device.deliver()
+
+        playlist.seekToNextMediaItem()
+        playlist.currentMediaItem?.mediaId shouldBe "s46"
+        // The songs before it arrive: the cast player's answer, the index asked for, is now another song
+        device.deliver()
+
+        playlist.currentMediaItem?.mediaId shouldBe "s46"
+        device.deliverAll()
+        player.ids shouldBe songs.map { it.mediaId }
+        player.currentMediaItem?.mediaId shouldBe "s46"
+        playlist.currentMediaItem?.mediaId shouldBe "s46"
+    }
+
+    @Test
+    fun `while a long queue is on its way, its songs' ids can't be mistaken for the cast device's`() {
+        val device = SlowDevice(player)
+        val playlist = RemotePlaylist(device)
+        playlist.setMediaItems(List(50) { item("s$it") }, 30, 0L)
+
+        (playlist.currentTimeline.getUidOfPeriod(1) is Int) shouldBe false
+    }
+
+    /**
+     * Like a cast device behind Media3's cast player: each change reaches it only once [deliver]ed,
+     * and until then the player answers as before, except that a skip answers with the index asked
+     * for. Delivered, a skip goes to the song that was at that index, as the cast player jumps to an
+     * item id.
+     */
+    private class SlowDevice(private val device: ExoPlayer) : ForwardingPlayer(device) {
+        private val undelivered = ArrayDeque<() -> Unit>()
+        private var seekingTo: Int? = null
+
+        /** Times the whole queue was sent, rather than added to. */
+        var loads = 0
+
+        override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            loads++
+            undelivered += { super.setMediaItems(mediaItems, startIndex, startPositionMs) }
+        }
+
+        override fun addMediaItems(mediaItems: List<MediaItem>) {
+            undelivered += { super.addMediaItems(mediaItems) }
+        }
+
+        override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
+            undelivered += { super.addMediaItems(index, mediaItems) }
+        }
+
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            val song = getMediaItemAt(mediaItemIndex).mediaId
+            seekingTo = mediaItemIndex
+            undelivered += {
+                seekingTo = null
+                super.seekTo((0 until mediaItemCount).first { getMediaItemAt(it).mediaId == song }, positionMs)
+            }
+        }
+
+        override fun getCurrentMediaItemIndex(): Int = seekingTo ?: super.getCurrentMediaItemIndex()
+
+        override fun getCurrentMediaItem(): MediaItem? =
+            if (mediaItemCount == 0) null else getMediaItemAt(currentMediaItemIndex)
+
+        /** The cast device gets the next change, and reports what it then has. */
+        fun deliver() {
+            undelivered.removeFirstOrNull()?.invoke()
+            advance(device).untilPendingCommandsAreFullyHandled()
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+
+        fun deliverAll() {
+            while (undelivered.isNotEmpty()) deliver()
+        }
+    }
+
+    @Test
     fun `a song not on the cast device yet is the one removed`() {
         val songs = List(50) { item("s$it") }
         playlist.setMediaItems(songs, 30, 0L)

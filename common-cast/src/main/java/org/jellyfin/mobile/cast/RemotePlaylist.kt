@@ -30,8 +30,11 @@ import kotlin.math.min
  * drops songs added before it has reported the queue). Meanwhile this answers for the whole queue,
  * so indexes mean the same as they will once it's all there: a seek to a song not sent yet sends the
  * queue again from that song, and changes to it (a burst of them, as an app makes around the song
- * playing) send it again, once, from the song playing. If the cast device's queue stops matching
- * what was sent (another sender changed it, or it dropped a song), it's sent again; after
+ * playing) send it again, once, from the song playing. A skip to a song the cast device has is made
+ * there (one made before it has reported the queue, once it has), and answered with that song until
+ * the cast device says it's playing it: until then Media3's cast player answers with the index asked
+ * for, which a part arriving in front moves onto another song. If the cast device's queue stops
+ * matching what was sent (another sender changed it, or it dropped a song), it's sent again; after
  * [MAX_RESENDS] the cast device's own answers stand.
  */
 // One override per playlist call Player has: each must be mirrored
@@ -62,6 +65,12 @@ internal class RemotePlaylist(
 
     /** The song a long queue was sent to start at, answered until the cast device reports it. */
     private var startIndex = 0
+
+    /** A skip made before the cast device reported the queue: the song, and where in it. */
+    private var seekOnArrival: Pair<Int, Long>? = null
+
+    /** The song last skipped to on the cast device, answered until the cast device says it's there. */
+    private var seekingTo: MediaItem? = null
 
     /** Times the queue was sent again because the cast device's stopped matching it. */
     private var resends = 0
@@ -98,6 +107,8 @@ internal class RemotePlaylist(
         wrappedPlayer.addListener(
             object : Player.Listener {
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) = onDeviceQueue(timeline.windowCount)
+
+                override fun onEvents(player: Player, events: Player.Events) = forgetConfirmedSeek()
             },
         )
     }
@@ -124,9 +135,15 @@ internal class RemotePlaylist(
     override fun getCurrentMediaItemIndex(): Int {
         if (!sending) return super.getCurrentMediaItemIndex()
         pendingResend?.let { return it.indexNow() }
-        if (!started) return startIndex
-        return (deviceFrom + super.getCurrentMediaItemIndex()).coerceIn(0, max(0, tracked.lastIndex))
+        return when {
+            !started -> startIndex
+            else -> seekingTo?.let { song -> tracked.indexOfFirst { it === song }.takeIf { it >= 0 } }
+                ?: inQueue(super.getCurrentMediaItemIndex())
+        }
     }
+
+    /** The cast device's [index] in [tracked]. */
+    private fun inQueue(index: Int) = (deviceFrom + index).coerceIn(0, max(0, tracked.lastIndex))
 
     override fun getCurrentPeriodIndex(): Int = if (sending) currentMediaItemIndex else super.getCurrentPeriodIndex()
 
@@ -178,7 +195,7 @@ internal class RemotePlaylist(
     /** [position] (the cast device's) in the whole queue, while a long one is on its way. */
     private fun reported(position: Player.PositionInfo): Player.PositionInfo {
         if (!sending) return position
-        val index = (deviceFrom + position.mediaItemIndex).coerceIn(0, max(0, tracked.lastIndex))
+        val index = inQueue(position.mediaItemIndex)
         return Player.PositionInfo(
             index,
             index,
@@ -198,13 +215,35 @@ internal class RemotePlaylist(
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
         if (!sending) return super.seekTo(mediaItemIndex, positionMs)
-        val onDevice = mediaItemIndex - deviceFrom
-        if (pendingResend == null && started && onDevice in 0 until super.getMediaItemCount()) {
-            return super.seekTo(onDevice, positionMs)
-        }
-        // Not on the cast device yet: the queue goes again, from there
         if (tracked.isEmpty()) return
-        send(mediaItemIndex.coerceIn(0, tracked.lastIndex), positionMs)
+        val index = mediaItemIndex.coerceIn(0, tracked.lastIndex)
+        when {
+            pendingResend != null -> send(index, positionMs)
+            // In the part on its way: once it's there
+            !started && index - sentFrom in 0 until arriving -> {
+                startIndex = index
+                seekOnArrival = index to positionMs
+            }
+            started && index - deviceFrom in 0 until super.getMediaItemCount() -> seekOnDevice(index, positionMs)
+            // Not on the cast device yet: the queue goes again, from there
+            else -> send(index, positionMs)
+        }
+    }
+
+    private fun seekOnDevice(index: Int, positionMs: Long) {
+        seekingTo = tracked[index]
+        super.seekTo(index - deviceFrom, positionMs)
+    }
+
+    /**
+     * The song skipped to is the cast device's answer too, with nothing left to arrive in front of it
+     * (which would move it again): the cast device's own answer stands.
+     */
+    private fun forgetConfirmedSeek() {
+        val song = seekingTo ?: return
+        val songsToComeInFront = unsentBefore.isNotEmpty() || (arrivingInFront && arriving > 0)
+        val there = inQueue(super.getCurrentMediaItemIndex()) == tracked.indexOfFirst { it === song }
+        if (!sending || (!songsToComeInFront && there)) seekingTo = null
     }
 
     override fun seekToNextMediaItem() {
@@ -359,6 +398,10 @@ internal class RemotePlaylist(
             count == sentCount -> {
                 started = true
                 arriving = 0
+                seekOnArrival?.let { (index, positionMs) ->
+                    seekOnArrival = null
+                    seekOnDevice(index, positionMs)
+                }
                 sendNextPart()
             }
             // Still on its way (or, before any has arrived, the queue from before)
@@ -405,6 +448,8 @@ internal class RemotePlaylist(
         arrivingInFront = false
         started = false
         gaveUp = false
+        seekOnArrival = null
+        seekingTo = null
     }
 
     private fun add(index: Int, items: List<MediaItem>) {
@@ -464,8 +509,9 @@ private class SentTimeline(private val timeline: Timeline, private val items: Li
 
 /**
  * The whole of a long queue while it's on its way to the cast device: one window (and period) per
- * song, its uid its index, lasting as long as its metadata says (the song playing, as long as the
- * player says, [currentDurationMs]).
+ * song, its uid its [Queued] index, lasting as long as its metadata says (the song playing, as long
+ * as the player says, [currentDurationMs]). Not a plain number: the cast player's uids are the cast
+ * device's item ids, and a controller looking a song up by uid would find another.
  */
 @UnstableApi
 private class QueueTimeline(
@@ -477,7 +523,7 @@ private class QueueTimeline(
 
     override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window =
         window.set(
-            windowIndex,
+            Queued(windowIndex),
             items[windowIndex],
             null,
             C.TIME_UNSET,
@@ -496,11 +542,13 @@ private class QueueTimeline(
     override fun getPeriodCount(): Int = items.size
 
     override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period =
-        period.set(periodIndex, periodIndex, periodIndex, durationUs(periodIndex), 0L)
+        period.set(Queued(periodIndex), Queued(periodIndex), periodIndex, durationUs(periodIndex), 0L)
 
-    override fun getIndexOfPeriod(uid: Any): Int = (uid as? Int)?.takeIf { it in items.indices } ?: C.INDEX_UNSET
+    override fun getIndexOfPeriod(uid: Any): Int = (uid as? Queued)?.index?.takeIf { it in items.indices } ?: C.INDEX_UNSET
 
-    override fun getUidOfPeriod(periodIndex: Int): Any = periodIndex
+    override fun getUidOfPeriod(periodIndex: Int): Any = Queued(periodIndex)
+
+    private data class Queued(val index: Int)
 
     private fun durationUs(index: Int): Long {
         val durationMs = if (index == currentIndex && currentDurationMs != C.TIME_UNSET) {

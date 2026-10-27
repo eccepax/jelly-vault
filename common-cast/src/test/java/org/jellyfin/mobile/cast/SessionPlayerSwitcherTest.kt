@@ -256,13 +256,14 @@ class SessionPlayerSwitcherTest {
     @Test
     fun `a cast device repeating a song is picked up in that song`() {
         val seenAt =
-            castDeviceLetGo(index = 1, positionMs = 95_000L, laterMs = 10_000L, repeatMode = Player.REPEAT_MODE_ONE)
+            castDeviceLetGo(index = 1, positionMs = 80_000L, laterMs = 30_000L, repeatMode = Player.REPEAT_MODE_ONE)
 
         switcher.switchTo(local)
         settle()
 
         local.currentMediaItemIndex shouldBe 1
-        local.currentPosition shouldBe seenAt + 10_000L - SONG_MS
+        // Round again from the start of it (on a slow machine it may have gone round before it was seen)
+        local.currentPosition shouldBe (seenAt + 30_000L) % SONG_MS
     }
 
     @Test
