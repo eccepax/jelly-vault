@@ -156,9 +156,8 @@ class PlayerPlaybackController(
             ?: target.currentIndex
     }
 
-    private fun Player.getMediaItemAtOrNull(index: Int) = if (index in 0 until mediaItemCount) getMediaItemAt(
-        index,
-    ) else null
+    private fun Player.getMediaItemAtOrNull(index: Int) =
+        if (index in 0 until mediaItemCount) getMediaItemAt(index) else null
 
     private fun syncFromPlayer() {
         val playingUid = player.currentMediaItem?.queueUid
