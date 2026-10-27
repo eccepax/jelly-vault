@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.MediaItemConverter
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
@@ -60,7 +61,7 @@ object NoCasting : Casting {
 }
 
 @UnstableApi
-private class CastContextCasting(context: Context) : Casting, CastPlayers {
+private class CastContextCasting(private val context: Context) : Casting, CastPlayers {
     private var castContext: CastContext? = null
     private val waiting = mutableListOf<() -> Unit>()
 
@@ -123,8 +124,19 @@ private class CastContextCasting(context: Context) : Casting, CastPlayers {
         castContext?.sessionManager?.endCurrentSession(true)
     }
 
-    override fun newCastPlayer(converter: MediaItemConverter): CastPlayer =
-        CastPlayer(checkNotNull(castContext) { "The Cast framework hasn't started" }, converter)
+    /**
+     * With the context, the player names the system's routing session for the cast (see the
+     * MediaTransferReceiver in the manifest), so the volume keys and the system's volume panel
+     * reach the cast device; without it, Android says to use the cast device's remote instead.
+     */
+    override fun newCastPlayer(converter: MediaItemConverter): CastPlayer = CastPlayer(
+        context,
+        checkNotNull(castContext) { "The Cast framework hasn't started" },
+        converter,
+        C.DEFAULT_SEEK_BACK_INCREMENT_MS,
+        C.DEFAULT_SEEK_FORWARD_INCREMENT_MS,
+        C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS,
+    )
 
     private val CastSession.deviceName: String? get() = castDevice?.friendlyName
 }
