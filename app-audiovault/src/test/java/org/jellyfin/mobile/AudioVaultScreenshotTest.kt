@@ -114,7 +114,7 @@ class AudioVaultScreenshotTest {
     fun `player while casting`() {
         // Not available: the real cast button needs the Cast framework. The label is what's shown.
         val casting = object : Casting {
-            override val isAvailable = false
+            override val isAvailable = MutableStateFlow(false)
             override val castDevice = MutableStateFlow<String?>("Living Room TV")
             override fun stopCasting() = Unit
         }
