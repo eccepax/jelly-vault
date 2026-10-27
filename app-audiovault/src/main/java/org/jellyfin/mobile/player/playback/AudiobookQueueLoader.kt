@@ -5,6 +5,8 @@ import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.extensions.ticks
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
@@ -74,14 +76,22 @@ class AudiobookQueueLoader(
         durationMs = runTimeTicks?.ticks?.inWholeMilliseconds ?: 0L,
         chapters = chapters.orEmpty().map { Chapter(it.startPositionTicks.ticks.inWholeMilliseconds, it.name) },
         fromDevice = fromDevice,
+        container = mediaSources?.firstOrNull()?.container,
+        audioCodec = mediaSources?.firstOrNull()?.audioCodec,
     )
 
     private fun LocalJellyfinMediaSource.toTrack(fallbackName: String?): AudiobookTrack {
         val track = item?.toTrack(fallbackName, fromDevice = true)
-        val durationMs = runTime.inWholeMilliseconds
-        return track?.copy(durationMs = track.durationMs.takeIf { it > 0 } ?: durationMs)
-            ?: AudiobookTrack(id = itemId.toString(), title = fallbackName.orEmpty(), durationMs = durationMs, fromDevice = true)
+            ?: AudiobookTrack(id = itemId.toString(), title = fallbackName.orEmpty(), durationMs = 0L, fromDevice = true)
+        return track.copy(
+            durationMs = track.durationMs.takeIf { it > 0 } ?: runTime.inWholeMilliseconds,
+            container = sourceInfo.container ?: track.container,
+            audioCodec = sourceInfo.audioCodec ?: track.audioCodec,
+        )
     }
+
+    private val MediaSourceInfo.audioCodec: String?
+        get() = mediaStreams?.firstOrNull { it.type == MediaStreamType.AUDIO }?.codec
 
     private val BaseItemDto.resumeMs: Long
         get() = userData?.playbackPositionTicks?.ticks?.inWholeMilliseconds?.coerceAtLeast(0L) ?: 0L

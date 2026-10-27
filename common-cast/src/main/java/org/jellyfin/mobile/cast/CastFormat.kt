@@ -39,7 +39,26 @@ private val CAST_FORMATS = mapOf(
 )
 
 /**
- * How a file in [container] is cast; MP3 when it can't go as it is. Not m4a or mp4: they hold ALAC
- * too, which cast devices can't play.
+ * The mp4 family, which holds ALAC as well as AAC: cast devices only play the AAC, so a file goes as
+ * it is only when its codec is known to be that (an audiobook's m4b, nearly always). Asked for with
+ * the codec, the server sends it as it is (byte ranges, so a cast device can seek in it).
  */
-fun castFormatOf(container: String?): CastFormat = container?.lowercase()?.let(CAST_FORMATS::get) ?: CAST_MP3
+private val MP4_CONTAINERS = setOf("m4b", "m4a", "mp4")
+
+/**
+ * How a file in [container] holding [audioCodec] (null when not known) is cast; MP3 when it can't go
+ * as it is.
+ */
+fun castFormatOf(container: String?, audioCodec: String? = null): CastFormat {
+    val name = container?.lowercase() ?: return CAST_MP3
+    if (name in MP4_CONTAINERS) {
+        return if (audioCodec.equals("aac", ignoreCase = true)) {
+            // Should the server transcode it after all, it comes as mp4 (which it serves as video/mp4:
+            // the Default Media Receiver plays that too)
+            CastFormat(listOf("$name|aac"), "mp4", "aac", "audio/mp4")
+        } else {
+            CAST_MP3
+        }
+    }
+    return CAST_FORMATS[name] ?: CAST_MP3
+}

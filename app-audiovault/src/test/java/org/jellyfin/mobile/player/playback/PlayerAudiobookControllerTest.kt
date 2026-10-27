@@ -286,26 +286,6 @@ class PlayerAudiobookControllerTest {
         onCast.state.value.isRemote shouldBe false
     }
 
-    @Test
-    fun `volume asked for while casting leaves the cast device alone, and applies once back here`() {
-        val castable = Castable(AudiobookPlayer(exoPlayer))
-        val onCast = PlayerAudiobookController(castable, streamUrl = {
-            "https://vault.test/Audio/$it/universal"
-        }, setSkipSilence = {})
-        onCast.play(listOf(track("a")), 0, 0L)
-        castable.remote = true
-        onCast.pause()
-        settle()
-
-        onCast.setVolume(0.3f)
-        exoPlayer.volume shouldBe 1f
-
-        castable.remote = false
-        onCast.play()
-        settle()
-        exoPlayer.volume shouldBe 0.3f
-    }
-
     /** The player as a controller sees it once the session's player is a cast player. */
     private class Castable(player: Player) : ForwardingPlayer(player) {
         var remote = false

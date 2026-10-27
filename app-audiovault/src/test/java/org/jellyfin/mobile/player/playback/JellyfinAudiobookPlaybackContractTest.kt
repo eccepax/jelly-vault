@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
@@ -11,6 +12,7 @@ import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.SessionInfoDto
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 import org.jellyfin.sdk.model.api.UserItemDataDto
@@ -98,6 +100,40 @@ class JellyfinAudiobookPlaybackContractTest {
     }
 
     @Test
+    fun `a book's details say what its file holds, so it can be cast in a format a cast device plays`() =
+        runBlocking<Unit> {
+            val source = audiobooks.items(listOf(m4b)).single().mediaSources.orEmpty().first()
+
+            source.container shouldBe "m4b"
+            source.mediaStreams.orEmpty().first { it.type == MediaStreamType.AUDIO }.codec shouldBe "aac"
+        }
+
+    @Test
+    fun `an m4b of AAC is cast as it is, served as the type the cast device is told, so it can seek`() {
+        val stream = audiobooks.castStream(m4b.toString(), container = "m4b", audioCodec = "aac")
+
+        // The cast device fetches it on its own: no Authorization header
+        val response = get(stream.url, range = "bytes=1000-1999", authorized = false)
+
+        stream.mimeType shouldBe "audio/mp4"
+        response.code shouldBe HttpURLConnection.HTTP_PARTIAL
+        response.contentType shouldBe stream.mimeType
+    }
+
+    @Test
+    fun `a book of no known format is cast as mp3, and a transcode started part way starts there for the cast device too`() {
+        val startMs = 1.minutes.inWholeMilliseconds
+        val stream = audiobooks.castStream(m4b.toString(), container = null, audioCodec = null, startMs = startMs)
+
+        val response = get(stream.url, authorized = false)
+
+        stream.mimeType shouldBe "audio/mpeg"
+        response.code shouldBe HttpURLConnection.HTTP_OK
+        response.contentType shouldBe stream.mimeType
+        stream.url.lowercase() shouldContain "starttimeticks=${startMs * 10_000L}"
+    }
+
+    @Test
     fun `while a book plays, the server sees where the listener is, and that it's paused`() = runBlocking<Unit> {
         val halfway = runTimeMs() / 2
         val track = AudiobookTrack(id = m4b.toString(), title = "", durationMs = runTimeMs())
@@ -165,19 +201,24 @@ class JellyfinAudiobookPlaybackContractTest {
 
     private class Response(val code: Int, val contentType: String, val length: Long)
 
-    /** A GET as the player's data source makes it: the token in the Authorization header. Reads no body. */
-    private fun get(url: String, range: String? = null): Response {
+    /**
+     * A GET as the player's data source makes it: the token in the Authorization header. [authorized]
+     * false makes it as a cast device does, with only the url. Reads no body.
+     */
+    private fun get(url: String, range: String? = null, authorized: Boolean = true): Response {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
-        connection.setRequestProperty(
-            "Authorization",
-            AuthorizationHeaderBuilder.buildHeader(
-                clientName = api.clientInfo.name,
-                clientVersion = api.clientInfo.version,
-                deviceId = api.deviceInfo.id,
-                deviceName = api.deviceInfo.name,
-                accessToken = api.accessToken,
-            ),
-        )
+        if (authorized) {
+            connection.setRequestProperty(
+                "Authorization",
+                AuthorizationHeaderBuilder.buildHeader(
+                    clientName = api.clientInfo.name,
+                    clientVersion = api.clientInfo.version,
+                    deviceId = api.deviceInfo.id,
+                    deviceName = api.deviceInfo.name,
+                    accessToken = api.accessToken,
+                ),
+            )
+        }
         range?.let { connection.setRequestProperty("Range", it) }
         return try {
             Response(connection.responseCode, connection.contentType.orEmpty(), connection.contentLengthLong)

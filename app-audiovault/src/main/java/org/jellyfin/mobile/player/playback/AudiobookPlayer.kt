@@ -30,9 +30,7 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 
     /** Where the playing stream starts in its track: past 0 when a transcode was started part way. */
-    private val streamStartMs: Long
-        get() = currentMediaItem?.localConfiguration?.uri?.getQueryParameter(START_PARAM)
-            ?.toLongOrNull()?.div(TICKS_PER_MS) ?: 0L
+    private val streamStartMs: Long get() = currentMediaItem?.streamStartMs ?: 0L
 
     /**
      * A transcode: one the player has opened and can't seek in, or one already started part way,
@@ -150,6 +148,11 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
         internal const val TICKS_PER_MS = 10_000L
     }
 }
+
+/** Where this item's stream starts in its track: past 0 when it's a transcode started part way. */
+val MediaItem.streamStartMs: Long
+    get() = localConfiguration?.uri?.getQueryParameter(AudiobookPlayer.START_PARAM)
+        ?.toLongOrNull()?.div(AudiobookPlayer.TICKS_PER_MS) ?: 0L
 
 /** This stream, starting from [positionMs]; from the beginning when that's null. */
 private fun Uri.withStart(positionMs: Long?): Uri {

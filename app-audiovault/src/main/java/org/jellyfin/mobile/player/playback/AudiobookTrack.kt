@@ -21,4 +21,10 @@ data class AudiobookTrack(
      * about it later (see OfflineListeningSync), rather than as it plays.
      */
     val fromDevice: Boolean = false,
+    /**
+     * The file's container and audio codec, where the server said: what a cast device is sent
+     * depends on them (see JellyfinAudiobooks.castStream).
+     */
+    val container: String? = null,
+    val audioCodec: String? = null,
 )

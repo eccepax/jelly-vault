@@ -3,7 +3,7 @@ package org.jellyfin.mobile.cast
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
-/** What a cast device is asked to get for a file, by its container. */
+/** What a cast device is asked to get for a file, by its container and (where known) codec. */
 class CastFormatTest {
 
     @Test
@@ -40,6 +40,24 @@ class CastFormatTest {
             transcodeCodec shouldBe "opus"
             mimeType shouldBe "audio/ogg"
         }
+    }
+
+    @Test
+    fun `an mp4 file known to hold AAC goes as it is, asked for with that codec`() {
+        listOf("m4b", "m4a", "mp4").forEach { container ->
+            castFormatOf(container, audioCodec = "AAC").run {
+                asked shouldBe listOf("$container|aac")
+                transcodeCodec shouldBe "aac"
+                mimeType shouldBe "audio/mp4"
+            }
+        }
+    }
+
+    @Test
+    fun `an mp4 file holding anything else, or not known to hold AAC, comes as mp3`() {
+        // ALAC, say, which cast devices can't play
+        castFormatOf("m4b", audioCodec = "alac") shouldBe CAST_MP3
+        castFormatOf("m4a") shouldBe CAST_MP3
     }
 
     @Test

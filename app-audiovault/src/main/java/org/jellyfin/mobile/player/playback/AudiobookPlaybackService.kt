@@ -3,7 +3,6 @@ package org.jellyfin.mobile.player.playback
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
-import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -28,15 +27,14 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.CastStream
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.cast.SessionCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
-import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.player.forAudiobooks
 import org.jellyfin.mobile.player.session.withPlayableUri
-import org.jellyfin.sdk.api.client.ApiClient
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -56,7 +54,6 @@ class AudiobookPlaybackService : MediaSessionService() {
     private val audiobooks: JellyfinAudiobooks by inject()
     private val appController: DeferredAudiobookController by inject()
     private val casting: Casting by inject()
-    private val apiClient: ApiClient by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var session: MediaSession? = null
@@ -103,11 +100,16 @@ class AudiobookPlaybackService : MediaSessionService() {
                     session,
                     exoPlayer,
                     casting,
-                    // This player sends the token as a header; the cast device fetches on its own
-                    castUri = { withAccessToken(it.toString(), apiClient.accessToken).toUri() },
                     wrap = castingWrapper(exoPlayer, audiobookPlayer),
+                    castStream = ::castStream,
                 )
             }
+    }
+
+    /** What the cast device fetches for [item]: from the server, even when it plays from a download here. */
+    private fun castStream(item: MediaItem): CastStream? {
+        val track = item.toAudiobookTrack().takeIf { it.id.isNotEmpty() } ?: return null
+        return audiobooks.castStream(track.id, track.container, track.audioCodec, item.streamStartMs)
     }
 
     /**
