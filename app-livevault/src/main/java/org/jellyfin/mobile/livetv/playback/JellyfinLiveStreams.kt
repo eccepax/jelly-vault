@@ -25,31 +25,33 @@ import java.util.Collections
 
 /**
  * [LiveStreams] over Jellyfin: the server opens the tuner stream (AutoOpenLiveStream) when asked
- * for playback info, and serves it direct or as HLS depending on [deviceProfile].
+ * for playback info, and serves it direct or as HLS depending on [deviceProfile] ([castProfile] for
+ * a cast device, which only gets HLS: it can't play the raw stream).
  */
 class JellyfinLiveStreams(
     private val apiClient: ApiClient,
     private val deviceProfile: () -> DeviceProfile,
+    private val castProfile: () -> DeviceProfile = deviceProfile,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : LiveStreams {
 
     /** Opens whose start has been reported (by [key]); later reports are progress. */
     private val started: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
-    override suspend fun open(channelId: String): OpenedStream = withContext(ioDispatcher) {
+    override suspend fun open(channelId: String, forCast: Boolean): OpenedStream = withContext(ioDispatcher) {
         val info = apiClient.mediaInfoApi.getPostedPlaybackInfo(
             itemId = channelId.toUUID(),
             data = PlaybackInfoDto(
-                deviceProfile = deviceProfile(),
+                deviceProfile = if (forCast) castProfile() else deviceProfile(),
                 autoOpenLiveStream = true,
-                enableDirectPlay = true,
-                enableDirectStream = true,
+                enableDirectPlay = !forCast,
+                enableDirectStream = !forCast,
                 enableTranscoding = true,
             ),
         ).content
         val source = info.mediaSources.firstOrNull() ?: error("No stream for channel $channelId")
         val liveStreamId = source.liveStreamId ?: error("Channel $channelId didn't open a live stream")
-        val url = playableUrl(channelId, source, liveStreamId)
+        val url = playableUrl(channelId, source, liveStreamId, direct = !forCast)
         if (url == null) {
             // Opened but unplayable: don't leave it holding the tuner.
             apiClient.mediaInfoApi.closeLiveStream(liveStreamId)
@@ -64,8 +66,8 @@ class JellyfinLiveStreams(
         )
     }
 
-    private fun playableUrl(channelId: String, source: MediaSourceInfo, liveStreamId: String): String? = when {
-        source.supportsDirectStream -> withAccessToken(
+    private fun playableUrl(channelId: String, source: MediaSourceInfo, liveStreamId: String, direct: Boolean): String? = when {
+        direct && source.supportsDirectStream -> withAccessToken(
             apiClient.videosApi.getVideoStreamUrl(
                 itemId = channelId.toUUID(),
                 static = true,

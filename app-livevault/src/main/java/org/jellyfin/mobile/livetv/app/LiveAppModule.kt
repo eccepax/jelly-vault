@@ -1,8 +1,15 @@
 package org.jellyfin.mobile.livetv.app
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.res.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
+import org.jellyfin.mobile.cast.casting
+import org.jellyfin.mobile.cast.liveCasting
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
@@ -23,6 +30,7 @@ import org.jellyfin.mobile.livetv.playback.WatchViewModel
 import org.jellyfin.mobile.livetv.viewing.PreferencesViewingMemory
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
+import org.jellyfin.mobile.player.deviceprofile.castVideoProfile
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -37,7 +45,15 @@ val liveAppModule = module {
 
     // Playback
     single { DeviceProfileBuilder("LiveVault", includeVideo = true) }
-    single<LiveStreams> { JellyfinLiveStreams(get(), get<DeviceProfileBuilder>()::getDeviceProfile) }
+    single<LiveStreams> {
+        JellyfinLiveStreams(
+            get(),
+            get<DeviceProfileBuilder>()::getDeviceProfile,
+            castProfile = { castVideoProfile("LiveVault") },
+        )
+    }
+    // None on a TV: it's where things are cast to, not from
+    single<Casting> { if (isTelevision(androidContext())) NoCasting else casting(androidApplication()) }
     single<StreamLedger> { PreferencesStreamLedger(androidContext()) }
     // App-wide scope: a stream is closed even when the screen that opened it is gone.
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
@@ -46,5 +62,10 @@ val liveAppModule = module {
     single { liveVaultSignOut(get(), get(), get(), get<ApiClientController>()::logoutUser) }
     viewModel { AccountViewModel(signOut = { get<SignOut>()() }) }
 
-    viewModel { WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), get(), get()) }
+    viewModel {
+        WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), liveCasting(get()), get(), get())
+    }
 }
+
+private fun isTelevision(context: Context): Boolean =
+    context.getSystemService(UiModeManager::class.java)?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION

@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.components.ConfirmDialog
 import org.jellyfin.mobile.common.ui.components.EmptyState
@@ -88,7 +90,7 @@ import org.jellyfin.mobile.common.R as CommonR
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
  * on tablets and TVs; cards and chips are focusable, so a TV remote's D-pad moves through them.
  * [onTv], the remote starts on the channel to continue (else the first one) rather than on search.
- * The menu names [app] and its version, for a bug report.
+ * The menu names [app] and its version, for a bug report. [castButton] is the app's cast button.
  */
 @Composable
 fun ChannelsScreen(
@@ -97,6 +99,7 @@ fun ChannelsScreen(
     onTv: Boolean = false,
     app: ClientInfo,
     actions: ChannelsActions,
+    castButton: @Composable () -> Unit = {},
 ) {
     val startFocus = remember { FocusRequester() }
     val loaded = state is ChannelsUiState.Loaded && state.channels.isNotEmpty()
@@ -110,6 +113,7 @@ fun ChannelsScreen(
                 onQueryChange = actions.onQueryChange,
                 onSignOut = actions.onSignOut,
                 app = app,
+                castButton = castButton,
             )
             when (state) {
                 ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
@@ -144,10 +148,22 @@ fun ChannelsScreen(
 }
 
 @Composable
-private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit, app: ClientInfo) {
+private fun Header(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSignOut: () -> Unit,
+    app: ClientInfo,
+    castButton: @Composable () -> Unit,
+) {
     Column {
         // The same bar as the other apps' main screens
-        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut, app) })
+        VaultTopBar(
+            title = stringResource(R.string.live_tv_title),
+            actions = {
+                castButton()
+                MoreMenu(onSignOut, app)
+            },
+        )
         SearchField(
             query = query,
             onQueryChange = onQueryChange,
@@ -454,6 +470,7 @@ fun ChannelsRoute(
     viewModel: ChannelsViewModel = koinViewModel(),
     // The app's name as the server knows it and the bug form lists it
     app: ClientInfo = koinInject(),
+    casting: Casting = koinInject(),
 ) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
@@ -489,6 +506,7 @@ fun ChannelsRoute(
             onRetry = viewModel::retry,
             onSignOut = onSignOut,
         ),
+        castButton = { CastButton(casting) },
     )
 }
 

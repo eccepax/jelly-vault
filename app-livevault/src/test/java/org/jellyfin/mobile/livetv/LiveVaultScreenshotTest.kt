@@ -6,6 +6,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -139,6 +143,34 @@ class LiveVaultScreenshotTest {
             }
         }
         captureBare("player-login-in-use")
+    }
+
+    @Test
+    @Config(qualifiers = "w852dp-h393dp-night-xhdpi")
+    fun `player while casting`() {
+        val state = WatchUiState(
+            playback = PlaybackState.Playing(DEVILS.id),
+            channel = DEVILS,
+            videoStarted = true,
+            castDevice = "Living Room TV",
+        )
+        composeRule.setContent {
+            AppTheme(VaultBrand.LiveVault) {
+                PlayerScreen(
+                    state = state,
+                    onZap = {},
+                    onRetry = {},
+                    onExit = {},
+                    onShowFree = {},
+                    video = { NoVideo() },
+                    // The real button needs the Cast framework; this is where it shows, connected
+                    castButton = {
+                        IconButton(onClick = {}) { Icon(Icons.Filled.CastConnected, null, tint = Color.White) }
+                    },
+                )
+            }
+        }
+        captureBare("player-casting")
     }
 
     private fun setChannels(onTv: Boolean = false) {

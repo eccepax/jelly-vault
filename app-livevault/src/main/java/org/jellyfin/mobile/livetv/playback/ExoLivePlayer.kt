@@ -30,6 +30,8 @@ class ExoLivePlayer(context: Context) : LivePlayer {
     private val _videoStarted = MutableStateFlow(false)
     override val videoStarted: StateFlow<Boolean> = _videoStarted.asStateFlow()
 
+    override val onCastDevice: StateFlow<Boolean> = MutableStateFlow(false)
+
     private var listener: LivePlayer.Listener? = null
 
     init {
@@ -47,7 +49,7 @@ class ExoLivePlayer(context: Context) : LivePlayer {
         )
     }
 
-    override fun play(url: String) {
+    override fun play(url: String, channelId: String) {
         _videoStarted.value = false
         val item = MediaItem.Builder()
             .setUri(url)

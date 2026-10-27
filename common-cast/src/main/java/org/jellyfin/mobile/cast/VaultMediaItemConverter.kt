@@ -5,6 +5,7 @@ import androidx.media3.cast.DefaultMediaItemConverter
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaQueueItem
 import org.jellyfin.mobile.player.session.playableUri
 
@@ -16,6 +17,8 @@ import org.jellyfin.mobile.player.session.playableUri
  * both through [castStream] instead. Everything else goes the way Media3's own converter sends it,
  * which also brings items back with their id, uri and metadata.
  *
+ * A [live] converter sends items as live streams, so the cast device shows no seek bar or duration.
+ *
  * An item with no way to play it at all (another controller can add one) goes with its id for a
  * uri: the cast device can't play it, but Media3's converter would throw on it in the service.
  */
@@ -24,6 +27,7 @@ internal class VaultMediaItemConverter(
     private val castUri: (Uri) -> Uri = { it },
     private val fallbackMimeType: String = "audio/mpeg",
     private val castStream: ((MediaItem) -> CastStream?)? = null,
+    private val live: Boolean = false,
 ) : MediaItemConverter {
 
     private val default = DefaultMediaItemConverter()
@@ -34,7 +38,9 @@ internal class VaultMediaItemConverter(
             .setUri(stream?.url?.let(Uri::parse) ?: mediaItem.playableUri?.let(castUri) ?: unplayable(mediaItem))
             .setMimeType(stream?.mimeType ?: mediaItem.localConfiguration?.mimeType ?: fallbackMimeType)
             .build()
-        return default.toMediaQueueItem(forCast)
+        val sent = default.toMediaQueueItem(forCast)
+        if (live) sent.media?.writer?.setStreamType(MediaInfo.STREAM_TYPE_LIVE)
+        return sent
     }
 
     override fun toMediaItem(mediaQueueItem: MediaQueueItem): MediaItem = default.toMediaItem(mediaQueueItem)

@@ -29,6 +29,7 @@ dependencies {
     // Common module
     implementation(project(":common"))
     implementation(project(":common-media"))
+    implementation(project(":common-cast"))
 
     // Kotlin
     implementation(libs.bundles.coroutines)

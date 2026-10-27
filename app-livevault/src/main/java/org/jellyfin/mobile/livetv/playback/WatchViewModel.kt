@@ -13,24 +13,28 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.jellyfin.mobile.cast.LiveCasting
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
 
 /**
- * The channel being watched. Activity-scoped, so the stream (and the player) survive rotation;
- * when the activity finishes for good the stream is closed ([onCleared]).
+ * The channel being watched, here on [localPlayer] or on the cast device while one is connected
+ * ([cast]). Activity-scoped, so the stream (and the player) survive rotation; when the activity
+ * finishes for good the stream is closed ([onCleared]).
  */
 class WatchViewModel(
     streams: LiveStreams,
     closer: StreamCloser,
-    val player: LivePlayer,
+    val localPlayer: LivePlayer,
+    private val cast: LiveCasting,
     private val sessions: LiveTvSessions,
     private val memory: ViewingMemory,
 ) : ViewModel() {
 
-    private val playback = LivePlayback(streams, player, closer, viewModelScope)
     private val lineup = MutableStateFlow<Map<String, LiveChannel>>(emptyMap())
+    private val player = CastingLivePlayer(localPlayer, cast, describe = { lineup.value[it] })
+    private val playback = LivePlayback(streams, player, closer, viewModelScope)
     private val _watching = MutableStateFlow(false)
 
     /** Whether the player screen is up. */
@@ -52,12 +56,14 @@ class WatchViewModel(
         lineup,
         player.videoStarted,
         loginInUse,
-    ) { playback, lineup, started, loginInUse ->
+        cast.deviceName,
+    ) { playback, lineup, started, loginInUse, castDevice ->
         WatchUiState(
             playback = playback,
             channel = playback.channelId?.let(lineup::get),
             videoStarted = started,
             loginInUse = loginInUse,
+            castDevice = castDevice,
         )
     }.stateIn(
         viewModelScope,
@@ -95,6 +101,9 @@ class WatchViewModel(
     fun onBackground() = playback.pause()
 
     fun onForeground() = playback.resume()
+
+    /** Ends the cast; the channel comes back here (see [LivePlayback]). */
+    fun stopCasting() = cast.stopCasting()
 
     /** Who on the server is holding the login; none known when the server can't say. */
     private suspend fun loginHolders(): List<ChannelSession> = try {

@@ -6,6 +6,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
+import com.google.android.gms.cast.MediaInfo
 import io.kotest.matchers.shouldBe
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -112,6 +113,23 @@ class VaultMediaItemConverterTest {
 
         sent.media?.contentUrl shouldBe "https://vault.test/cast/42"
         sent.media?.contentType shouldBe "audio/flac"
+    }
+
+    @Test
+    fun `items are sent as recordings that can be seeked`() {
+        val sent = VaultMediaItemConverter().toMediaQueueItem(item("https://vault.test/Audio/1/universal"))
+
+        sent.media?.streamType shouldBe MediaInfo.STREAM_TYPE_BUFFERED
+    }
+
+    @Test
+    fun `a live converter sends items as live streams, so the cast device shows no seek bar`() {
+        val converter = VaultMediaItemConverter(live = true)
+
+        val sent = converter.toMediaQueueItem(item("https://vault.test/live.m3u8", mimeType = "application/x-mpegURL"))
+
+        sent.media?.streamType shouldBe MediaInfo.STREAM_TYPE_LIVE
+        sent.media?.contentUrl shouldBe "https://vault.test/live.m3u8"
     }
 
     @Test

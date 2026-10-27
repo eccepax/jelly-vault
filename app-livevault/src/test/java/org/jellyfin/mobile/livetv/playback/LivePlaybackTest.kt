@@ -345,4 +345,167 @@ class LivePlaybackTest {
         assertOnlyOpen()
         ledger.all().shouldBeEmpty()
     }
+
+    // Casting: the phone keeps owning the stream; the cast device only plays it.
+
+    @Test
+    fun `a channel watched while casting is opened for the cast device`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+
+        playback.play("a", lineup)
+        runCurrent()
+
+        log.events shouldContainExactly listOf("open-for-cast:a", "player.play:http://vault/a/1.m3u8", "playing:ls-a-1")
+        playback.state.value shouldBe PlaybackState.Playing("a")
+    }
+
+    @Test
+    fun `casting starting mid-channel closes its stream and opens it again for the cast device`() = runTest {
+        // The cast device can't play what the phone does (the tuner's raw MPEG-TS), and the provider
+        // allows one connection: the phone's stream must be closed before the cast one opens.
+        val playback = playback()
+        playback.play("a", lineup)
+        runCurrent()
+        log.events.clear()
+
+        player.onCastDevice.value = true
+        runCurrent()
+
+        log.events shouldContainExactly listOf(
+            "player.stop",
+            "close:ls-a-1",
+            "open-for-cast:a",
+            "player.play:http://vault/a/2.m3u8",
+            "playing:ls-a-2",
+        )
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        assertOnlyOpen("ls-a-2")
+    }
+
+    @Test
+    fun `casting ending mid-channel tunes it again here`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        log.events.clear()
+
+        player.onCastDevice.value = false
+        runCurrent()
+
+        log.events shouldContainExactly listOf(
+            "player.stop",
+            "close:ls-a-1",
+            "open:a",
+            "player.play:http://vault/a/2.m3u8",
+            "playing:ls-a-2",
+        )
+        assertOnlyOpen("ls-a-2")
+    }
+
+    @Test
+    fun `a channel that failed is tried again when casting starts`() = runTest {
+        val playback = playback()
+        streams.failing += "a"
+        playback.play("a", lineup)
+        settle()
+        streams.failing -= "a"
+
+        player.onCastDevice.value = true
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        log.events.last { it.startsWith("open") } shouldBe "open-for-cast:a"
+    }
+
+    @Test
+    fun `casting starting with nothing on opens nothing`() = runTest {
+        val playback = playback()
+        playback.play("a", lineup)
+        runCurrent()
+        playback.stop()
+        settle()
+        log.events.clear()
+
+        player.onCastDevice.value = true
+        settle()
+
+        log.events.shouldBeEmpty()
+        playback.state.value shouldBe PlaybackState.Idle
+    }
+
+    @Test
+    fun `going to the background while casting keeps the channel on the cast device`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+
+        playback.pause()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        assertOnlyOpen("ls-a-1")
+    }
+
+    @Test
+    fun `coming back from the background while casting leaves the channel playing`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+        settle()
+        log.events.clear()
+
+        playback.resume()
+        settle()
+
+        log.events.filter { it.startsWith("open") }.shouldBeEmpty()
+        assertOnlyOpen("ls-a-1")
+    }
+
+    @Test
+    fun `casting ending while in the background frees the stream rather than play in a pocket`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+
+        player.onCastDevice.value = false
+        settle()
+
+        player.playing shouldBe null
+        assertOnlyOpen()
+    }
+
+    @Test
+    fun `coming back after casting ended in the background tunes the channel here`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+        player.onCastDevice.value = false
+        settle()
+
+        playback.resume()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        log.events.last { it.startsWith("open") } shouldBe "open:a"
+        assertOnlyOpen("ls-a-2")
+    }
+
+    @Test
+    fun `the player is told which channel it plays`() = runTest {
+        val playback = playback()
+
+        playback.play("b", lineup)
+        runCurrent()
+
+        player.channel shouldBe "b"
+    }
 }

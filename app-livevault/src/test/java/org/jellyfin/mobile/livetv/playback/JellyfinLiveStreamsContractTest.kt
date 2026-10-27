@@ -3,6 +3,7 @@ package org.jellyfin.mobile.livetv.playback
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldNotBeExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.delay
@@ -14,6 +15,7 @@ import org.jellyfin.mobile.livetv.catalog.JellyfinLiveTvCatalog
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.player.deviceprofile.DeviceDecoders
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
+import org.jellyfin.mobile.player.deviceprofile.castVideoProfile
 import org.jellyfin.mobile.testing.VaultFixtures.LiveTv
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.junit.jupiter.api.AfterEach
@@ -40,7 +42,9 @@ class JellyfinLiveStreamsContractTest {
         val profile = DeviceProfileBuilder("LiveVault contract tests", includeVideo = true) {
             DeviceDecoders(video = mapOf("h264" to setOf("baseline", "main", "high")), audio = setOf("aac", "mp3"))
         }
-        streams = JellyfinLiveStreams(api, profile::getDeviceProfile)
+        streams = JellyfinLiveStreams(api, profile::getDeviceProfile, castProfile = {
+            castVideoProfile("LiveVault contract tests")
+        })
         channel = JellyfinLiveTvCatalog(api).channels().filter(::isFree).shouldNotBeEmpty().first()
     }
 
@@ -51,9 +55,9 @@ class JellyfinLiveStreamsContractTest {
 
     private fun isFree(channel: LiveChannel) = LiveTv.FREE_TAG in channel.tags && channel.name.startsWith(LiveTv.FREE_PREFIX)
 
-    private suspend fun openFree(): OpenedStream {
+    private suspend fun openFree(forCast: Boolean = false): OpenedStream {
         check(isFree(channel)) { "tests may only open free channels" }
-        return streams.open(channel.id).also { opened += it }
+        return streams.open(channel.id, forCast).also { opened += it }
     }
 
     private fun get(url: String): Pair<Int, String> {
@@ -79,6 +83,20 @@ class JellyfinLiveStreamsContractTest {
         val (status, body) = get(stream.url)
         status shouldBe 200
         if (".m3u8" in stream.url) body shouldStartWith "#EXTM3U"
+    }
+
+    @Test
+    fun `a channel opened for a cast device comes as H264 and AAC over HLS, with the token in the url`() = runBlocking<Unit> {
+        // The cast device fetches it itself (no header) and can't play the tuner's raw MPEG-TS.
+        val stream = openFree(forCast = true)
+
+        stream.url shouldContain ".m3u8"
+        stream.url shouldContain "ApiKey=${api.accessToken}"
+        val (status, playlist) = get(stream.url)
+        status shouldBe 200
+        playlist shouldStartWith "#EXTM3U"
+        playlist shouldContain "avc1"
+        playlist shouldContain "mp4a"
     }
 
     @Test

@@ -22,6 +22,7 @@ class WatchViewModelTest {
     private val log = EventLog()
     private val streams = FakeLiveStreams(log)
     private val player = FakeLivePlayer(log)
+    private val cast = FakeLiveCasting(log)
     private val ledger = FakeStreamLedger()
     private val sessions = FakeLiveTvSessions()
     private val memory = FakeViewingMemory()
@@ -49,6 +50,7 @@ class WatchViewModelTest {
             streams,
             StreamCloser(streams, ledger, scope = backgroundScope),
             player,
+            cast,
             sessions,
             memory,
         )
@@ -119,6 +121,7 @@ class WatchViewModelTest {
         settle()
 
         player.released shouldBe true
+        cast.released shouldBe true
         streams.openStreams.shouldBeEmpty()
         ledger.all().shouldBeEmpty()
     }
@@ -212,5 +215,48 @@ class WatchViewModelTest {
         settle()
 
         memory.lastChannelId.value shouldBe bulls.id
+    }
+
+    @Test
+    fun `watching while casting plays the channel on the cast device, opened for it`() = watchTest { viewModel ->
+        cast.connected.value = true
+
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        log.events.first() shouldBe "open-for-cast:${bulls.id}"
+        cast.sent!![2] shouldBe "1 Bulls"
+        player.playing shouldBe null
+    }
+
+    @Test
+    fun `the state names the cast device while casting`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+        viewModel.state.value.castDevice shouldBe null
+
+        cast.deviceName.value = "Main Bedroom TV"
+        settle()
+
+        viewModel.state.value.castDevice shouldBe "Main Bedroom TV"
+    }
+
+    @Test
+    fun `the video has started once the cast device plays it`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        cast.started.value = true
+        settle()
+
+        viewModel.state.value.videoStarted shouldBe true
+    }
+
+    @Test
+    fun `stopping casting ends the cast`() = watchTest { viewModel ->
+        viewModel.stopCasting()
+
+        cast.castsStopped shouldBe 1
     }
 }

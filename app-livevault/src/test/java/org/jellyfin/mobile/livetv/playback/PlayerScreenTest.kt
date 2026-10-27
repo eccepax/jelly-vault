@@ -41,12 +41,14 @@ class PlayerScreenTest {
     private var retried = false
     private var exited = false
     private var showedFree = false
+    private var castingStopped = false
 
     private fun show(
         playback: PlaybackState,
         videoStarted: Boolean = false,
         loginInUse: LoginInUse? = null,
         inPictureInPicture: Boolean = false,
+        castDevice: String? = null,
     ) {
         composeRule.setContent {
             PlayerScreen(
@@ -55,6 +57,7 @@ class PlayerScreenTest {
                     channel = bulls,
                     videoStarted = videoStarted,
                     loginInUse = loginInUse,
+                    castDevice = castDevice,
                 ),
                 onZap = { zaps += it },
                 onRetry = { retried = true },
@@ -62,6 +65,8 @@ class PlayerScreenTest {
                 onShowFree = { showedFree = true },
                 video = { Text("video", Modifier.testTag(VIDEO)) },
                 inPictureInPicture = inPictureInPicture,
+                onStopCasting = { castingStopped = true },
+                castButton = { Text("cast", Modifier.testTag(CAST_BUTTON)) },
             )
         }
     }
@@ -188,6 +193,47 @@ class PlayerScreenTest {
     }
 
     @Test
+    fun `the cast button is in the top bar`() {
+        show(PlaybackState.Tuning(bulls.id))
+
+        composeRule.onNodeWithTag(CAST_BUTTON, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `while casting it says where the channel plays`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.onNodeWithText("Playing on Main Bedroom TV").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `while casting the channel's details stay up, with no video here to look at`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.mainClock.advanceTimeBy(OVERLAY_GONE_MS)
+
+        composeRule.onNodeWithText("Bulls at Pacers").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping where it plays offers to stop casting`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.onNodeWithText("Playing on Main Bedroom TV").performClick()
+        composeRule.onNodeWithText("Stop casting").performClick()
+
+        castingStopped shouldBe true
+    }
+
+    @Test
+    fun `not casting, nothing says it is`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true)
+
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING).assertDoesNotExist()
+    }
+
+    @Test
     fun `in the floating window there's only the video`() {
         show(PlaybackState.Playing(bulls.id), videoStarted = true, inPictureInPicture = true)
 
@@ -235,3 +281,4 @@ class PlayerScreenTest {
 
 private const val OVERLAY_GONE_MS = 5_000L
 private const val VIDEO = "video"
+private const val CAST_BUTTON = "cast_button"

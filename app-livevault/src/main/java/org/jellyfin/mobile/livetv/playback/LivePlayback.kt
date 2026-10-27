@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -31,6 +32,10 @@ sealed interface PlaybackState {
  * - An open in flight is never cancelled (its LiveStreamId would be lost); if the viewer has moved on
  *   by the time it returns, it's closed unplayed.
  * - Zaps stop the current channel at once and tune only where they land, after [ZAP_DEBOUNCE_MS].
+ * - Casting: the phone still opens and closes the stream, opened for the cast device while the
+ *   player is on one. When the player moves to or from a cast device, the channel is opened again
+ *   for where it now plays (closing the old stream first, as ever). In the background the channel
+ *   carries on on the cast device; if the cast ends there, the stream is freed as for any background.
  *
  * Not thread-safe: call it, and run [scope], on one thread (the main thread in the app).
  */
@@ -53,11 +58,13 @@ class LivePlayback(
     /** The channel the viewer last asked for: where a zap starts from, and what retry tunes. */
     private var lastChannel: String? = null
     private var resumeChannel: String? = null
+    private var inBackground = false
     private var tuneJob: Job? = null
     private var progressJob: Job? = null
 
     init {
         player.listenWith { onPlayerError() }
+        scope.launch { player.onCastDevice.drop(1).collect(::onCastDeviceChanged) }
     }
 
     /** Tunes [channelId]; [lineup] is the channel order zapping moves through. */
@@ -83,19 +90,15 @@ class LivePlayback(
 
     /**
      * The app went to the background: frees the connection, remembering the channel for [resume].
-     * A channel that had failed is tried again on the way back.
+     * A channel that had failed is tried again on the way back. A channel on a cast device plays on.
      */
     fun pause() {
-        resumeChannel = when (val state = state.value) {
-            is PlaybackState.Playing -> state.channelId
-            is PlaybackState.Tuning -> state.channelId
-            is PlaybackState.Failed -> state.channelId
-            PlaybackState.Idle -> null
-        }
-        if (resumeChannel != null) stop()
+        inBackground = true
+        if (!player.onCastDevice.value) freeForBackground()
     }
 
     fun resume() {
+        inBackground = false
         val channel = resumeChannel ?: return
         resumeChannel = null
         request(channel, debounce = false)
@@ -111,6 +114,21 @@ class LivePlayback(
         current?.let { closer.close(it.ticket) }
         current = null
         _state.value = PlaybackState.Idle
+    }
+
+    private fun freeForBackground() {
+        resumeChannel = state.value.channelId
+        if (resumeChannel != null) stop()
+    }
+
+    /** The player moved to or from a cast device: what's shown is opened again for where it plays now. */
+    private fun onCastDeviceChanged(onCastDevice: Boolean) {
+        val channel = state.value.channelId ?: return
+        if (!onCastDevice && inBackground) {
+            freeForBackground()
+        } else {
+            request(channel, debounce = false)
+        }
     }
 
     private fun onPlayerError() {
@@ -137,8 +155,9 @@ class LivePlayback(
     }
 
     private suspend fun tune(channelId: String, gen: Int) {
-        val opened = withContext(NonCancellable) { open(channelId, gen) } ?: return
-        player.play(opened.url)
+        val forCast = player.onCastDevice.value
+        val opened = withContext(NonCancellable) { open(channelId, forCast, gen) } ?: return
+        player.play(opened.url, channelId)
         _state.value = PlaybackState.Playing(channelId)
         report(opened)
         progressJob = scope.launch {
@@ -150,9 +169,9 @@ class LivePlayback(
     }
 
     /** Opens [channelId] and records it; null when it failed or [gen] was superseded meanwhile (then it's closed). */
-    private suspend fun open(channelId: String, gen: Int): OpenedStream? {
+    private suspend fun open(channelId: String, forCast: Boolean, gen: Int): OpenedStream? {
         val opened = try {
-            streams.open(channelId)
+            streams.open(channelId, forCast)
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -191,6 +210,14 @@ class LivePlayback(
             Timber.w(e, "Reporting live playback failed")
         }
     }
+
+    private val PlaybackState.channelId: String?
+        get() = when (this) {
+            is PlaybackState.Tuning -> channelId
+            is PlaybackState.Playing -> channelId
+            is PlaybackState.Failed -> channelId
+            PlaybackState.Idle -> null
+        }
 
     companion object {
         const val PROGRESS_INTERVAL_MS = 10_000L
