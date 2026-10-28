@@ -101,6 +101,9 @@ internal class RemoteMediaClientDevice(
 
     private val queueCallback = object : MediaQueue.Callback() {
         override fun mediaQueueChanged() = reported()
+        override fun itemsInsertedInRange(insertIndex: Int, insertCount: Int) = reported()
+        override fun itemsRemovedAtIndexes(indexes: IntArray) = reported()
+        override fun itemsReorderedAtIndexes(indexes: List<Int>, insertBeforeIndex: Int) = reported()
         override fun itemsUpdatedAtIndexes(indexes: IntArray) = reported()
     }
 
@@ -190,15 +193,16 @@ internal class RemoteMediaClientDevice(
     private fun statusOf(client: RemoteMediaClient, media: MediaStatus): DeviceStatus {
         media.queueItems.forEach { learn(it) }
         val queue = client.mediaQueue
-        val ids = queue.itemIds.takeIf { it.isNotEmpty() } ?: media.queueItems.map { it.itemId }.toIntArray()
+        val queueIds = queue.itemIds
+        val currentId = media.currentItemId
+        val ids = queueIds.takeIf { it.isNotEmpty() } ?: media.queueItems.map { it.itemId }.toIntArray()
         this.ids = ids
-        var known = true
+        var known = !isBehind(queueIds, media)
         ids.forEachIndexed { index, id ->
             val item = media.getQueueItemById(id) ?: queue.getItemAtIndex(index, true)
             if (item == null && id !in keyById) known = false
             item?.let(::learn)
         }
-        val currentId = media.currentItemId
         val currentItem = media.getQueueItemById(currentId)
             ?: queue.indexOfItemWithId(currentId).takeIf { it >= 0 }?.let { queue.getItemAtIndex(it, true) }
         currentItem?.let(::learn)
@@ -218,6 +222,17 @@ internal class RemoteMediaClientDevice(
             repeat = repeatOf(media.queueRepeatMode),
             queueKnown = known,
         )
+    }
+
+    /**
+     * Whether the framework's queue lists items from before the last load, which it does until it
+     * fetches them again: what the cast device holds isn't known until then (it says again once it has).
+     */
+    private fun isBehind(queueIds: IntArray, media: MediaStatus): Boolean {
+        if (queueIds.isEmpty()) return false
+        val currentId = media.currentItemId
+        if (currentId != MediaQueueItem.INVALID_ITEM_ID && currentId !in queueIds) return true
+        return media.queueItems.any { it.itemId !in queueIds }
     }
 
     override fun heldItems(): List<SentItem?> {
@@ -256,7 +271,8 @@ internal class RemoteMediaClientDevice(
 
     private fun queueItemOf(sent: SentItem) = CastQueueItems.queueItemOf(sent, live)
 
-    private fun idOf(key: String): Int? = keyById.entries.firstOrNull { it.value == key }?.key
+    /** The item with [key] in the queue as last said: a key sent again has a new id, and the old one is gone. */
+    private fun idOf(key: String): Int? = ids.firstOrNull { keyById[it] == key }
 
     override fun load(
         items: List<SentItem>,
