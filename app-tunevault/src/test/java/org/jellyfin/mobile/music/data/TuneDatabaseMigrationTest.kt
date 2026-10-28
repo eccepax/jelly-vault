@@ -77,6 +77,24 @@ class TuneDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `downloaded songs keep their details as they come to keep their container, not yet known`() {
+        appHelper.createDatabase(DB, 5).use { db ->
+            db.execSQL(
+                "INSERT INTO download_track (id, title, artist, albumId, albumTitle, durationMs) " +
+                    "VALUES ('a', 'A', 'B', 'pb', 'The Purple Bird', 1000)",
+            )
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 6, true).use { db ->
+            db.query("SELECT title, container FROM download_track WHERE id = 'a'").use {
+                it.moveToFirst() shouldBe true
+                it.getString(0) shouldBe "A"
+                it.isNull(1) shouldBe true
+            }
+        }
+    }
+
     private fun SQLiteConnection.count(table: String): Long =
         prepare("SELECT COUNT(*) FROM $table").use {
             it.step()

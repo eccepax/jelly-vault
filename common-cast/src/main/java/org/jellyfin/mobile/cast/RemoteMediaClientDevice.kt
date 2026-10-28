@@ -1,0 +1,390 @@
+package org.jellyfin.mobile.cast
+
+import android.content.Context
+import android.media.MediaRouter2
+import android.media.RouteDiscoveryPreference
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import androidx.annotation.RequiresApi
+import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
+import androidx.media3.common.util.UnstableApi
+import com.google.android.gms.cast.Cast
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaQueueData
+import com.google.android.gms.cast.MediaQueueItem
+import com.google.android.gms.cast.MediaSeekOptions
+import com.google.android.gms.cast.MediaStatus
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.framework.media.MediaQueue
+import com.google.android.gms.cast.framework.media.RemoteMediaClient
+import com.google.android.gms.common.api.PendingResult
+import org.jellyfin.mobile.cast.CastDevice.Repeat
+import org.jellyfin.mobile.cast.DeviceStatus.IdleReason
+import org.jellyfin.mobile.cast.DeviceStatus.State
+import timber.log.Timber
+import kotlin.math.roundToInt
+
+/**
+ * A cast device through the Cast framework: the session the framework has up, its media channel
+ * (RemoteMediaClient) for the queue and playback, and the session for the volume. Each item goes
+ * with the key of its entry (see [CastQueueItems]), which the cast device sends back, so its items
+ * are known by key; the queue's item ids come from the framework's MediaQueue, which fetches items
+ * it hasn't seen ([DeviceStatus.queueKnown] is false until it has). A [live] device sends items as
+ * live streams.
+ */
+@UnstableApi
+internal class RemoteMediaClientDevice(
+    private val context: Context,
+    private val castContext: CastContext,
+    private val live: Boolean = false,
+) : CastDevice {
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var session: CastSession? = null
+    private val client: RemoteMediaClient? get() = session?.remoteMediaClient
+
+    /** Keys of the items this session has seen, by their item id: the queue's items aren't all in each report. */
+    private val keyById = mutableMapOf<Int, String>()
+    private var hasReported = false
+
+    override var listener: CastDevice.Listener? = null
+
+    override val isConnected: Boolean get() = client != null
+
+    override val status: DeviceStatus?
+        get() {
+            val client = client ?: return null
+            if (!hasReported) return null
+            val media = client.mediaStatus ?: return EMPTY.copy(atMs = SystemClock.elapsedRealtime())
+            return statusOf(client, media)
+        }
+
+    private val routing: Routing? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Routing(context) else null
+
+    override val deviceInfo: DeviceInfo
+        get() = DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE)
+            .setMaxVolume(CastDevice.MAX_VOLUME)
+            .setRoutingControllerId(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.controllerId() else null,
+            )
+            .build()
+
+    // Not every session can say (one mid-teardown throws): no volume then
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    override val volume: Int
+        get() = try {
+            ((session?.volume ?: 0.0) * CastDevice.MAX_VOLUME).roundToInt()
+        } catch (e: IllegalStateException) {
+            0
+        }
+
+    @Suppress("SwallowedException")
+    override val isMuted: Boolean
+        get() = try {
+            session?.isMute ?: false
+        } catch (e: IllegalStateException) {
+            false
+        }
+
+    private val clientCallback = object : RemoteMediaClient.Callback() {
+        override fun onStatusUpdated() = reported()
+        override fun onQueueStatusUpdated() = reported()
+        override fun onMetadataUpdated() = reported()
+    }
+
+    private val queueCallback = object : MediaQueue.Callback() {
+        override fun mediaQueueChanged() = reported()
+        override fun itemsUpdatedAtIndexes(indexes: IntArray) = reported()
+    }
+
+    private val castListener = object : Cast.Listener() {
+        override fun onVolumeChanged() {
+            listener?.onVolumeChanged()
+        }
+    }
+
+    private val sessions = object : SessionManagerListener<CastSession> {
+        override fun onSessionStarted(session: CastSession, sessionId: String) = attach(session)
+        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = attach(session)
+        override fun onSessionEnded(session: CastSession, error: Int) = detach()
+        override fun onSessionSuspended(session: CastSession, reason: Int) = detach()
+        override fun onSessionStarting(session: CastSession) = Unit
+        override fun onSessionStartFailed(session: CastSession, error: Int) = Unit
+        override fun onSessionEnding(session: CastSession) = Unit
+        override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
+        override fun onSessionResumeFailed(session: CastSession, error: Int) = Unit
+    }
+
+    init {
+        castContext.sessionManager.addSessionManagerListener(sessions, CastSession::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.start { listener?.onVolumeChanged() }
+        castContext.sessionManager.currentCastSession?.let(::attach)
+    }
+
+    private fun attach(session: CastSession) {
+        if (this.session === session) return
+        detach()
+        val client = session.remoteMediaClient ?: return
+        this.session = session
+        keyById.clear()
+        hasReported = false
+        client.registerCallback(clientCallback)
+        client.mediaQueue.registerCallback(queueCallback)
+        session.addCastListener(castListener)
+        listener?.onConnectionChanged(true)
+        // What it holds now, before anything is sent: it may still be playing what this app sent before
+        client.requestStatus().setResultCallback { if (this.session === session) reported() }
+    }
+
+    private fun detach() {
+        val session = session ?: return
+        session.remoteMediaClient?.let {
+            it.unregisterCallback(clientCallback)
+            it.mediaQueue.unregisterCallback(queueCallback)
+        }
+        session.removeCastListener(castListener)
+        this.session = null
+        hasReported = false
+        listener?.onConnectionChanged(false)
+    }
+
+    private fun reported() {
+        hasReported = true
+        status?.let { listener?.onStatus(it) }
+    }
+
+    private fun statusOf(client: RemoteMediaClient, media: MediaStatus): DeviceStatus {
+        media.queueItems.forEach { learn(it) }
+        val queue = client.mediaQueue
+        val ids = queue.itemIds.takeIf { it.isNotEmpty() } ?: media.queueItems.map { it.itemId }.toIntArray()
+        var known = true
+        val items = ids.mapIndexed { index, id ->
+            val item = media.getQueueItemById(id) ?: queue.getItemAtIndex(index, true)
+            if (item == null && id !in keyById) known = false
+            item?.let(::learn)
+            item
+        }
+        val currentId = media.currentItemId
+        val currentItem = media.getQueueItemById(currentId)
+            ?: queue.indexOfItemWithId(currentId).takeIf { it >= 0 }?.let { queue.getItemAtIndex(it, true) }
+        currentItem?.let(::learn)
+        val currentKey = keyById[currentId]
+        // Playing an item it hasn't said the details of yet: whose it is waits until it has
+        if (currentId != MediaQueueItem.INVALID_ITEM_ID && currentItem == null && currentKey == null) known = false
+        return DeviceStatus(
+            keys = ids.map { keyById[it] },
+            currentKey = currentKey,
+            playsOther = media.mediaInfo != null && currentItem != null && currentKey == null,
+            state = stateOf(media.playerState),
+            idleReason = idleReasonOf(media.idleReason),
+            positionMs = client.approximateStreamPosition,
+            atMs = SystemClock.elapsedRealtime(),
+            speed = media.playbackRate.toFloat(),
+            durationMs = media.mediaInfo?.streamDuration?.takeIf { it > 0 } ?: C.TIME_UNSET,
+            repeat = repeatOf(media.queueRepeatMode),
+            queueKnown = known,
+            items = items.map { it?.let(CastQueueItems::mediaItemOf) },
+        )
+    }
+
+    private fun stateOf(playerState: Int) = when (playerState) {
+        MediaStatus.PLAYER_STATE_PLAYING -> State.PLAYING
+        MediaStatus.PLAYER_STATE_PAUSED -> State.PAUSED
+        MediaStatus.PLAYER_STATE_BUFFERING, MediaStatus.PLAYER_STATE_LOADING -> State.BUFFERING
+        else -> State.IDLE
+    }
+
+    private fun idleReasonOf(idleReason: Int) = when (idleReason) {
+        MediaStatus.IDLE_REASON_FINISHED -> IdleReason.FINISHED
+        MediaStatus.IDLE_REASON_CANCELED -> IdleReason.CANCELED
+        MediaStatus.IDLE_REASON_INTERRUPTED -> IdleReason.INTERRUPTED
+        MediaStatus.IDLE_REASON_ERROR -> IdleReason.ERROR
+        else -> IdleReason.NONE
+    }
+
+    private fun repeatOf(repeatMode: Int) = when (repeatMode) {
+        MediaStatus.REPEAT_MODE_REPEAT_SINGLE -> Repeat.ONE
+        MediaStatus.REPEAT_MODE_REPEAT_ALL, MediaStatus.REPEAT_MODE_REPEAT_ALL_AND_SHUFFLE -> Repeat.ALL
+        else -> Repeat.OFF
+    }
+
+    private fun learn(item: MediaQueueItem) {
+        CastQueueItems.keyOf(item)?.let { keyById[item.itemId] = it }
+    }
+
+    private fun queueItemOf(sent: SentItem) = CastQueueItems.queueItemOf(sent, live)
+
+    private fun idOf(key: String): Int? = keyById.entries.firstOrNull { it.value == key }?.key
+
+    override fun load(
+        items: List<SentItem>,
+        startIndex: Int,
+        startMs: Long,
+        playWhenReady: Boolean,
+        repeat: Repeat,
+        speed: Float,
+        done: (Boolean) -> Unit,
+    ) = send(done) {
+        val queue = MediaQueueData.Builder()
+            .setItems(items.map(::queueItemOf))
+            .setStartIndex(startIndex)
+            .setRepeatMode(repeatModeOf(repeat))
+            .build()
+        it.load(
+            MediaLoadRequestData.Builder()
+                .setQueueData(queue)
+                .setAutoplay(playWhenReady)
+                .setCurrentTime(startMs)
+                .setPlaybackRate(speed.toDouble())
+                .build(),
+        )
+    }
+
+    override fun append(items: List<SentItem>, done: (Boolean) -> Unit) = send(done) {
+        it.queueInsertItems(items.map(::queueItemOf).toTypedArray(), MediaQueueItem.INVALID_ITEM_ID, null)
+    }
+
+    override fun keepOnly(keys: Set<String>, done: (Boolean) -> Unit) {
+        val client = client ?: return later(done, false)
+        val ids = client.mediaQueue.itemIds.filter { keyById[it] !in keys }
+        if (ids.isEmpty()) return later(done, true)
+        send(done) { it.queueRemoveItems(ids.toIntArray(), null) }
+    }
+
+    override fun jumpTo(key: String, startMs: Long, done: (Boolean) -> Unit) {
+        val id = idOf(key) ?: return later(done, false)
+        send(done) { it.queueJumpToItem(id, startMs, null) }
+    }
+
+    override fun seek(positionMs: Long, done: (Boolean) -> Unit) =
+        send(done) { it.seek(MediaSeekOptions.Builder().setPosition(positionMs).build()) }
+
+    override fun play(done: (Boolean) -> Unit) = send(done) { it.play() }
+    override fun pause(done: (Boolean) -> Unit) = send(done) { it.pause() }
+    override fun setSpeed(speed: Float, done: (Boolean) -> Unit) = send(done) { it.setPlaybackRate(speed.toDouble()) }
+    override fun setRepeat(repeat: Repeat, done: (Boolean) -> Unit) =
+        send(done) { it.queueSetRepeatMode(repeatModeOf(repeat), null) }
+    override fun stop(done: (Boolean) -> Unit) = send(done) { it.stop() }
+
+    @Suppress("TooGenericExceptionCaught")
+    override fun setVolume(volume: Int) {
+        try {
+            session?.volume = volume.toDouble() / CastDevice.MAX_VOLUME
+        } catch (e: Exception) {
+            Timber.w(e, "Couldn't set the cast device's volume")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    override fun setMuted(muted: Boolean) {
+        try {
+            session?.isMute = muted
+        } catch (e: Exception) {
+            Timber.w(e, "Couldn't mute the cast device")
+        }
+    }
+
+    override fun disconnect() {
+        castContext.sessionManager.endCurrentSession(true)
+    }
+
+    override fun release() {
+        castContext.sessionManager.removeSessionManagerListener(sessions, CastSession::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.stop()
+        val session = session ?: return
+        session.remoteMediaClient?.let {
+            it.unregisterCallback(clientCallback)
+            it.mediaQueue.unregisterCallback(queueCallback)
+        }
+        session.removeCastListener(castListener)
+        this.session = null
+    }
+
+    /** Sends a command on this session's media channel; its answer, if this session is still up. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun send(
+        done: (Boolean) -> Unit,
+        command: (RemoteMediaClient) -> PendingResult<RemoteMediaClient.MediaChannelResult>,
+    ) {
+        val session = session
+        val client = client ?: return later(done, false)
+        try {
+            command(client).setResultCallback { result ->
+                if (this.session !== session) return@setResultCallback
+                if (!result.status.isSuccess) Timber.w("Cast command failed: %s", result.status)
+                done(result.status.isSuccess)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Cast command not sent")
+            later(done, false)
+        }
+    }
+
+    /** Answers on the next turn of the main looper, like the framework does. */
+    private fun later(done: (Boolean) -> Unit, ok: Boolean) {
+        handler.post { done(ok) }
+    }
+
+    private fun repeatModeOf(repeat: Repeat) = when (repeat) {
+        Repeat.OFF -> MediaStatus.REPEAT_MODE_REPEAT_OFF
+        Repeat.ONE -> MediaStatus.REPEAT_MODE_REPEAT_SINGLE
+        Repeat.ALL -> MediaStatus.REPEAT_MODE_REPEAT_ALL
+    }
+
+    /**
+     * The system's routing session for the cast (MediaRouter2, with the MediaTransferReceiver in the
+     * manifest): named in [deviceInfo], the volume keys and the system's volume panel reach the cast
+     * device. As Media3's cast player finds it: the second controller, after the system's own.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private class Routing(context: Context) {
+        private val router = MediaRouter2.getInstance(context)
+        private val handler = Handler(Looper.getMainLooper())
+        private var transfers: MediaRouter2.TransferCallback? = null
+        private val routes = object : MediaRouter2.RouteCallback() {}
+
+        fun controllerId(): String? = router.controllers.takeIf { it.size == 2 }?.get(1)?.id
+
+        fun start(onChange: () -> Unit) {
+            val callback = object : MediaRouter2.TransferCallback() {
+                override fun onTransfer(old: MediaRouter2.RoutingController, new: MediaRouter2.RoutingController) =
+                    onChange()
+
+                override fun onStop(controller: MediaRouter2.RoutingController) = onChange()
+            }
+            transfers = callback
+            router.registerTransferCallback(handler::post, callback)
+            // Without a route callback, the router doesn't keep its controllers up to date
+            router.registerRouteCallback(
+                handler::post,
+                routes,
+                RouteDiscoveryPreference.Builder(emptyList(), false).build(),
+            )
+        }
+
+        fun stop() {
+            transfers?.let(router::unregisterTransferCallback)
+            router.unregisterRouteCallback(routes)
+            handler.removeCallbacksAndMessages(null)
+        }
+    }
+
+    private companion object {
+        val EMPTY = DeviceStatus(
+            keys = emptyList(),
+            currentKey = null,
+            playsOther = false,
+            state = State.IDLE,
+            idleReason = IdleReason.NONE,
+            positionMs = 0L,
+            atMs = 0L,
+            speed = 1f,
+            durationMs = C.TIME_UNSET,
+        )
+    }
+}

@@ -18,14 +18,14 @@ fun tuneVaultSignOut(
     session: ServerSession,
     clearAccountData: suspend () -> Unit,
     logout: suspend () -> Unit,
-    /** Ends a cast, once playback has stopped: the cast device holds stream urls with the token in them. */
-    stopCasting: () -> Unit,
+    /** Ends a cast and forgets its queue (see Casting.forgetCast): the cast device holds stream urls with the token in them. */
+    forgetCast: () -> Unit,
 ) = SignOut(
     session = session,
     logout = logout,
     whileSignedIn = {
+        forgetCast()
         playback.stop()
-        stopCasting()
         tracker.finish()
     },
     forgetAccount = {

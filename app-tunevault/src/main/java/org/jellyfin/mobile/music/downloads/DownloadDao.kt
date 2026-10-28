@@ -35,6 +35,8 @@ data class DownloadTrackEntity(
     val discNumber: Int?,
     val coverUrl: String?,
     @ColumnInfo(defaultValue = "NULL") val normalizationGainDb: Float? = null,
+    /** The file's container, for casting it in the same format as from the server (see Track.container). */
+    @ColumnInfo(defaultValue = "NULL") val container: String? = null,
 ) {
     fun toTrack() = Track(
         id,
@@ -47,6 +49,7 @@ data class DownloadTrackEntity(
         discNumber,
         coverUrl,
         normalizationGainDb = normalizationGainDb,
+        container = container,
     )
 
     companion object {
@@ -62,6 +65,7 @@ data class DownloadTrackEntity(
                 discNumber,
                 coverUrl,
                 normalizationGainDb,
+                container,
             )
         }
     }

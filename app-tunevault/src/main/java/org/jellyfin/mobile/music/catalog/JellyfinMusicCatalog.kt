@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.cast.CAST_MP3
 import org.jellyfin.mobile.cast.CastStream
 import org.jellyfin.mobile.cast.castFormatOf
+import org.jellyfin.mobile.cast.serverCastStream
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
@@ -127,24 +128,17 @@ class JellyfinMusicCatalog(
         withAccessToken(downloadUri(trackId, streamingQuality()), apiClient.accessToken)
 
     /**
-     * The song as a cast device gets it, and the type it comes as (the receiver needs one): it
-     * fetches the song itself, so the token is in the url. At the original quality, in its own
-     * format where a cast device plays that (see [castFormatOf]); anything else, or at a lower
-     * quality, as MP3. Either way the type is known before the server answers.
+     * The song as a cast device gets it, from [fromMs] (see [serverCastStream]), and the type it
+     * comes as (the receiver needs one). At the original quality, in its own format where a cast
+     * device plays that (see [castFormatOf]); anything else, or at a lower quality (which the server
+     * transcodes down to anyway), as MP3. Either way the type is known before the server answers.
      */
-    fun castStream(trackId: String, container: String?): CastStream {
+    fun castStream(trackId: String, container: String?, fromMs: Long = 0L): CastStream {
         val quality = streamingQuality()
-        val format = if (quality == StreamingQuality.ORIGINAL) castFormatOf(container) else CAST_MP3
-        val url = universalAudioUri(
-            trackId,
-            format.asked,
-            quality,
-            format.transcodeTo,
-            format.transcodeCodec,
-            maxSampleRate = format.maxSampleRate,
-            maxBitDepth = format.maxBitDepth,
-        )
-        return CastStream(withAccessToken(url, apiClient.accessToken), format.mimeType)
+        val original = quality == StreamingQuality.ORIGINAL
+        val format = if (original) castFormatOf(container) else CAST_MP3
+        val goesAsIs = original && format.playsAsIs(container, null)
+        return serverCastStream(apiClient, trackId, format, goesAsIs, fromMs, quality.maxBitrate)
     }
 
     /**
