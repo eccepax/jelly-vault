@@ -12,7 +12,6 @@ import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.BaseItemKind
-import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.SessionInfoDto
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 import org.jellyfin.sdk.model.api.UserItemDataDto
@@ -98,15 +97,6 @@ class JellyfinAudiobookPlaybackContractTest {
         response.code shouldBe HttpURLConnection.HTTP_OK
         response.contentType shouldStartWith "audio/"
     }
-
-    @Test
-    fun `a book's details say what its file holds, so it can be cast in a format a cast device plays`() =
-        runBlocking<Unit> {
-            val source = audiobooks.items(listOf(m4b)).single().mediaSources.orEmpty().first()
-
-            source.container shouldBe "m4b"
-            source.mediaStreams.orEmpty().first { it.type == MediaStreamType.AUDIO }.codec shouldBe "aac"
-        }
 
     @Test
     fun `an m4b of AAC is cast as it is, served as the type the cast device is told, so it can seek`() = runBlocking<Unit> {

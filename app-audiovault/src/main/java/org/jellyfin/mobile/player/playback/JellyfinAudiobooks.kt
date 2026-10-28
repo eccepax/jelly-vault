@@ -29,14 +29,11 @@ class JellyfinAudiobooks(
     private val apiClient: ApiClient,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    /**
-     * The items with these ids, with their chapters, where the listener left them, and their files'
-     * details (what casting sends depends on them).
-     */
+    /** The items with these ids, with their chapters and where the listener left them. */
     suspend fun items(ids: List<UUID>): List<BaseItemDto> = withContext(ioDispatcher) {
         apiClient.itemsApi.getItems(
             ids = ids,
-            fields = listOf(ItemFields.CHAPTERS, ItemFields.MEDIA_SOURCES),
+            fields = listOf(ItemFields.CHAPTERS),
             enableUserData = true,
         ).content.items.orEmpty()
     }

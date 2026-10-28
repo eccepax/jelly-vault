@@ -23,8 +23,6 @@ class AudiobookMediaItemsTest {
         durationMs = 3_600_000L,
         chapters = listOf(Chapter(0L, "Opening"), Chapter(1_200_000L, "Middle")),
         fromDevice = true,
-        container = "m4b",
-        audioCodec = "aac",
     )
 
     @Test

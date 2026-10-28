@@ -194,4 +194,64 @@ class TranscodedAudiobookPlayerTest {
         lastStreamUrl shouldContain "StartTimeTicks=6000000000"
         player.currentPosition shouldBe 600_000L
     }
+
+    @Test
+    fun `a queue set from part way into a transcode starts its stream there`() {
+        // As playback coming back from a cast device does, or a book resumed part way
+        player.setMediaItems(listOf(item("a")), 0, 90_000L)
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=900000000"
+        player.currentPosition shouldBe 90_000L
+    }
+
+    @Test
+    fun `a seek before the stream has opened still gets there, once it turns out to be a transcode`() {
+        player.setMediaItems(listOf(item("a")))
+        player.prepare()
+
+        player.seekTo(300_000L)
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=3000000000"
+        player.currentPosition shouldBe 300_000L
+    }
+
+    @Test
+    fun `a queue set again is played from its tracks' places, not where their streams last started`() {
+        // Items back from a cast device still carry the start of a stream this device had restarted
+        val partWay = item("a", "StartTimeTicks=600000000")
+
+        player.setMediaItems(listOf(partWay, item("b", "StartTimeTicks=600000000")), 0, 0L)
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldNotContain AudiobookPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+        player.getMediaItemAt(1).localConfiguration!!.uri.toString() shouldNotContain AudiobookPlayer.START_PARAM
+    }
+
+    @Test
+    fun `wrapping a cast player, items started part way are left as they are`() {
+        // The cast player asks for its own streams: rewriting its items' uris would only make it resend them
+        val castPlayer = TestExoPlayerBuilder(
+            ApplicationProvider.getApplicationContext(),
+        ).setMediaSourceFactory(transcodes).build()
+        val onCast = AudiobookPlayer(castPlayer, streamOffsets = false)
+        onCast.setMediaItems(listOf(item("a", "StartTimeTicks=600000000"), item("b")))
+        onCast.prepare()
+        advance(castPlayer).untilPendingCommandsAreFullyHandled()
+
+        onCast.seekToNextMediaItem()
+        advance(castPlayer).untilPendingCommandsAreFullyHandled()
+
+        onCast.getMediaItemAt(0).localConfiguration!!.uri.toString() shouldContain "StartTimeTicks=600000000"
+        castPlayer.release()
+    }
+
+    private fun item(id: String, query: String = "") =
+        track(
+            id,
+        ).toMediaItem { "https://vault.test/Audio/$it/universal?api_key=x${if (query.isEmpty()) "" else "&$query"}" }
 }

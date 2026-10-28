@@ -281,8 +281,7 @@ class AudiobookProgressReporterTest {
     @Test
     fun `a downloaded track playing on a cast device is streamed there, so the server hears of it`() = runTest {
         reporter()
-        controller.playing(downloaded, positionMs = 0L)
-        controller.state.value = controller.state.value.copy(isRemote = true)
+        controller.playing(downloaded, positionMs = 0L, isRemote = true)
         runCurrent()
 
         play(PROGRESS_INTERVAL_MS)
@@ -290,6 +289,53 @@ class AudiobookProgressReporterTest {
 
         device.reports.shouldBeEmpty()
         server.reports shouldBe listOf("started downloaded at 0", "progress downloaded at 10000", "paused downloaded at 10000")
+    }
+
+    @Test
+    fun `a download cast part way ends its listen here, and the server hears the rest from there`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L)
+        runCurrent()
+        play(5_000L)
+
+        cast(true)
+        play(PROGRESS_INTERVAL_MS)
+
+        device.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+        server.reports shouldBe listOf("started downloaded at 5000", "progress downloaded at 15000")
+    }
+
+    @Test
+    fun `a download back from a cast device ends its listen on the server, and goes on here`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L, isRemote = true)
+        runCurrent()
+        play(5_000L)
+
+        cast(false)
+        pause()
+
+        server.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+        device.reports shouldBe listOf("started downloaded at 5000", "paused downloaded at 5000")
+    }
+
+    @Test
+    fun `a streamed track cast part way goes on as one listen on the server`() = runTest {
+        reporter()
+        controller.playing(streamed, positionMs = 0L)
+        runCurrent()
+        play(5_000L)
+
+        cast(true)
+        pause()
+
+        server.reports shouldBe listOf("started streamed at 0", "paused streamed at 5000")
+    }
+
+    /** Playback moves onto a cast device, or back here, where it was. */
+    private fun TestScope.cast(remote: Boolean) {
+        controller.state.value = controller.state.value.copy(isRemote = remote)
+        runCurrent()
     }
 
     @Test

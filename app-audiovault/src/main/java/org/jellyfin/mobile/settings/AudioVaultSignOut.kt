@@ -4,10 +4,11 @@ import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.server.ServerSession
 
 /**
- * AudioVault's sign-out: ends any cast and forgets it first (see Casting.forgetCast), since the cast
- * device holds stream urls with the token in them and nothing after should keep it going, then
- * stops playback (and sends its last report) while the token still works. [forgetDownloads] removes
- * downloads if the user asked for that in Settings.
+ * AudioVault's sign-out: stops playback, sending its last report while the token still works (where
+ * the listener got to is read from the player, so this goes before anything empties it), then ends
+ * any cast and forgets it (see Casting.forgetCast), even if stopping failed, since the cast device
+ * holds stream urls with the token in them. [forgetDownloads] removes downloads if the user asked
+ * for that in Settings.
  */
 fun audioVaultSignOut(
     session: ServerSession,
@@ -19,8 +20,11 @@ fun audioVaultSignOut(
     session = session,
     logout = logout,
     whileSignedIn = {
-        forgetCast()
-        stopPlayback()
+        try {
+            stopPlayback()
+        } finally {
+            forgetCast()
+        }
     },
     forgetAccount = forgetDownloads,
 )
