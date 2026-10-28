@@ -49,7 +49,7 @@ class ExoLivePlayer(context: Context) : LivePlayer {
         )
     }
 
-    override fun play(url: String, channelId: String) {
+    override fun play(url: String, channelId: String, forCast: Boolean) {
         _videoStarted.value = false
         val item = MediaItem.Builder()
             .setUri(url)

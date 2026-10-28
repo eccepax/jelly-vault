@@ -30,8 +30,12 @@ interface LivePlayer {
     /** Whether [play] goes to a cast device, which needs a stream opened for it (see [LiveStreams.open]). */
     val onCastDevice: StateFlow<Boolean>
 
-    /** Plays [url], the stream of [channelId]. */
-    fun play(url: String, channelId: String)
+    /**
+     * Plays [url], the stream of [channelId], where it was opened for: the cast device when
+     * [forCast], else here. That's where it was opened for, not where [onCastDevice] says now: a cast
+     * that came or went while it opened is followed by opening it again (see [LivePlayback]).
+     */
+    fun play(url: String, channelId: String, forCast: Boolean = onCastDevice.value)
     fun stop()
     fun listenWith(listener: Listener?)
     fun release()

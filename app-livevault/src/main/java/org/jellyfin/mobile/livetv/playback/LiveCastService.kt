@@ -19,12 +19,20 @@ import org.jellyfin.mobile.cast.R as CastR
 
 /**
  * Runs while a channel plays on a cast device (see [ServiceCastKeepAlive]), so the app carries on in
- * the background, with a notification of what's on where that opens the app or ends the cast.
+ * the background, with a notification of what's on where that opens the app or ends the cast. It
+ * follows [CastHold]: another channel shows in the notification, and once nothing is held it stops
+ * itself, always having gone to the foreground first, as Android requires.
  */
 class LiveCastService : Service() {
     private val casting: Casting by inject()
+    private val show: (Pair<String, String?>?) -> Unit = ::show
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        CastHold.listener = show
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_CASTING) {
@@ -32,18 +40,42 @@ class LiveCastService : Service() {
             casting.stopCasting()
             return START_NOT_STICKY
         }
-        val channel = intent?.getStringExtra(EXTRA_CHANNEL).orEmpty()
-        val device = intent?.getStringExtra(EXTRA_DEVICE)
+        // Every start goes to the foreground, even one whose cast has ended meanwhile
+        val held = CastHold.current
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            notification(channel, device),
+            notification(held),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
         )
+        running = true
+        if (held == null) stop()
         return START_NOT_STICKY
     }
 
-    private fun notification(channel: String, device: String?): Notification {
+    override fun onDestroy() {
+        if (CastHold.listener === show) CastHold.listener = null
+        running = false
+        super.onDestroy()
+    }
+
+    private fun show(held: Pair<String, String?>?) {
+        // Not in the foreground yet: it shows what's held once it is
+        if (!running) return
+        if (held == null) {
+            stop()
+        } else {
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(held))
+        }
+    }
+
+    private fun stop() {
+        running = false
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun notification(held: Pair<String, String?>?): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(
@@ -56,7 +88,9 @@ class LiveCastService : Service() {
         val open = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, LiveMainActivity::class.java),
+            // Back to the activity that's casting, not another on top of it
+            Intent(this, LiveMainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stop = PendingIntent.getService(
@@ -65,9 +99,10 @@ class LiveCastService : Service() {
             Intent(this, LiveCastService::class.java).setAction(ACTION_STOP_CASTING),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val device = held?.second
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_cast_notification)
-            .setContentTitle(channel)
+            .setContentTitle(held?.first.orEmpty())
             .setContentText(device?.let { getString(CastR.string.playing_on, it) })
             .setContentIntent(open)
             .addAction(0, getString(CastR.string.stop_casting), stop)
@@ -78,10 +113,12 @@ class LiveCastService : Service() {
     }
 
     companion object {
-        const val EXTRA_CHANNEL = "channel"
-        const val EXTRA_DEVICE = "device"
+        /** Whether a service is in the foreground keeping the app alive, and not stopping. Main thread only. */
+        var running = false
+            private set
+
+        internal const val NOTIFICATION_ID = 1
         private const val ACTION_STOP_CASTING = "org.jellyfin.mobile.livetv.STOP_CASTING"
         private const val CHANNEL_ID = "casting"
-        private const val NOTIFICATION_ID = 1
     }
 }

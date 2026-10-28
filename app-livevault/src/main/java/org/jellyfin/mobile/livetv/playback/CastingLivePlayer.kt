@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import org.jellyfin.mobile.cast.CastStream
 import org.jellyfin.mobile.cast.LiveCasting
-import org.jellyfin.mobile.livetv.channels.displayName
+import org.jellyfin.mobile.livetv.channels.castTitle
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 
 /**
@@ -40,13 +40,13 @@ class CastingLivePlayer(
         )
     }
 
-    override fun play(url: String, channelId: String) {
-        onCast = cast.connected.value
+    override fun play(url: String, channelId: String, forCast: Boolean) {
+        onCast = forCast
         if (onCast) {
             val channel = describe(channelId)
             cast.play(
                 CastStream(url, MimeTypes.APPLICATION_M3U8),
-                title = channel?.let { "${it.number} ${it.displayName}" } ?: channelId,
+                title = channel?.castTitle ?: channelId,
                 subtitle = null,
                 artworkUri = channel?.logoUrl,
             )

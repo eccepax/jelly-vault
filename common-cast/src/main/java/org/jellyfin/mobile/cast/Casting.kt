@@ -50,7 +50,7 @@ internal interface CastPlayers {
     fun newDevice(live: Boolean): CastDevice
 
     /** [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. */
-    fun forgetsWithCast(player: CastQueuePlayer): () -> Unit
+    fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit = {}): () -> Unit
 }
 
 /**
@@ -76,7 +76,9 @@ object NoCasting : Casting {
 private class CastContextCasting(private val context: Context) : Casting, CastPlayers {
     private var castContext: CastContext? = null
     private val gate = StartGate()
-    private val players = mutableSetOf<CastQueuePlayer>()
+
+    /** The cast players, each with what it's told when the cast is ended from here. */
+    private val players = mutableMapOf<CastQueuePlayer, () -> Unit>()
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -137,13 +139,16 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     }
 
     override fun stopCasting() {
+        // Told first: the cast device stops on the way out, and that stop is this app's, not its remote's
+        players.values.toList().forEach { it() }
         castContext?.sessionManager?.endCurrentSession(true)
     }
 
     override fun forgetCast() {
-        players.toList().forEach {
-            it.stop()
-            it.clearMediaItems()
+        players.toList().forEach { (player, endingHere) ->
+            endingHere()
+            player.stop()
+            player.clearMediaItems()
         }
         stopCasting()
     }
@@ -151,8 +156,8 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     override fun newDevice(live: Boolean): CastDevice =
         RemoteMediaClientDevice(context, checkNotNull(castContext) { "The Cast framework hasn't started" }, live)
 
-    override fun forgetsWithCast(player: CastQueuePlayer): () -> Unit {
-        players += player
+    override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit): () -> Unit {
+        players[player] = endingHere
         return { players -= player }
     }
 

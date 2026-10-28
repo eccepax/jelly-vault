@@ -180,6 +180,46 @@ class PlayerLiveCastingTest {
     }
 
     @Test
+    fun `the cast device stopping as this app ends the cast isn't reported as stopped there`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        // Stop casting, here or from the notification, or signing out: the receiver stops before the session ends
+        casting.endingHere()
+        device.stop()
+        settle()
+
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `stopping casting from here isn't reported as stopped there either`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        casting.stopCasting()
+        device.stop()
+        settle()
+
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `the live cast player hears of the cast being ended from here, however it's ended`() {
+        val framework = WaitingCastPlayers()
+        liveCasting(framework)
+        framework.start()
+
+        framework.endings.size shouldBe 1
+    }
+
+    @Test
     fun `a stream the cast device can't play is reported as that, not as stopped`() {
         connect()
         var errors = 0
@@ -286,6 +326,7 @@ class PlayerLiveCastingTest {
         private val waiting = mutableListOf<() -> Unit>()
         var devicesMade = 0
         val forgotten = mutableListOf<CastQueuePlayer>()
+        val endings = mutableListOf<() -> Unit>()
 
         override val isAvailable = MutableStateFlow(false)
         override val castDevice = MutableStateFlow<String?>(null)
@@ -304,8 +345,9 @@ class PlayerLiveCastingTest {
             return FakeCastDevice()
         }
 
-        override fun forgetsWithCast(player: CastQueuePlayer): () -> Unit {
+        override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit): () -> Unit {
             forgotten += player
+            endings += endingHere
             return { forgotten -= player }
         }
     }

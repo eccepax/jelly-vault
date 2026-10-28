@@ -185,7 +185,7 @@ class LivePlayback(
     private suspend fun tune(channelId: String, gen: Int) {
         val forCast = player.onCastDevice.value
         val opened = withContext(NonCancellable) { open(channelId, forCast, gen) } ?: return
-        player.play(opened.url, channelId)
+        player.play(opened.url, channelId, forCast)
         _state.value = PlaybackState.Playing(channelId)
         report(opened)
         progressJob = scope.launch {

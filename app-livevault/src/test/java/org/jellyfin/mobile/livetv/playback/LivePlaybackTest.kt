@@ -361,6 +361,7 @@ class LivePlaybackTest {
 
         log.events shouldContainExactly listOf("open-for-cast:a", "player.play:http://vault/a/1.m3u8", "playing:ls-a-1")
         playback.state.value shouldBe PlaybackState.Playing("a")
+        player.playedOnCastDevice shouldBe true
     }
 
     @Test

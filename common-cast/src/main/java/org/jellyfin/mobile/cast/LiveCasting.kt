@@ -64,7 +64,8 @@ fun liveCasting(casting: Casting): LiveCasting {
         castPlayer.onConnectionChange = live::onConnectionChanged
         if (live.start(castPlayer, device.isConnected)) {
             // Signing out empties it, since the stream url it holds carries the token
-            live.forgetting = castPlayers.forgetsWithCast(castPlayer)
+            // and ending the cast from here (its own Stop casting, signing out) isn't a stop on the cast device
+            live.forgetting = castPlayers.forgetsWithCast(castPlayer, endingHere = live::endingHere)
         } else {
             castPlayer.release()
         }
@@ -93,7 +94,10 @@ internal class PlayerLiveCasting(
     private var onError: (() -> Unit)? = null
     private var onStopped: (() -> Unit)? = null
 
-    /** Whether a stream was sent and hasn't been stopped from here: one that stops is stopped there. */
+    /**
+     * Whether a stream was sent and hasn't been stopped from here: one that stops is stopped there.
+     * Not once the cast is being ended from here ([endingHere]): the cast device stops on the way out.
+     */
     private var sent = false
 
     /** Takes back the wait for the Cast framework, while it's still waiting. */
@@ -178,7 +182,15 @@ internal class PlayerLiveCasting(
         this.onStopped = onStopped
     }
 
-    override fun stopCasting() = endCast()
+    /** The cast is being ended from here: the cast device stopping on the way out isn't the viewer's doing. */
+    fun endingHere() {
+        sent = false
+    }
+
+    override fun stopCasting() {
+        endingHere()
+        endCast()
+    }
 
     override fun release() {
         released = true

@@ -31,6 +31,22 @@ class CastingLivePlayerTest {
     }
 
     @Test
+    fun `a stream opened for here plays here, though a cast device connected while it opened`() {
+        cast.connected.value = true
+
+        player.play("http://vault/a.ts", devils.id, forCast = false)
+
+        log.events shouldContainExactly listOf("player.play:http://vault/a.ts")
+    }
+
+    @Test
+    fun `a stream opened for the cast device never plays here, though the cast ended while it opened`() {
+        player.play("https://vault/a/master.m3u8?ApiKey=t", devils.id, forCast = true)
+
+        log.events shouldContainExactly listOf("cast.play:https://vault/a/master.m3u8?ApiKey=t")
+    }
+
+    @Test
     fun `with a cast device connected a channel plays there, as HLS`() {
         cast.connected.value = true
 

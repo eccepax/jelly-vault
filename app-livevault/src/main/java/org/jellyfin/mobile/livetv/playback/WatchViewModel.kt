@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.cast.LiveCasting
-import org.jellyfin.mobile.livetv.channels.displayName
+import org.jellyfin.mobile.livetv.channels.castTitle
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
@@ -68,7 +68,8 @@ class WatchViewModel(
         lineup,
         player.videoStarted,
         loginInUse,
-        cast.deviceName,
+        // Named only once connected: until then the channel still plays here
+        combine(cast.connected, cast.deviceName) { connected, name -> name.takeIf { connected } },
     ) { playback, lineup, started, loginInUse, castDevice ->
         WatchUiState(
             playback = playback,
@@ -83,12 +84,16 @@ class WatchViewModel(
         WatchUiState(PlaybackState.Idle, channel = null, videoStarted = false),
     )
 
+    /** The channel and cast device the app is kept alive for; null while nothing plays on one. */
+    private var castingNow: Pair<String, String?>? = null
+
     init {
         viewModelScope.launch {
             combine(playback.state, cast.connected, cast.deviceName, lineup) { state, connected, device, lineup ->
                 val channelId = state.channelId?.takeIf { connected && state !is PlaybackState.Failed }
-                channelId?.let { id -> (lineup[id]?.let { "${it.number} ${it.displayName}" } ?: id) to device }
+                channelId?.let { id -> (lineup[id]?.castTitle ?: id) to device }
             }.distinctUntilChanged().collect { casting ->
+                castingNow = casting
                 if (casting == null) keepAlive.release() else keepAlive.hold(casting.first, casting.second)
             }
         }
@@ -120,7 +125,11 @@ class WatchViewModel(
     /** The app went to the background (not a rotation): frees the connection until [onForeground]. */
     fun onBackground() = playback.pause()
 
-    fun onForeground() = playback.resume()
+    fun onForeground() {
+        // Android doesn't let a cast connecting in the background keep the app alive: it's asked again here
+        castingNow?.let { (channel, device) -> keepAlive.hold(channel, device) }
+        playback.resume()
+    }
 
     /** Ends the cast; the channel comes back here (see [LivePlayback]). */
     fun stopCasting() = cast.stopCasting()

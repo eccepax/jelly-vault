@@ -74,15 +74,19 @@ class FakeLivePlayer(private val log: EventLog) : LivePlayer {
 
     /** The channel [playing] is. */
     var channel: String? = null
+
+    /** Where [playing] was opened for: the cast device, or here. */
+    var playedOnCastDevice: Boolean? = null
     var released = false
         private set
     override val videoStarted = MutableStateFlow(false)
     override val onCastDevice = MutableStateFlow(false)
 
-    override fun play(url: String, channelId: String) {
+    override fun play(url: String, channelId: String, forCast: Boolean) {
         log += "player.play:$url"
         playing = url
         channel = channelId
+        playedOnCastDevice = forCast
     }
 
     override fun stop() {
@@ -179,8 +183,13 @@ class FakeCastKeepAlive : CastKeepAlive {
     var holding: Pair<String, String?>? = null
         private set
 
+    /** How many times it was asked to hold. */
+    var holds = 0
+        private set
+
     override fun hold(channel: String, device: String?) {
         holding = channel to device
+        holds++
     }
 
     override fun release() {

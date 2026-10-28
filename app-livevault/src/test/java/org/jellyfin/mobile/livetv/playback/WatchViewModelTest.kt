@@ -238,10 +238,23 @@ class WatchViewModelTest {
         viewModel.state.value.castDevice shouldBe null
 
         cast.deviceName.value = "Main Bedroom TV"
+        cast.connected.value = true
         settle()
 
         viewModel.state.value.castDevice shouldBe "Main Bedroom TV"
     }
+
+    @Test
+    fun `a cast device named but not connected yet isn't shown as casting, as the channel still plays here`() =
+        watchTest { viewModel ->
+            viewModel.watch(bulls, listOf(bulls))
+            settle()
+
+            cast.deviceName.value = "Main Bedroom TV"
+            settle()
+
+            viewModel.state.value.castDevice shouldBe null
+        }
 
     @Test
     fun `the video has started once the cast device plays it`() = watchTest { viewModel ->
@@ -276,6 +289,22 @@ class WatchViewModelTest {
         settle()
         keepAlive.holding shouldBe null
     }
+
+    @Test
+    fun `back in the foreground, keeping the app alive is asked for again, as Android may have refused it in the background`() =
+        watchTest { viewModel ->
+            cast.connected.value = true
+            viewModel.watch(bulls, listOf(bulls, espn))
+            settle()
+            val holds = keepAlive.holds
+
+            viewModel.onBackground()
+            viewModel.onForeground()
+            settle()
+
+            keepAlive.holds shouldBe holds + 1
+            keepAlive.holding shouldBe ("1 Bulls" to null)
+        }
 
     @Test
     fun `a channel playing here keeps nothing alive`() = watchTest { viewModel ->
