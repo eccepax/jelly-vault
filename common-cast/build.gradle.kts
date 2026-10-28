@@ -12,6 +12,11 @@ android {
         compose = true
     }
 
+    // :common needs it, so a test APK of this module does too
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -30,6 +35,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":common-media"))
     implementation(libs.jellyfin.sdk)
+    coreLibraryDesugaring(libs.androiddesugarlibs)
 
     // Testing
     testImplementation(libs.junit.api)
