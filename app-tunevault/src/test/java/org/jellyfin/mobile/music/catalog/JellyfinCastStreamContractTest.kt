@@ -90,7 +90,8 @@ class JellyfinCastStreamContractTest {
             val stream = catalog.castStream(UUID.randomUUID().toString(), container)
 
             stream.mimeType shouldBe "audio/flac"
-            containersAskedFor(stream.url) shouldBe listOf("flac")
+            // A wav file is made a flac
+            containersAskedFor(stream.url) shouldBe if (container == "flac") listOf("flac") else emptyList()
             parameter(stream.url, "maxAudioSampleRate") shouldBe "96000"
             parameter(stream.url, "maxAudioBitDepth") shouldBe "24"
             // So that whatever the server sends is the type the cast device was told
@@ -120,6 +121,35 @@ class JellyfinCastStreamContractTest {
         stream.mimeType shouldBe "audio/mpeg"
         contentTypeOf(stream.url) shouldBe "audio/mpeg"
     }
+
+    @Test
+    fun `a song cast as it is starts at its start wherever playback is, and the cast device seeks in it`() =
+        runBlocking<Unit> {
+            val flac = aFlacTrack()
+
+            val stream = catalog.castStream(flac.id, flac.container, fromMs = 30_000L)
+
+            stream.startMs shouldBe 0L
+            stream.seekable shouldBe true
+            parameter(stream.url, "startTimeTicks") shouldBe null
+        }
+
+    @Test
+    fun `a transcoded song is cast from where playback is, and starts there`() = runBlocking<Unit> {
+        val lowQuality = JellyfinMusicCatalog(VaultTestServer.apiClient, streamingQuality = { StreamingQuality.LOW })
+        val flac = aFlacTrack()
+
+        val stream = lowQuality.castStream(flac.id, flac.container, fromMs = 30_000L)
+
+        stream.startMs shouldBe 30_000L
+        stream.seekable shouldBe false
+        parameter(stream.url, "startTimeTicks") shouldBe "300000000"
+        contentTypeOf(stream.url) shouldBe "audio/mpeg"
+    }
+
+    private suspend fun aFlacTrack(): Track = catalog.albums().firstNotNullOfOrNull { album ->
+        catalog.albumTracks(album.id).firstOrNull { it.container == "flac" }
+    }.shouldNotBeNull()
 
     @Test
     fun `cast and stream urls for a song share one cache key`() = runBlocking<Unit> {

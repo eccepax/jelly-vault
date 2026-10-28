@@ -164,7 +164,7 @@ val tuneAppModule = module {
                 DownloadsOnSignOut(get(), downloads::removeAll)()
             },
             logout = apiClientController::logoutUser,
-            stopCasting = get<Casting>()::stopCasting,
+            forgetCast = get<Casting>()::forgetCast,
         )
     }
 

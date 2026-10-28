@@ -75,8 +75,8 @@ class PlaybackService : MediaSessionService() {
         this.session = session
         // The cast device gets its own url for each song, asking only for what it plays, and its type
         val catalog = get<JellyfinMusicCatalog>()
-        casting = SessionCasting.attach(session, player, get<Casting>(), castStream = { item ->
-            item.trackId?.let { catalog.castStream(it, item.container) }
+        casting = SessionCasting.attach(session, player, get<Casting>(), castStream = { item, fromMs ->
+            item.trackId?.let { catalog.castStream(it, item.container, fromMs) }
         })
     }
 

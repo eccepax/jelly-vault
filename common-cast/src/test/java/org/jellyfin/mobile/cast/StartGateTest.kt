@@ -31,4 +31,15 @@ class StartGateTest {
         gate.waiting shouldBe 0
         ran shouldBe emptyList()
     }
+
+    @Test
+    fun `what's taken back before it starts never runs, and isn't kept`() {
+        val cancel = gate.whenReady { ran += "gone" }
+
+        cancel()
+        gate.waiting shouldBe 0
+        gate.started()
+
+        ran shouldBe emptyList()
+    }
 }

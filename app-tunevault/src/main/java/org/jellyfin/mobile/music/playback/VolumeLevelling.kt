@@ -27,7 +27,7 @@ fun levelFor(gainDb: Float?): Float =
  * fade. Each sets its own part, so neither overwrites the other.
  *
  * Sent while casting too: the cast player leaves the cast device's own volume alone, and keeps it
- * for this device's player once playback is back (common-cast's RemotePlaylist and
+ * for this device's player once playback is back (common-cast's CastQueuePlayer and
  * SessionPlayerSwitcher).
  */
 class PlaybackVolume(private val playback: PlaybackController) {
