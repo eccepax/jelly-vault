@@ -68,15 +68,16 @@ class WatchViewModel(
         lineup,
         player.videoStarted,
         loginInUse,
-        // Named only once connected: until then the channel still plays here
-        combine(cast.connected, cast.deviceName) { connected, name -> name.takeIf { connected } },
-    ) { playback, lineup, started, loginInUse, castDevice ->
+        // Casting once connected, named or not (until then the channel still plays here)
+        combine(cast.connected, cast.deviceName) { connected, name -> connected to name.takeIf { connected } },
+    ) { playback, lineup, started, loginInUse, (casting, castDevice) ->
         WatchUiState(
             playback = playback,
             channel = playback.channelId?.let(lineup::get),
             videoStarted = started,
             loginInUse = loginInUse,
             castDevice = castDevice,
+            casting = casting,
         )
     }.stateIn(
         viewModelScope,
@@ -84,16 +85,12 @@ class WatchViewModel(
         WatchUiState(PlaybackState.Idle, channel = null, videoStarted = false),
     )
 
-    /** The channel and cast device the app is kept alive for; null while nothing plays on one. */
-    private var castingNow: Pair<String, String?>? = null
-
     init {
         viewModelScope.launch {
             combine(playback.state, cast.connected, cast.deviceName, lineup) { state, connected, device, lineup ->
                 val channelId = state.channelId?.takeIf { connected && state !is PlaybackState.Failed }
                 channelId?.let { id -> (lineup[id]?.castTitle ?: id) to device }
             }.distinctUntilChanged().collect { casting ->
-                castingNow = casting
                 if (casting == null) keepAlive.release() else keepAlive.hold(casting.first, casting.second)
             }
         }
@@ -127,7 +124,7 @@ class WatchViewModel(
 
     fun onForeground() {
         // Android doesn't let a cast connecting in the background keep the app alive: it's asked again here
-        castingNow?.let { (channel, device) -> keepAlive.hold(channel, device) }
+        keepAlive.holdAgain()
         playback.resume()
     }
 

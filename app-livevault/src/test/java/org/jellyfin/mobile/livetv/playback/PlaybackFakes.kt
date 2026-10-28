@@ -195,4 +195,8 @@ class FakeCastKeepAlive : CastKeepAlive {
     override fun release() {
         holding = null
     }
+
+    override fun holdAgain() {
+        holding?.let { (channel, device) -> hold(channel, device) }
+    }
 }

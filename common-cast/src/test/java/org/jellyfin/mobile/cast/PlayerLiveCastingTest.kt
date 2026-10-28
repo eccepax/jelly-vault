@@ -259,6 +259,19 @@ class PlayerLiveCastingTest {
     }
 
     @Test
+    fun `forgotten (signing out), what played there is over, as if stopped there, so the app frees it`() {
+        val framework = WaitingCastPlayers()
+        val live = liveCasting(framework)
+        framework.start()
+        var stopped = 0
+        live.listenWith(onError = {}, onStopped = { stopped++ })
+
+        framework.forgettings.single()()
+
+        stopped shouldBe 1
+    }
+
+    @Test
     fun `the live cast player is emptied when the cast is forgotten (signing out)`() {
         val framework = WaitingCastPlayers()
         liveCasting(framework)
@@ -327,6 +340,7 @@ class PlayerLiveCastingTest {
         var devicesMade = 0
         val forgotten = mutableListOf<CastQueuePlayer>()
         val endings = mutableListOf<() -> Unit>()
+        val forgettings = mutableListOf<() -> Unit>()
 
         override val isAvailable = MutableStateFlow(false)
         override val castDevice = MutableStateFlow<String?>(null)
@@ -345,10 +359,11 @@ class PlayerLiveCastingTest {
             return FakeCastDevice()
         }
 
-        override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit): () -> Unit {
-            forgotten += player
+        override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit, forgotten: () -> Unit): () -> Unit {
+            this.forgotten += player
             endings += endingHere
-            return { forgotten -= player }
+            forgettings += forgotten
+            return { this.forgotten -= player }
         }
     }
 

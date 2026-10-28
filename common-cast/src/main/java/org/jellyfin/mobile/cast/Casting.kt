@@ -49,8 +49,11 @@ internal interface CastPlayers {
     /** The cast device, through the framework once it has started; [live] sends items as live streams. */
     fun newDevice(live: Boolean): CastDevice
 
-    /** [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. */
-    fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit = {}): () -> Unit
+    /**
+     * [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. [endingHere] is
+     * told whenever the cast is ended from here; [forgotten] when it's forgotten, once emptied.
+     */
+    fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit = {}, forgotten: () -> Unit = {}): () -> Unit
 }
 
 /**
@@ -77,8 +80,10 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     private var castContext: CastContext? = null
     private val gate = StartGate()
 
-    /** The cast players, each with what it's told when the cast is ended from here. */
-    private val players = mutableMapOf<CastQueuePlayer, () -> Unit>()
+    /** What a cast player is told when the cast is ended from here, and when it's forgotten. */
+    private class Told(val endingHere: () -> Unit, val forgotten: () -> Unit)
+
+    private val players = mutableMapOf<CastQueuePlayer, Told>()
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -140,15 +145,16 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
 
     override fun stopCasting() {
         // Told first: the cast device stops on the way out, and that stop is this app's, not its remote's
-        players.values.toList().forEach { it() }
+        players.values.toList().forEach { it.endingHere() }
         castContext?.sessionManager?.endCurrentSession(true)
     }
 
     override fun forgetCast() {
-        players.toList().forEach { (player, endingHere) ->
-            endingHere()
+        players.toList().forEach { (player, told) ->
+            told.endingHere()
             player.stop()
             player.clearMediaItems()
+            told.forgotten()
         }
         stopCasting()
     }
@@ -156,8 +162,8 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     override fun newDevice(live: Boolean): CastDevice =
         RemoteMediaClientDevice(context, checkNotNull(castContext) { "The Cast framework hasn't started" }, live)
 
-    override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit): () -> Unit {
-        players[player] = endingHere
+    override fun forgetsWithCast(player: CastQueuePlayer, endingHere: () -> Unit, forgotten: () -> Unit): () -> Unit {
+        players[player] = Told(endingHere, forgotten)
         return { players -= player }
     }
 

@@ -31,13 +31,24 @@ class LiveCastService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.cast_notification_channel),
+                    NotificationManager.IMPORTANCE_LOW,
+                ),
+            )
+        }
         CastHold.listener = show
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_CASTING) {
-            // The cast ending frees the stream (see LivePlayback), which then stops this service
+            // The cast ending frees the stream (see LivePlayback), which then stops a running service.
+            // One started just for this (the notification outlived the service) stops again at once.
             casting.stopCasting()
+            if (!running) stopSelf(startId)
             return START_NOT_STICKY
         }
         // Every start goes to the foreground, even one whose cast has ended meanwhile
@@ -76,15 +87,6 @@ class LiveCastService : Service() {
     }
 
     private fun notification(held: Pair<String, String?>?): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    getString(R.string.cast_notification_channel),
-                    NotificationManager.IMPORTANCE_LOW,
-                ),
-            )
-        }
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -118,7 +120,7 @@ class LiveCastService : Service() {
             private set
 
         internal const val NOTIFICATION_ID = 1
-        private const val ACTION_STOP_CASTING = "org.jellyfin.mobile.livetv.STOP_CASTING"
+        internal const val ACTION_STOP_CASTING = "org.jellyfin.mobile.livetv.STOP_CASTING"
         private const val CHANNEL_ID = "casting"
     }
 }

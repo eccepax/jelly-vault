@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.livetv.channels
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -78,6 +77,7 @@ import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultColors
 import org.jellyfin.mobile.common.ui.theme.focusBorder
 import org.jellyfin.mobile.livetv.R
+import org.jellyfin.mobile.livetv.app.isTelevision
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.sdk.model.ClientInfo
@@ -484,8 +484,7 @@ fun ChannelsRoute(
         viewModel.refresh()
         onPauseOrDispose {}
     }
-    val onTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK ==
-        Configuration.UI_MODE_TYPE_TELEVISION
+    val onTv = LocalConfiguration.current.isTelevision
     ChannelsScreen(
         state = state,
         now = now,

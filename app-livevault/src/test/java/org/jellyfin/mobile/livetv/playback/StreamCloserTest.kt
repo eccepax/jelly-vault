@@ -128,6 +128,21 @@ class StreamCloserTest {
     }
 
     @Test
+    fun `a stream already closed is not closed again`() = runTest {
+        // Signing out closes everything, then the screen still holding the stream lets go of it too
+        val closer = closer()
+        val ticket = stream("a").ticket
+        closer.track(ticket)
+        closer.closeAll()
+
+        closer.closeNow(ticket)
+        closer.close(ticket)
+        settle()
+
+        log.events shouldContainExactly listOf("close:ls-a-1")
+    }
+
+    @Test
     fun `closing everything waits for a close already under way`() = runTest {
         val closer = closer()
         val ticket = stream("a").ticket

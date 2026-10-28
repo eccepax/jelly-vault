@@ -69,11 +69,12 @@ import org.jellyfin.mobile.livetv.channels.channelDisplayName
 import org.jellyfin.mobile.livetv.channels.displayName
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.koin.compose.koinInject
+import org.jellyfin.mobile.cast.R as CastR
 
 /**
  * What the player shows: [videoStarted] is the player actually rendering, not just the stream being
- * open. [loginInUse] explains a failure on a channel that needs the provider login. [castDevice] is
- * where the channel plays while casting.
+ * open. [loginInUse] explains a failure on a channel that needs the provider login. [casting] is
+ * the channel playing on a cast device, [castDevice] that device's name, once it has said it.
  */
 data class WatchUiState(
     val playback: PlaybackState,
@@ -81,6 +82,7 @@ data class WatchUiState(
     val videoStarted: Boolean,
     val loginInUse: LoginInUse? = null,
     val castDevice: String? = null,
+    val casting: Boolean = castDevice != null,
 )
 
 /** The provider login is probably taken; [holders] are the server's viewers known to have it. */
@@ -123,7 +125,7 @@ fun PlayerScreen(
             overlayHidden = overlayRequests
         }
     }
-    val casting = state.castDevice != null
+    val casting = state.casting
     val overlayVisible = !playing || casting || overlayHidden != overlayRequests
     LaunchedEffect(Unit) { focus.requestFocus() }
 
@@ -160,7 +162,7 @@ fun PlayerScreen(
         // Always here, in or out of the floating window: moving it would make a new PlayerView,
         // re-attaching the player to a new surface with a black flash on every switch
         video()
-        if (state.castDevice != null && !inPictureInPicture) CastingPanel(state.castDevice, onStopCasting)
+        if (state.casting && !inPictureInPicture) CastingPanel(state.castDevice, onStopCasting)
         if (inPictureInPicture) {
             PictureInPictureContent(state)
         } else {
@@ -260,7 +262,7 @@ private fun LoginInUseMessage(loginInUse: LoginInUse) {
 
 /** In place of the video while the channel plays on [castDevice]: where it plays, and stopping that. */
 @Composable
-private fun CastingPanel(castDevice: String, onStopCasting: () -> Unit) {
+private fun CastingPanel(castDevice: String?, onStopCasting: () -> Unit) {
     Column(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -275,7 +277,11 @@ private fun CastingPanel(castDevice: String, onStopCasting: () -> Unit) {
             tint = Color.White.copy(alpha = VaultAlpha.SECONDARY),
             modifier = Modifier.size(CAST_ICON_SIZE),
         )
-        PlayingOnLabel(castDevice, onStopCasting, Modifier.padding(top = 8.dp))
+        PlayingOnLabel(
+            castDevice ?: stringResource(CastR.string.unnamed_cast_device),
+            onStopCasting,
+            Modifier.padding(top = 8.dp),
+        )
     }
 }
 
@@ -369,9 +375,10 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit, casting: Cast
         }
     }
     FullScreen()
+    AskForNotificationsWhenCasting(state.casting)
     // Leaving the app while a channel plays carries on in a floating window; on a cast device it
     // plays on regardless
-    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing && state.castDevice == null)
+    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing && !state.casting)
     val inPictureInPicture = rememberInPictureInPicture()
     PlayerScreen(
         state = state,
@@ -385,7 +392,7 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit, casting: Cast
         video = {
             val exoPlayer = (viewModel.localPlayer as? ExoLivePlayer)?.exoPlayer
             // On only while the channel plays here: a cast plays on the TV, and the phone can sleep
-            val playsHere = state.castDevice == null
+            val playsHere = !state.casting
             AndroidView(
                 factory = { context ->
                     PlayerView(context).apply {

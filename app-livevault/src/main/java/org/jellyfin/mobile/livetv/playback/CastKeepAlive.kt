@@ -15,10 +15,14 @@ interface CastKeepAlive {
 
     fun release()
 
+    /** Asks again to be kept alive for what's held, if anything: Android may have refused it in the background. */
+    fun holdAgain()
+
     /** Nothing kept alive (tests, and where casting can't work). */
     object None : CastKeepAlive {
         override fun hold(channel: String, device: String?) = Unit
         override fun release() = Unit
+        override fun holdAgain() = Unit
     }
 }
 
@@ -44,6 +48,10 @@ class ServiceCastKeepAlive(private val context: Context) : CastKeepAlive {
 
     override fun release() {
         CastHold.current = null
+    }
+
+    override fun holdAgain() {
+        CastHold.current?.let { (channel, device) -> hold(channel, device) }
     }
 }
 

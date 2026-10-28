@@ -254,7 +254,20 @@ class WatchViewModelTest {
             settle()
 
             viewModel.state.value.castDevice shouldBe null
+            viewModel.state.value.casting shouldBe false
         }
+
+    @Test
+    fun `a cast device connected before it has said its name is still casting`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        cast.connected.value = true
+        settle()
+
+        viewModel.state.value.casting shouldBe true
+        viewModel.state.value.castDevice shouldBe null
+    }
 
     @Test
     fun `the video has started once the cast device plays it`() = watchTest { viewModel ->

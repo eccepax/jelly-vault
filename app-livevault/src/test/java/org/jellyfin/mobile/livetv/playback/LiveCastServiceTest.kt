@@ -8,9 +8,14 @@ import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import org.koin.dsl.module
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
@@ -114,5 +119,33 @@ class LiveCastServiceTest {
 
         (tapped.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP) shouldNotBe 0
         (tapped.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP) shouldNotBe 0
+    }
+
+    @Test
+    fun `Stop casting from a notification left over, with no service running, ends the cast and stops it again`() {
+        var castsStopped = 0
+        startKoin {
+            modules(
+                module {
+                    single<Casting> {
+                        object : Casting by NoCasting {
+                            override fun stopCasting() {
+                                castsStopped++
+                            }
+                        }
+                    }
+                },
+            )
+        }
+        try {
+            val stop = Intent(context, LiveCastService::class.java).setAction(LiveCastService.ACTION_STOP_CASTING)
+            val controller = Robolectric.buildService(LiveCastService::class.java, stop).create().startCommand(0, 1)
+            service = controller
+
+            castsStopped shouldBe 1
+            shadowOf(controller.get()).isStoppedBySelf shouldBe true
+        } finally {
+            stopKoin()
+        }
     }
 }

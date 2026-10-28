@@ -7,6 +7,8 @@
     <!-- Keeps the app alive while a channel plays on a cast device (LiveCastService) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Its notification says where the channel plays, and stops casting (asked for the first time a channel is cast) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- One APK for phones, tablets and Google TV: declared optional, or Play hides it from TVs
          (no touchscreen) or phones (no leanback). -->

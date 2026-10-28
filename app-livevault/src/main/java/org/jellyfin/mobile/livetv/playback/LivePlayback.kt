@@ -108,11 +108,12 @@ class LivePlayback(
 
     /**
      * The app went to the background: frees the connection, remembering the channel for [resume].
-     * A channel that had failed is tried again on the way back. A channel on a cast device plays on.
+     * A channel that had failed is tried again on the way back, wherever it failed. A channel on a
+     * cast device plays on.
      */
     fun pause() {
         inBackground = true
-        if (!player.onCastDevice.value) freeForBackground()
+        if (!player.onCastDevice.value || state.value is PlaybackState.Failed) freeForBackground()
     }
 
     fun resume() {
@@ -139,13 +140,22 @@ class LivePlayback(
         if (resumeChannel != null) stop()
     }
 
-    /** The player moved to or from a cast device: what's shown is opened again for where it plays now. */
+    /**
+     * The player moved to or from a cast device: what's shown is opened again for where it plays now.
+     * In the background, a cast that ends frees the stream, and one that comes back (the session
+     * rejoined) plays the channel freed there again.
+     */
     private fun onCastDeviceChanged(onCastDevice: Boolean) {
-        val channel = state.value.channelId ?: return
-        if (!onCastDevice && inBackground) {
-            freeForBackground()
-        } else {
-            request(channel, debounce = false)
+        val freed = resumeChannel
+        val channel = state.value.channelId
+        when {
+            onCastDevice && inBackground && channel == null && freed != null -> {
+                resumeChannel = null
+                request(freed, debounce = false)
+            }
+            channel == null -> Unit
+            !onCastDevice && inBackground -> freeForBackground()
+            else -> request(channel, debounce = false)
         }
     }
 

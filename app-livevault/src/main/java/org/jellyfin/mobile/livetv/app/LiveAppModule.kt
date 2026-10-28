@@ -1,8 +1,5 @@
 package org.jellyfin.mobile.livetv.app
 
-import android.app.UiModeManager
-import android.content.Context
-import android.content.res.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,7 +51,7 @@ val liveAppModule = module {
         )
     }
     // None on a TV: it's where things are cast to, not from
-    single<Casting> { if (isTelevision(androidContext())) NoCasting else casting(androidApplication()) }
+    single<Casting> { if (androidContext().isTelevision) NoCasting else casting(androidApplication()) }
     single<StreamLedger> { PreferencesStreamLedger(androidContext()) }
     // App-wide scope: a stream is closed even when the screen that opened it is gone.
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
@@ -83,6 +80,3 @@ val liveAppModule = module {
         )
     }
 }
-
-private fun isTelevision(context: Context): Boolean =
-    context.getSystemService(UiModeManager::class.java)?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION

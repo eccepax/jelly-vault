@@ -49,6 +49,7 @@ class PlayerScreenTest {
         loginInUse: LoginInUse? = null,
         inPictureInPicture: Boolean = false,
         castDevice: String? = null,
+        casting: Boolean = castDevice != null,
     ) {
         composeRule.setContent {
             PlayerScreen(
@@ -58,6 +59,7 @@ class PlayerScreenTest {
                     videoStarted = videoStarted,
                     loginInUse = loginInUse,
                     castDevice = castDevice,
+                    casting = casting,
                 ),
                 onZap = { zaps += it },
                 onRetry = { retried = true },
@@ -204,6 +206,14 @@ class PlayerScreenTest {
         show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
 
         composeRule.onNodeWithText("Playing on Main Bedroom TV").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `casting to a device that hasn't said its name yet still shows the channel plays there`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, casting = true)
+
+        composeRule.onNodeWithText("Playing on your cast device").assertIsDisplayed()
         composeRule.onNodeWithTag(PlayerScreenTags.CASTING, useUnmergedTree = true).assertIsDisplayed()
     }
 

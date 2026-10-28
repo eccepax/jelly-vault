@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.livetv.playback
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.NonCancellable
@@ -50,7 +51,13 @@ class StreamCloser(
 
     private val inFlight = mutableMapOf<StreamTicket, Deferred<Unit>>()
 
+    /**
+     * The close of [ticket]: the one under way, or a new one, unless it's closed already (it's out
+     * of the ledger), as when signing out has closed everything and the screen then lets go of it.
+     */
     private fun closing(ticket: StreamTicket): Deferred<Unit> = synchronized(inFlight) {
+        inFlight[ticket]?.let { return it }
+        if (ticket !in ledger.all()) return CompletableDeferred(Unit)
         inFlight.getOrPut(ticket) {
             scope.async {
                 try {

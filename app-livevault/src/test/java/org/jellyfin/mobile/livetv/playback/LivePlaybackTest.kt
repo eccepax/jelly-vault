@@ -563,4 +563,39 @@ class LivePlaybackTest {
         playback.state.value shouldBe PlaybackState.Playing("a")
         assertOnlyOpen("ls-a-2")
     }
+
+    @Test
+    fun `a channel that failed while casting, then went to the background, is tried again on the way back`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        streams.failing += "a"
+        playback.play("a", lineup)
+        settle()
+        streams.failing -= "a"
+
+        playback.pause()
+        playback.resume()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        assertOnlyOpen("ls-a-1")
+    }
+
+    @Test
+    fun `a cast that ends and comes back while in the background plays the channel there again`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+        player.onCastDevice.value = false
+        settle()
+
+        player.onCastDevice.value = true
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        log.events.last { it.startsWith("open") } shouldBe "open-for-cast:a"
+        assertOnlyOpen("ls-a-2")
+    }
 }

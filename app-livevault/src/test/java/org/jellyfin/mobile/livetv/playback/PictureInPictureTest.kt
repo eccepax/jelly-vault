@@ -34,6 +34,8 @@ class PictureInPictureTest {
         val app = org.robolectric.RuntimeEnvironment.getApplication()
         shadowOf(app.packageManager).setSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE, pipSupported)
         shadowOf(app.packageManager).setSystemFeature(PackageManager.FEATURE_LEANBACK, tv)
+        // A TV is told by its UI mode (see isTelevision)
+        if (tv) org.robolectric.RuntimeEnvironment.setQualifiers("+television")
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         controller.get().setContent { PictureInPictureOnLeave(enabled = playing) }
         shadowOf(Looper.getMainLooper()).idle()

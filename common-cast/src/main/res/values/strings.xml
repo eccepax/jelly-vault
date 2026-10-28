@@ -2,4 +2,6 @@
 <resources>
     <string name="playing_on">Playing on %1$s</string>
     <string name="stop_casting">Stop casting</string>
+    <!-- Where playback is, before the cast device has said its name: "Playing on your cast device" -->
+    <string name="unnamed_cast_device">your cast device</string>
 </resources>
