@@ -42,6 +42,7 @@ dependencies {
     testRuntimeOnly(libs.junit.engine)
     testImplementation(libs.bundles.kotest)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.androidx.media3.exoplayer)
     testImplementation(libs.androidx.media3.test.utils)
     testImplementation(libs.androidx.media3.test.utils.robolectric)

@@ -14,6 +14,7 @@ import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.extensions.inWholeTicks
 import org.jellyfin.sdk.model.serializer.toUUID
 import timber.log.Timber
+import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 
 /** How long finding what a file is may take before it's cast as MP3 instead. */
@@ -21,10 +22,11 @@ private const val LOOKUP_TIMEOUT_MS = 5_000L
 
 /**
  * [itemId] from the server as a cast device fetches it. What its file is comes from the server (as
- * it is there, whether or not it plays from a download here), once, when it's about to be cast; it
- * goes in a format a cast device plays (see [castChoiceOf]): its own where it can, kept unless
- * [keepFormat] says not, and [maxBitrate] caps it. Both are asked each time a stream is, so a
- * change of quality while casting reaches the songs already found.
+ * it is there, whether or not it plays from a download here), once, when it's about to be cast, and
+ * only if [keepFormat] says to keep it then; it goes in a format a cast device plays (see
+ * [castChoiceOf]): its own where it can, kept unless [keepFormat] says not, and [maxBitrate] caps
+ * it. Both are asked each time a stream is, so a change of quality while casting reaches the songs
+ * already found (one found while not keeping formats goes as MP3). An id that isn't one throws.
  */
 suspend fun serverCastSource(
     apiClient: ApiClient,
@@ -32,21 +34,22 @@ suspend fun serverCastSource(
     keepFormat: () -> Boolean = { true },
     maxBitrate: () -> Int? = { null },
 ): CastSource {
-    val file = audioFileOf(apiClient, itemId)
+    val id = itemId.toUUID()
+    val file = if (keepFormat()) audioFileOf(apiClient, id) else null
     return CastSource { fromMs ->
         val keep = keepFormat()
-        serverCastStream(apiClient, itemId, castChoiceOf(if (keep) file else null, keep), fromMs, maxBitrate())
+        serverCastStream(apiClient, id, castChoiceOf(if (keep) file else null, keep), fromMs, maxBitrate())
     }
 }
 
 /** What the server says [itemId]'s file is; null if it can't say just now. */
 // Whatever the server does, the song is still cast, as MP3
 @Suppress("TooGenericExceptionCaught")
-private suspend fun audioFileOf(apiClient: ApiClient, itemId: String): AudioFileInfo? = try {
+private suspend fun audioFileOf(apiClient: ApiClient, itemId: UUID): AudioFileInfo? = try {
     withTimeoutOrNull(LOOKUP_TIMEOUT_MS) {
         withContext(Dispatchers.IO) {
             val item = apiClient.itemsApi.getItems(
-                ids = listOf(itemId.toUUID()),
+                ids = listOf(itemId),
                 fields = listOf(ItemFields.MEDIA_SOURCES),
             ).content.items.firstOrNull()
             val source = item?.mediaSources?.firstOrNull() ?: return@withContext null
@@ -70,7 +73,7 @@ private suspend fun audioFileOf(apiClient: ApiClient, itemId: String): AudioFile
  */
 internal fun serverCastStream(
     apiClient: ApiClient,
-    itemId: String,
+    itemId: UUID,
     choice: CastChoice,
     fromMs: Long,
     maxBitrate: Int? = null,
@@ -78,7 +81,7 @@ internal fun serverCastStream(
     val format = choice.format
     val startMs = if (choice.asIs) 0L else fromMs.coerceAtLeast(0L)
     val url = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-        itemId = itemId.toUUID(),
+        itemId = itemId,
         // Nothing asked for as it is: the server transcodes, so the start it's asked for holds
         container = if (choice.asIs) format.asked else emptyList(),
         deviceId = apiClient.deviceInfo.id,

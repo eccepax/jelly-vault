@@ -15,8 +15,10 @@ import org.jellyfin.mobile.cast.DeviceStatus.State
  * looper and Robolectric's clock), says what it holds after each, and plays its queue as time goes
  * on, a song lasting its metadata's length less where its stream starts. The tests drive what a
  * real one does on its own: its remote ([pressPause], [skipOnRemote], [seekOnRemote]), another
- * sender ([takeOver]), dropped commands ([failNext]), dropped reports ([quiet]) and a moment without
- * the network ([suspend], [resume]), which loses the answers on their way.
+ * sender ([takeOver]), dropped commands ([failNext], [turnsDown]), dropped reports ([quiet]) and a
+ * moment without the network ([suspend], [resume]), which loses the answers on their way. Like a
+ * real one it may cap the speed ([maxSpeed]), drop a volume set ([dropsVolume]) and play a stream
+ * whose length isn't its metadata's ([lengths]).
  */
 internal class FakeCastDevice(
     private val roundTripMs: Long = ROUND_TRIP_MS,
@@ -70,6 +72,18 @@ internal class FakeCastDevice(
 
     /** How many of the next commands it fails. */
     var failNext = 0
+
+    /** The commands it always turns down, by name. */
+    var turnsDown: (String) -> Boolean = { false }
+
+    /** The fastest it plays: it takes a faster speed, and plays at this. */
+    var maxSpeed = Float.MAX_VALUE
+
+    /** While true, a volume set goes nowhere, and nothing is said of it. */
+    var dropsVolume = false
+
+    /** How long each song's stream really is, by id, where it isn't its metadata's length. */
+    val lengths = mutableMapOf<String, Long>()
 
     /** While true, it says nothing of what it does. */
     var quiet = false
@@ -180,7 +194,7 @@ internal class FakeCastDevice(
         queue += items
         other = false
         this.repeat = repeat
-        this.speed = speed
+        this.speed = speed.coerceAtMost(maxSpeed)
         startAt(startIndex, startMs)
         if (playWhenReady) playNow() else pauseNow()
     }
@@ -216,7 +230,7 @@ internal class FakeCastDevice(
     override fun setSpeed(speed: Float, done: (Boolean) -> Unit) = command("speed $speed", done) {
         positionMs = streamPositionMs
         atMs = now()
-        this.speed = speed
+        this.speed = speed.coerceAtMost(maxSpeed)
         if (state == State.PLAYING) playNow()
     }
 
@@ -233,6 +247,7 @@ internal class FakeCastDevice(
 
     /** Its volume changes a round trip later, as a cast session's does. */
     override fun setVolume(volume: Int) {
+        if (dropsVolume) return
         handler.postDelayed({
             this.volume = volume
             listener?.onVolumeChanged()
@@ -269,7 +284,9 @@ internal class FakeCastDevice(
             waiting -= answer
             failing -= done
             run {
-                if (failNext > 0) {
+                if (turnsDown(name)) {
+                    done(false)
+                } else if (failNext > 0) {
                     failNext--
                     done(false)
                 } else {
@@ -351,7 +368,7 @@ internal class FakeCastDevice(
 
     private fun streamLength(index: Int): Long {
         val sent = queue[index]
-        val song = sent.item.mediaMetadata.durationMs ?: return Long.MAX_VALUE / 2
+        val song = lengths[sent.item.mediaId] ?: sent.item.mediaMetadata.durationMs ?: return Long.MAX_VALUE / 2
         return song - sent.stream.startMs
     }
 
