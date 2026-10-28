@@ -53,7 +53,9 @@ fun liveCasting(casting: Casting): LiveCasting {
         val device = castPlayers.newDevice(live = true)
         val castPlayer = CastQueuePlayer(
             device,
-            streamFor = { item, _ -> defaultCastStream(item, { it }, HLS_MIME_TYPE) },
+            sources = CastSourceFinder { item, found ->
+                found(CastSource { defaultCastStream(item, { it }, HLS_MIME_TYPE) })
+            },
         )
         castPlayer.onConnectionChange = live::onConnectionChanged
         if (!live.start(castPlayer, device.isConnected)) castPlayer.release()

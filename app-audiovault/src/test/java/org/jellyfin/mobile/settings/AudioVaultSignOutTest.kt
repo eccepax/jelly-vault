@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.settings
 
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.jellyfin.mobile.common.server.ServerSession
@@ -19,13 +20,12 @@ class AudioVaultSignOutTest {
     )
 
     @Test
-    fun `ends any cast first, since the cast device holds stream urls with the token in them, then stops playback`() =
+    fun `stops playback, sending where the listener got to, then ends any cast, since it holds urls with the token`() =
         runTest {
-            // First, so a last report that fails can't leave it casting; it empties the cast's queue
-            // itself, so it needn't wait on playback stopping
+            // The listen ends first: forgetting the cast empties the queue, and with it the place
             signOut()
 
-            events shouldBe listOf("forget cast", "stop playback", "end session", "forget downloads", "logout")
+            events shouldBe listOf("stop playback", "forget cast", "end session", "forget downloads", "logout")
         }
 
     @Test
@@ -40,6 +40,6 @@ class AudioVaultSignOutTest {
 
         runCatching { failing() }
 
-        events.first() shouldBe "forget cast"
+        events shouldContain "forget cast"
     }
 }

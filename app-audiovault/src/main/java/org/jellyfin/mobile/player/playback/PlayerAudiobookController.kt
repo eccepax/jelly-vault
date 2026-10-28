@@ -86,7 +86,7 @@ class PlayerAudiobookController(
 
     override fun setSkipSilence(enabled: Boolean) = setSkipSilence.invoke(enabled)
 
-    /** While casting, the cast player keeps it for this device's player (common-cast's RemotePlaylist). */
+    /** While casting, the cast player keeps it for this device's player (common-cast's CastQueuePlayer.volumeAskedFor). */
     override fun setVolume(volume: Float) {
         player.volume = volume
     }

@@ -13,9 +13,7 @@ import org.jellyfin.sdk.model.api.ChapterInfo
 import org.jellyfin.sdk.model.api.MediaProtocol
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaSourceType
-import org.jellyfin.sdk.model.api.MediaStream
 import org.jellyfin.sdk.model.api.MediaStreamProtocol
-import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.UserItemDataDto
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
@@ -56,11 +54,11 @@ class AudiobookQueueLoaderTest {
         )
     }
 
-    private fun downloaded(id: UUID, name: String, savedAtMs: Long = 0L, sourceInfo: MediaSourceInfo = sourceInfo()) {
+    private fun downloaded(id: UUID, name: String, savedAtMs: Long = 0L) {
         downloads[id] = LocalJellyfinMediaSource(
             itemId = id,
             item = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = name, runTimeTicks = 600_000_000_000L),
-            sourceInfo = sourceInfo,
+            sourceInfo = sourceInfo(),
             playSessionId = "session",
             localDirectoryUri = "/downloads",
             remoteFileUri = "https://vault.test/Items/$id/Download",
@@ -113,33 +111,6 @@ class AudiobookQueueLoaderTest {
             chapters = listOf(Chapter(0L, "Opening"), Chapter(90_000L, "Next")),
             fromDevice = false,
         )
-    }
-
-    @Test
-    fun `a streamed track says what its file holds, so a cast device can be sent it in a format it plays`() = runTest {
-        onServer(partOne, "Part 1")
-        server[partOne] = server.getValue(partOne).copy(
-            mediaSources = listOf(sourceInfo().copy(container = "m4b", mediaStreams = listOf(audioStream("aac")))),
-        )
-
-        val track = loader.load(options(partOne)).getOrThrow().tracks.single()
-
-        track.container shouldBe "m4b"
-        track.audioCodec shouldBe "aac"
-    }
-
-    @Test
-    fun `a downloaded track says what its file holds too`() = runTest {
-        downloaded(
-            partOne,
-            "Part 1",
-            sourceInfo = sourceInfo().copy(container = "mp3", mediaStreams = listOf(audioStream("mp3"))),
-        )
-
-        val track = loader.load(options(partOne, fromDownloads = true)).getOrThrow().tracks.single()
-
-        track.container shouldBe "mp3"
-        track.audioCodec shouldBe "mp3"
     }
 
     @Test
@@ -224,19 +195,6 @@ class AudiobookQueueLoaderTest {
         played = false,
         key = "",
         itemId = partOne,
-    )
-
-    private fun audioStream(codec: String) = MediaStream(
-        index = 0,
-        type = MediaStreamType.AUDIO,
-        codec = codec,
-        isExternal = false,
-        isTextSubtitleStream = false,
-        isInterlaced = false,
-        isDefault = true,
-        isForced = false,
-        isHearingImpaired = false,
-        supportsExternalStream = false,
     )
 
     private fun sourceInfo() = MediaSourceInfo(

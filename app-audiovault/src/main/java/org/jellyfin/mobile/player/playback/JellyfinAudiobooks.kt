@@ -3,9 +3,8 @@ package org.jellyfin.mobile.player.playback
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jellyfin.mobile.cast.CastStream
-import org.jellyfin.mobile.cast.castFormatOf
-import org.jellyfin.mobile.cast.serverCastStream
+import org.jellyfin.mobile.cast.CastSource
+import org.jellyfin.mobile.cast.serverCastSource
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -30,14 +29,11 @@ class JellyfinAudiobooks(
     private val apiClient: ApiClient,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    /**
-     * The items with these ids, with their chapters, where the listener left them, and their files'
-     * details (what casting sends depends on them).
-     */
+    /** The items with these ids, with their chapters and where the listener left them. */
     suspend fun items(ids: List<UUID>): List<BaseItemDto> = withContext(ioDispatcher) {
         apiClient.itemsApi.getItems(
             ids = ids,
-            fields = listOf(ItemFields.CHAPTERS, ItemFields.MEDIA_SOURCES),
+            fields = listOf(ItemFields.CHAPTERS),
             enableUserData = true,
         ).content.items.orEmpty()
     }
@@ -67,13 +63,10 @@ class JellyfinAudiobooks(
         )
 
     /**
-     * [itemId] as a cast device gets it, from [fromMs] (see [serverCastStream]): as it is where a
-     * cast device plays the file's [container] and [audioCodec] (see [castFormatOf]), else as mp3.
+     * Where a cast device gets [itemId] from (see [serverCastSource]): from the server, as the file is
+     * there, even when it plays from a download here; as it is where a cast device plays that.
      */
-    fun castStream(itemId: String, container: String?, audioCodec: String?, fromMs: Long = 0L): CastStream {
-        val format = castFormatOf(container, audioCodec)
-        return serverCastStream(apiClient, itemId, format, format.playsAsIs(container, audioCodec), fromMs)
-    }
+    suspend fun castSource(itemId: String): CastSource = serverCastSource(apiClient, itemId)
 
     /** The track's own cover, or its book's when it has none (one part of a book in files). */
     fun coverUrl(item: BaseItemDto): String? {

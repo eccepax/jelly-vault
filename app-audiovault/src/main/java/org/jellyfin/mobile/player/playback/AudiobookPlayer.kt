@@ -16,17 +16,28 @@ import androidx.media3.common.Timeline
  * from the target (the server transcodes from [START_PARAM]). Positions and the length still count
  * from the start of the whole track, for everything that reads them. A track started part way is
  * put back to its start once it's left, so going back to it later plays it from its beginning.
+ * Whether a stream is a transcode is only known once it's open: a place asked for before then (a
+ * queue set from part way, a seek while it loads) is where a transcode starts once it turns out to
+ * be one. A queue set anew starts its streams from their beginnings, whatever their uris said.
+ *
  * Without [streamOffsets] (wrapping a cast player, which starts and seeks its own streams and counts
  * from the track's start: see common-cast's CastQueuePlayer) only the chapters are this one's.
  */
 class AudiobookPlayer(player: Player, private val streamOffsets: Boolean = true) : ForwardingPlayer(player) {
 
+    /** A place asked for (the item's index, and where in it) before its stream was open. */
+    private var pendingStart: Pair<Int, Long>? = null
+
     init {
-        player.addListener(
-            object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = restoreLeftTracks()
-            },
-        )
+        if (streamOffsets) {
+            player.addListener(
+                object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = restoreLeftTracks()
+
+                    override fun onTimelineChanged(timeline: Timeline, reason: Int) = startPending()
+                },
+            )
+        }
     }
 
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
@@ -66,7 +77,38 @@ class AudiobookPlayer(player: Player, private val streamOffsets: Boolean = true)
     override fun isCurrentMediaItemSeekable(): Boolean = isLiveTranscode || super.isCurrentMediaItemSeekable()
 
     override fun seekTo(positionMs: Long) {
-        if (isLiveTranscode) restartStreamAt(positionMs) else super.seekTo(positionMs - streamStartMs)
+        when {
+            isLiveTranscode -> restartStreamAt(positionMs)
+            else -> {
+                if (streamOffsets && isOpening) pendingStart = currentMediaItemIndex to positionMs
+                super.seekTo(positionMs - streamStartMs)
+            }
+        }
+    }
+
+    override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
+        if (!streamOffsets) return super.setMediaItems(mediaItems, startIndex, startPositionMs)
+        super.setMediaItems(mediaItems.map { it.fromItsStart() }, startIndex, startPositionMs)
+        pendingStart = (startIndex to startPositionMs).takeIf { startPositionMs > 0 }
+    }
+
+    /** Whether the playing item's stream isn't open yet, so whether it can seek isn't known. */
+    private val isOpening: Boolean
+        get() {
+            val timeline = currentTimeline
+            return timeline.isEmpty || timeline.getWindow(currentMediaItemIndex, Timeline.Window()).isPlaceholder
+        }
+
+    /** The stream asked for part way is open: a transcode, which played from its start, starts there instead. */
+    private fun startPending() {
+        val (index, positionMs) = pendingStart ?: return
+        if (currentMediaItemIndex != index) {
+            pendingStart = null
+            return
+        }
+        if (isOpening) return
+        pendingStart = null
+        if (isLiveTranscode && streamStartMs == 0L) restartStreamAt(positionMs)
     }
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
@@ -150,6 +192,13 @@ class AudiobookPlayer(player: Player, private val streamOffsets: Boolean = true)
         const val START_PARAM = "StartTimeTicks"
         internal const val TICKS_PER_MS = 10_000L
     }
+}
+
+/** This item, its stream from the beginning. */
+private fun MediaItem.fromItsStart(): MediaItem {
+    val uri = localConfiguration?.uri ?: return this
+    if (uri.getQueryParameter(AudiobookPlayer.START_PARAM) == null) return this
+    return buildUpon().setUri(uri.withStart(null)).build()
 }
 
 /** Where this item's stream starts in its track: past 0 when it's a transcode started part way. */

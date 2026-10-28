@@ -14,8 +14,9 @@ import org.jellyfin.mobile.cast.DeviceStatus.State
  * A cast device in a test: it takes each command a round trip later ([roundTripMs], on the main
  * looper and Robolectric's clock), says what it holds after each, and plays its queue as time goes
  * on, a song lasting its metadata's length less where its stream starts. The tests drive what a
- * real one does on its own: its remote ([pressPause], [skipOnRemote]), another sender ([takeOver]),
- * dropped commands ([failNext]) and dropped reports ([quiet]).
+ * real one does on its own: its remote ([pressPause], [skipOnRemote], [seekOnRemote]), another
+ * sender ([takeOver]), dropped commands ([failNext]), dropped reports ([quiet]) and a moment without
+ * the network ([suspend], [resume]), which loses the answers on their way.
  */
 internal class FakeCastDevice(
     private val roundTripMs: Long = ROUND_TRIP_MS,
@@ -64,6 +65,9 @@ internal class FakeCastDevice(
 
     private val songEnds = Runnable(::songEnded)
 
+    /** The commands taken whose answers haven't come yet. */
+    private val answers = mutableListOf<Runnable>()
+
     val keys: List<String> get() = queue.map { it.key }
     val playing: SentItem? get() = queue.getOrNull(current).takeUnless { other }
     val isPlaying get() = state == State.PLAYING
@@ -86,7 +90,22 @@ internal class FakeCastDevice(
         isConnected = false
         status = null
         handler.removeCallbacksAndMessages(null)
+        answers.clear()
         listener?.onConnectionChanged(false)
+    }
+
+    /** The network goes for a moment: it plays on, unheard, and the answers on their way are lost. */
+    fun suspend() {
+        isConnected = false
+        answers.forEach(handler::removeCallbacks)
+        answers.clear()
+    }
+
+    /** The session is back. */
+    fun resume() {
+        isConnected = true
+        listener?.onConnectionChanged(true)
+        report()
     }
 
     fun pressPause() = remote { pauseNow() }
@@ -94,6 +113,17 @@ internal class FakeCastDevice(
     fun skipOnRemote() = remote { if (current < queue.lastIndex) startAt(current + 1, 0L) }
     fun stopOnRemote() = remote { idle(IdleReason.CANCELED) }
     fun failToPlay() = remote { idle(IdleReason.ERROR) }
+
+    /** Its remote seeks: it buffers a round trip, then plays or stays paused there as it was. */
+    fun seekOnRemote(positionMs: Long) {
+        val wasPlaying = state == State.PLAYING
+        remote {
+            pauseNow()
+            this.positionMs = positionMs
+            state = State.BUFFERING
+        }
+        handler.postDelayed({ remote { if (wasPlaying) playNow() else pauseNow() } }, roundTripMs)
+    }
 
     /** Another app casts its own item to this device. */
     fun takeOver() = remote {
@@ -171,6 +201,8 @@ internal class FakeCastDevice(
         current = -1
     }
 
+    override fun heldItems(): List<SentItem?> = queue.map { it.takeUnless { other } }
+
     override fun setVolume(volume: Int) {
         this.volume = volume
         listener?.onVolumeChanged()
@@ -200,8 +232,10 @@ internal class FakeCastDevice(
     private fun command(name: String, done: (Boolean) -> Unit, apply: () -> Unit) {
         check(isConnected) { "$name with no session" }
         commands += name
-        handler.postDelayed(
-            {
+        lateinit var answer: Runnable
+        answer = Runnable {
+            answers -= answer
+            run {
                 if (failNext > 0) {
                     failNext--
                     done(false)
@@ -216,9 +250,10 @@ internal class FakeCastDevice(
                         done(true)
                     }
                 }
-            },
-            roundTripMs,
-        )
+            }
+        }
+        answers += answer
+        handler.postDelayed(answer, roundTripMs)
     }
 
     private fun startAt(index: Int, startMs: Long) {
@@ -298,7 +333,6 @@ internal class FakeCastDevice(
             speed = speed,
             durationMs = if (playingItem?.stream?.seekable == true) streamLength(current) else C.TIME_UNSET,
             repeat = repeat,
-            items = queue.map { it.item.takeUnless { other } },
         )
         status = next
         if (notify) listener?.onStatus(next)

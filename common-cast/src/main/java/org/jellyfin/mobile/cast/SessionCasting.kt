@@ -7,7 +7,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.jellyfin.mobile.player.session.playableUri
+import timber.log.Timber
 
 /**
  * Puts a playback service's session on the cast device while one is connected, and back on the
@@ -24,6 +31,9 @@ class SessionCasting private constructor(private val casting: Casting) {
     private var waiting: (() -> Unit)? = null
     private var forgetting: (() -> Unit)? = null
 
+    /** Where songs' sources are looked for; what's still being looked for stops with the service. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     /**
      * Released while playback is on the cast device (the service stopping, say after the app is
      * swiped away while paused), the cast ends too: nothing could control it, and the next service
@@ -32,6 +42,7 @@ class SessionCasting private constructor(private val casting: Casting) {
      */
     fun release() {
         released = true
+        scope.cancel()
         waiting?.invoke()
         forgetting?.invoke()
         val player = player ?: return
@@ -39,8 +50,8 @@ class SessionCasting private constructor(private val casting: Casting) {
         player.release()
     }
 
-    private fun start(device: CastDevice, castPlayers: CastPlayers, session: MediaSession, local: Player, wrap: (Player) -> Player, streamFor: (MediaItem, Long) -> CastStream) {
-        val player = CastQueuePlayer(device, streamFor)
+    private fun start(device: CastDevice, castPlayers: CastPlayers, session: MediaSession, local: Player, wrap: (Player) -> Player, sources: CastSourceFinder) {
+        val player = CastQueuePlayer(device, sources)
         this.player = player
         forgetting = castPlayers.forgetsWithCast(player)
         val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
@@ -50,12 +61,38 @@ class SessionCasting private constructor(private val casting: Casting) {
         if (device.isConnected) switcher.switchTo(player)
     }
 
+    /**
+     * Each song's source as [castSource] finds it (on the main thread, and it may ask the server);
+     * one it finds nothing for, or fails on, goes as [defaultCastStream] says.
+     */
+    private fun finder(
+        castSource: (suspend (MediaItem) -> CastSource?)?,
+        castUri: (Uri) -> Uri,
+        fallbackMimeType: String,
+    ) = CastSourceFinder { item, found ->
+        val fallback = CastSource { defaultCastStream(item, castUri, fallbackMimeType) }
+        if (castSource == null) return@CastSourceFinder found(fallback)
+        scope.launch {
+            // Whatever goes wrong finding it (the server, say), the song still goes somehow
+            @Suppress("TooGenericExceptionCaught")
+            val source = try {
+                castSource(item)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "No cast source for %s", item.mediaId)
+                null
+            }
+            found(source ?: fallback)
+        }
+    }
+
     companion object {
         /**
          * Null where casting can't work: the session stays on [local]. Each song goes to the cast
-         * device as [castStream] says, from where it should start; one it says nothing of goes from
-         * its own uri made fit to fetch by [castUri], as its own type or [fallbackMimeType] (see
-         * [defaultCastStream]). A [live] app's items go as live streams.
+         * device from the source [castSource] finds for it, from where it should start; one it says
+         * nothing of goes from its own uri made fit to fetch by [castUri], as its own type or
+         * [fallbackMimeType] (see [defaultCastStream]). A [live] app's items go as live streams.
          */
         fun attach(
             session: MediaSession,
@@ -64,7 +101,7 @@ class SessionCasting private constructor(private val casting: Casting) {
             castUri: (Uri) -> Uri = { it },
             fallbackMimeType: String = "audio/mpeg",
             wrap: (Player) -> Player = { it },
-            castStream: ((item: MediaItem, fromMs: Long) -> CastStream?)? = null,
+            castSource: (suspend (item: MediaItem) -> CastSource?)? = null,
             live: Boolean = false,
         ): SessionCasting? {
             val castPlayers = casting as? CastPlayers ?: return null
@@ -72,10 +109,8 @@ class SessionCasting private constructor(private val casting: Casting) {
             attached.waiting = castPlayers.whenReady {
                 attached.waiting = null
                 if (attached.released) return@whenReady
-                val streamFor = { item: MediaItem, fromMs: Long ->
-                    castStream?.invoke(item, fromMs) ?: defaultCastStream(item, castUri, fallbackMimeType)
-                }
-                attached.start(castPlayers.newDevice(live), castPlayers, session, local, wrap, streamFor)
+                val sources = attached.finder(castSource, castUri, fallbackMimeType)
+                attached.start(castPlayers.newDevice(live), castPlayers, session, local, wrap, sources)
             }
             return attached
         }

@@ -121,6 +121,8 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
                     device.value = null
                 }
 
+                // A moment without the network: playback stays on the cast device (see
+                // RemoteMediaClientDevice), so it's still the one named
                 override fun onSessionSuspended(session: CastSession, reason: Int) = Unit
                 override fun onSessionStarting(session: CastSession) = Unit
                 override fun onSessionStartFailed(session: CastSession, error: Int) = Unit

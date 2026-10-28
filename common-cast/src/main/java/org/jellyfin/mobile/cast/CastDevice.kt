@@ -28,8 +28,19 @@ internal interface CastDevice {
 
     var listener: Listener?
 
+    /**
+     * What it holds as it was sent, in the order of [DeviceStatus.keys]: the app's items and their
+     * streams, for picking up a queue from another of this app's players; null for one this app
+     * didn't send or the cast device hasn't said the details of. Read only when it's needed: it
+     * goes through every item.
+     */
+    fun heldItems(): List<SentItem?>
+
     interface Listener {
-        /** A session came up or ended. */
+        /**
+         * A session came up or ended. A session can also come back after a moment without one (the
+         * network went for a while): connected again, with the commands on their way then lost.
+         */
         fun onConnectionChanged(connected: Boolean)
 
         fun onStatus(status: DeviceStatus)
@@ -105,8 +116,6 @@ internal data class DeviceStatus(
     val repeat: CastDevice.Repeat = CastDevice.Repeat.OFF,
     /** False while the cast device hasn't yet said what some of its items are: [keys] isn't the whole story. */
     val queueKnown: Boolean = true,
-    /** The items as they came, for picking up a queue from another of this app's players. */
-    val items: List<MediaItem?> = emptyList(),
 ) {
     enum class State { IDLE, BUFFERING, PLAYING, PAUSED }
 
@@ -114,8 +123,16 @@ internal data class DeviceStatus(
 
     val isPlaying: Boolean get() = state == State.PLAYING || state == State.BUFFERING
 
-    fun positionAt(nowMs: Long): Long =
-        if (state == State.PLAYING) positionMs + ((nowMs - atMs) * speed).toLong() else positionMs
+    /**
+     * Whether it's been told to play (true) or pause (false); null while that isn't known. Buffering
+     * says neither: a paused cast device buffers too, after a seek from its remote.
+     */
+    val playsOrPauses: Boolean?
+        get() = when (state) {
+            State.PLAYING -> true
+            State.PAUSED -> false
+            State.BUFFERING, State.IDLE -> null
+        }
 }
 
 /** The Default Media Receiver's repeat, as Media3's. */

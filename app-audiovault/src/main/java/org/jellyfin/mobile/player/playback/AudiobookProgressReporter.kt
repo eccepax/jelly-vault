@@ -25,7 +25,9 @@ interface AudiobookProgressSink {
 /**
  * Follows playback and reports where the listener is, the resume position the whole app depends
  * on: when a track starts, every [PROGRESS_INTERVAL_MS] while it plays, on each pause, and when it
- * stops or plays to its end. Streamed tracks report to [server], downloaded ones to [device].
+ * stops or plays to its end. Streamed tracks report to [server], downloaded ones to [device], unless
+ * they play on a cast device, which streams them from the server. A listen reports to one of them
+ * throughout: a download moving onto a cast device or back ends its listen and starts another.
  * App-wide, like the player in the service, so it keeps reporting with the app's screens gone.
  *
  * Reports go through a queue and are sent one at a time; a failed one is logged and dropped.
@@ -37,7 +39,12 @@ class AudiobookProgressReporter(
     private val device: AudiobookProgressSink,
     private val scope: CoroutineScope,
 ) {
-    private class Listen(val index: Int, val track: AudiobookTrack, var lastPositionMs: Long) {
+    private class Listen(
+        val index: Int,
+        val track: AudiobookTrack,
+        var lastPositionMs: Long,
+        val sink: AudiobookProgressSink,
+    ) {
         var sinceProgressMs = 0L
         var playWhenReady = false
 
@@ -104,29 +111,48 @@ class AudiobookProgressReporter(
                 current?.let(::end)
                 listen = track?.let { begin(state.currentIndex, it, state) }
             }
+            else -> onSameTrack(current, track, state)
+        }
+    }
+
+    /** What changed of the track [current] listens to. */
+    private fun onSameTrack(current: Listen, track: AudiobookTrack, state: AudiobookPlaybackState) {
+        when {
+            !current.over && current.sink !== sinkFor(track, state) -> {
+                // Where it plays from changed: the listen ends where it got to, and goes on from there
+                current.lastPositionMs = controller.positionMs
+                end(current)
+                listen = begin(state.currentIndex, track, state)
+            }
             current.over -> if (!state.isEnded && state.error == null) listen = begin(state.currentIndex, track, state)
             state.isEnded -> {
                 current.over = true
-                report(track) { finished(track) }
+                current.report { finished(track) }
             }
             state.error != null -> {
                 current.over = true
-                report(track) { stopped(track, current.lastPositionMs) }
+                current.report { stopped(track, current.lastPositionMs) }
             }
             state.playWhenReady != current.playWhenReady -> {
                 current.playWhenReady = state.playWhenReady
                 current.lastPositionMs = controller.positionMs
                 val positionMs = current.lastPositionMs
-                report(track) { progress(track, positionMs, isPaused = !state.playWhenReady) }
+                current.report { progress(track, positionMs, isPaused = !state.playWhenReady) }
             }
         }
     }
 
     private fun begin(index: Int, track: AudiobookTrack, state: AudiobookPlaybackState): Listen {
         val positionMs = controller.positionMs
-        report(track) { started(track, positionMs) }
-        return Listen(index, track, positionMs).apply { playWhenReady = state.playWhenReady }
+        return Listen(index, track, positionMs, sinkFor(track, state)).apply {
+            playWhenReady = state.playWhenReady
+            report { started(track, positionMs) }
+        }
     }
+
+    /** A download playing on a cast device is streamed there, from the server. */
+    private fun sinkFor(track: AudiobookTrack, state: AudiobookPlaybackState) =
+        if (track.fromDevice && !state.isRemote) device else server
 
     /** The listen moved on from [ended]: finished if it got to the track's last moments. */
     private fun end(ended: Listen) {
@@ -134,7 +160,7 @@ class AudiobookProgressReporter(
         val track = ended.track
         val positionMs = ended.lastPositionMs
         val finished = track.durationMs > 0 && positionMs >= track.durationMs - END_WINDOW_MS
-        report(track) { if (finished) finished(track) else stopped(track, positionMs) }
+        ended.report { if (finished) finished(track) else stopped(track, positionMs) }
     }
 
     private fun onSample() {
@@ -146,13 +172,12 @@ class AudiobookProgressReporter(
         if (current.sinceProgressMs >= PROGRESS_INTERVAL_MS) {
             current.sinceProgressMs = 0L
             val positionMs = current.lastPositionMs
-            report(current.track) { progress(current.track, positionMs, isPaused = false) }
+            current.report { progress(current.track, positionMs, isPaused = false) }
         }
     }
 
-    private fun report(track: AudiobookTrack, send: suspend AudiobookProgressSink.() -> Unit) {
-        // A download playing on a cast device is streamed there, from the server
-        val sink = if (track.fromDevice && !controller.state.value.isRemote) device else server
+    private fun Listen.report(send: suspend AudiobookProgressSink.() -> Unit) {
+        val sink = sink
         reports.trySend { sink.send() }
     }
 

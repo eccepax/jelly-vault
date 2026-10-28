@@ -53,7 +53,10 @@ class CastQueuePlayerTest {
         }
     }
 
-    private val player = CastQueuePlayer(device, ::stream)
+    /** Each song's source, found at once. */
+    private val sources = CastSourceFinder { item, found -> found(CastSource { stream(item, it) }) }
+
+    private val player = CastQueuePlayer(device, sources)
 
     init {
         device.connect()
@@ -358,6 +361,34 @@ class CastQueuePlayerTest {
     }
 
     @Test
+    fun `a paused cast device that buffers (a seek on its remote) stays paused here, and isn't told to play`() {
+        playing("a")
+        device.pressPause()
+        settle()
+
+        device.seekOnRemote(50_000L)
+        player.playWhenReady shouldBe false
+        settle()
+
+        player.playWhenReady shouldBe false
+        device.isPlaying shouldBe false
+        device.commands.last() shouldBe "pause"
+        player.currentPosition.near(50_000L)
+    }
+
+    @Test
+    fun `a playing cast device that buffers plays on, here too`() {
+        playing("a")
+
+        device.seekOnRemote(50_000L)
+        player.playWhenReady shouldBe true
+        settle()
+
+        player.isPlaying shouldBe true
+        device.isPlaying shouldBe true
+    }
+
+    @Test
     fun `stopped on the cast device, the queue stays here, stopped`() {
         playing("a", "b")
 
@@ -450,6 +481,41 @@ class CastQueuePlayerTest {
     }
 
     @Test
+    fun `a session back after a moment without the network carries on as it was, without sending the queue again`() {
+        playing("a", "b", "c")
+        val connections = mutableListOf<Boolean>()
+        player.onConnectionChange = { connections += it }
+        val commands = device.commands.size
+
+        device.suspend()
+        settle(5_000L)
+        device.resume()
+        settle()
+
+        connections shouldBe listOf(true)
+        device.commands.size shouldBe commands
+        player.isPlaying shouldBe true
+        device.isPlaying shouldBe true
+        player.currentPosition.near(5_000L + 2 * SETTLE_MS)
+    }
+
+    @Test
+    fun `what changed here while the session was away goes once it's back, answers lost then too`() {
+        playing("a", "b")
+
+        player.seekTo(30_000L)
+        device.suspend()
+        player.pause()
+        settle()
+        device.resume()
+        settle()
+
+        device.isPlaying shouldBe false
+        device.songPositionMs.near(30_000L)
+        player.currentPosition.near(30_000L)
+    }
+
+    @Test
     fun `a cast device that went quiet before the cast ended is left as far on as it would have got`() {
         playing("a", "b", "c")
         settle(90_000L)
@@ -466,7 +532,7 @@ class CastQueuePlayerTest {
     fun `another player of this app's can take up what's on the cast device`() {
         playing("a", "b", "c", "d", index = 1)
         player.release()
-        val next = CastQueuePlayer(device, ::stream)
+        val next = CastQueuePlayer(device, sources)
 
         next.takeUpDevice()
 
@@ -477,9 +543,80 @@ class CastQueuePlayerTest {
     }
 
     @Test
+    fun `a queue taken up keeps where its transcodes start, so its place is still the song's`() {
+        transcodes = setOf("b")
+        playing("a", "b", "c", index = 1, positionMs = 30_000L)
+        player.release()
+        val next = CastQueuePlayer(device, sources)
+
+        next.takeUpDevice()
+
+        next.currentMediaItem?.mediaId shouldBe "b"
+        next.currentPosition.near(30_000L)
+        next.release()
+    }
+
+    @Test
+    fun `a taken-up song seeked in finds its source then, and its stream starts there`() {
+        transcodes = setOf("b")
+        playing("b", "c", positionMs = 30_000L)
+        player.release()
+        val next = CastQueuePlayer(device, sources)
+        next.takeUpDevice()
+        asked.clear()
+
+        next.seekTo(60_000L)
+        settle()
+
+        asked shouldContain ("b" to 60_000L)
+        device.songPositionMs.near(60_000L)
+        next.release()
+    }
+
+    @Test
+    fun `nothing goes to the cast device until a song's source is found, and each is looked for once`() {
+        val later = FakeCastDevice()
+        val looked = mutableListOf<String>()
+        val found = mutableMapOf<String, (CastSource) -> Unit>()
+        val slow = CastQueuePlayer(
+            later,
+            CastSourceFinder { item, give ->
+                looked += item.mediaId
+                found[item.mediaId] = give
+            },
+        )
+        later.connect()
+        slow.setMediaItems(items("a", "b", "c", "d"))
+        slow.playWhenReady = true
+        slow.prepare()
+        settle()
+
+        later.commands.shouldBeEmpty()
+        slow.playbackState shouldBe Player.STATE_BUFFERING
+        looked shouldBe listOf("a", "b", "c")
+
+        // The next songs aren't waited for: the one playing goes as soon as it can
+        found.getValue("a")(CastSource { stream(item("a"), it) })
+        settle()
+        later.queue.map { it.item.mediaId } shouldBe listOf("a")
+        slow.isPlaying shouldBe true
+
+        found.getValue("c")(CastSource { stream(item("c"), it) })
+        found.getValue("b")(CastSource { stream(item("b"), it) })
+        settle()
+        later.queue.map { it.item.mediaId } shouldBe listOf("a", "b", "c")
+
+        slow.seekTo(10_000L)
+        slow.seekToNextMediaItem()
+        settle()
+        looked shouldBe listOf("a", "b", "c", "d")
+        slow.release()
+    }
+
+    @Test
     fun `answers that come before the cast device's report land the same`() {
         val answersFirst = FakeCastDevice(answerFirst = true)
-        val other = CastQueuePlayer(answersFirst, ::stream)
+        val other = CastQueuePlayer(answersFirst, sources)
         answersFirst.connect()
         other.setMediaItems(items("a", "b", "c", "d", "e"))
         other.playWhenReady = true

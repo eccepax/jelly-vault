@@ -8,8 +8,6 @@ import androidx.media3.common.MediaMetadata
 private const val EXTRA_CHAPTER_STARTS = "org.jellyfin.mobile.chapterStarts"
 private const val EXTRA_CHAPTER_NAMES = "org.jellyfin.mobile.chapterNames"
 private const val EXTRA_FROM_DEVICE = "org.jellyfin.mobile.fromDevice"
-private const val EXTRA_CONTAINER = "org.jellyfin.mobile.container"
-private const val EXTRA_AUDIO_CODEC = "org.jellyfin.mobile.audioCodec"
 
 /**
  * The player-side form of a track. Everything the app and the service need travels in the item,
@@ -37,8 +35,6 @@ fun AudiobookTrack.toMediaItem(streamUrl: (itemId: String) -> String): MediaItem
                         putLongArray(EXTRA_CHAPTER_STARTS, chapters.map { it.startMs }.toLongArray())
                         putStringArray(EXTRA_CHAPTER_NAMES, chapters.map { it.name.orEmpty() }.toTypedArray())
                         putBoolean(EXTRA_FROM_DEVICE, fromDevice)
-                        putString(EXTRA_CONTAINER, container)
-                        putString(EXTRA_AUDIO_CODEC, audioCodec)
                     },
                 )
                 .build(),
@@ -60,8 +56,6 @@ fun MediaItem.toAudiobookTrack(): AudiobookTrack {
         durationMs = metadata.durationMs ?: 0L,
         chapters = starts.mapIndexed { i, start -> Chapter(start, names?.getOrNull(i)?.takeIf { it.isNotEmpty() }) },
         fromDevice = metadata.extras?.getBoolean(EXTRA_FROM_DEVICE) == true,
-        container = metadata.extras?.getString(EXTRA_CONTAINER),
-        audioCodec = metadata.extras?.getString(EXTRA_AUDIO_CODEC),
     )
 }
 

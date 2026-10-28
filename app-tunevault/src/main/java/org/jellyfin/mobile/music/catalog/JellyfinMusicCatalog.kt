@@ -3,10 +3,8 @@ package org.jellyfin.mobile.music.catalog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jellyfin.mobile.cast.CAST_MP3
-import org.jellyfin.mobile.cast.CastStream
-import org.jellyfin.mobile.cast.castFormatOf
-import org.jellyfin.mobile.cast.serverCastStream
+import org.jellyfin.mobile.cast.CastSource
+import org.jellyfin.mobile.cast.serverCastSource
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
@@ -128,17 +126,13 @@ class JellyfinMusicCatalog(
         withAccessToken(downloadUri(trackId, streamingQuality()), apiClient.accessToken)
 
     /**
-     * The song as a cast device gets it, from [fromMs] (see [serverCastStream]), and the type it
-     * comes as (the receiver needs one). At the original quality, in its own format where a cast
-     * device plays that (see [castFormatOf]); anything else, or at a lower quality (which the server
-     * transcodes down to anyway), as MP3. Either way the type is known before the server answers.
+     * Where a cast device gets the song from (see [serverCastSource]): from the server, even when it
+     * plays from a download here. At the original quality, in its own format where a cast device
+     * plays that; at a lower quality (which the server transcodes down to anyway), as MP3.
      */
-    fun castStream(trackId: String, container: String?, fromMs: Long = 0L): CastStream {
+    suspend fun castSource(trackId: String): CastSource {
         val quality = streamingQuality()
-        val original = quality == StreamingQuality.ORIGINAL
-        val format = if (original) castFormatOf(container) else CAST_MP3
-        val goesAsIs = original && format.playsAsIs(container, null)
-        return serverCastStream(apiClient, trackId, format, goesAsIs, fromMs, quality.maxBitrate)
+        return serverCastSource(apiClient, trackId, quality == StreamingQuality.ORIGINAL, quality.maxBitrate)
     }
 
     /**
@@ -146,31 +140,14 @@ class JellyfinMusicCatalog(
      * long as they last, and get the current token added to each request (see [withAccessToken]).
      */
     fun downloadUri(trackId: String, quality: StreamingQuality): String =
-        universalAudioUri(trackId, DIRECT_PLAY_CONTAINERS, quality, transcodeTo = "m4a", transcodeCodec = "aac")
-
-    /**
-     * [trackId] as it is if it's in one of [containers] (and within [quality], [maxSampleRate] and
-     * [maxBitDepth]), else as [transcodeTo].
-     */
-    @Suppress("LongParameterList")
-    private fun universalAudioUri(
-        trackId: String,
-        containers: List<String>,
-        quality: StreamingQuality,
-        transcodeTo: String,
-        transcodeCodec: String,
-        maxSampleRate: Int? = null,
-        maxBitDepth: Int? = null,
-    ): String = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-        itemId = trackId.toUUID(),
-        container = containers,
-        maxStreamingBitrate = quality.maxBitrate,
-        transcodingContainer = transcodeTo,
-        transcodingProtocol = MediaStreamProtocol.HTTP,
-        audioCodec = transcodeCodec,
-        maxAudioSampleRate = maxSampleRate,
-        maxAudioBitDepth = maxBitDepth,
-    )
+        apiClient.universalAudioApi.getUniversalAudioStreamUrl(
+            itemId = trackId.toUUID(),
+            container = DIRECT_PLAY_CONTAINERS,
+            maxStreamingBitrate = quality.maxBitrate,
+            transcodingContainer = "m4a",
+            transcodingProtocol = MediaStreamProtocol.HTTP,
+            audioCodec = "aac",
+        )
 
     private suspend fun albumItems(parentId: UUID, albumArtistId: UUID? = null): List<BaseItemDto> =
         apiClient.itemsApi.getItems(

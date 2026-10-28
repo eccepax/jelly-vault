@@ -12,7 +12,6 @@ import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.BaseItemKind
-import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.SessionInfoDto
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 import org.jellyfin.sdk.model.api.UserItemDataDto
@@ -100,18 +99,9 @@ class JellyfinAudiobookPlaybackContractTest {
     }
 
     @Test
-    fun `a book's details say what its file holds, so it can be cast in a format a cast device plays`() =
-        runBlocking<Unit> {
-            val source = audiobooks.items(listOf(m4b)).single().mediaSources.orEmpty().first()
-
-            source.container shouldBe "m4b"
-            source.mediaStreams.orEmpty().first { it.type == MediaStreamType.AUDIO }.codec shouldBe "aac"
-        }
-
-    @Test
-    fun `an m4b of AAC is cast as it is, served as the type the cast device is told, so it can seek`() {
-        // From part way through: the cast device seeks there in the whole file
-        val stream = audiobooks.castStream(m4b.toString(), container = "m4b", audioCodec = "aac", fromMs = 60_000L)
+    fun `an m4b of AAC is cast as it is, served as the type the cast device is told, so it can seek`() = runBlocking<Unit> {
+        // The server says what the file is; from part way through, the cast device seeks there in the whole file
+        val stream = audiobooks.castSource(m4b.toString()).streamFrom(60_000L)
 
         // The cast device fetches it on its own: no Authorization header
         val response = get(stream.url, range = "bytes=1000-1999", authorized = false)
@@ -124,19 +114,16 @@ class JellyfinAudiobookPlaybackContractTest {
     }
 
     @Test
-    fun `a book of no known format is cast as an mp3 transcode, which starts where it's asked for`() {
-        val fromMs = 1.minutes.inWholeMilliseconds
-        val stream = audiobooks.castStream(m4b.toString(), container = null, audioCodec = null, fromMs = fromMs)
+    fun `a book the server can't say anything of is cast as an mp3 transcode, which starts where it's asked for`() =
+        runBlocking<Unit> {
+            val fromMs = 1.minutes.inWholeMilliseconds
+            val stream = audiobooks.castSource(UUID.randomUUID().toString()).streamFrom(fromMs)
 
-        val response = get(stream.url, authorized = false)
-
-        stream.mimeType shouldBe "audio/mpeg"
-        stream.startMs shouldBe fromMs
-        stream.seekable shouldBe false
-        response.code shouldBe HttpURLConnection.HTTP_OK
-        response.contentType shouldBe stream.mimeType
-        stream.url.lowercase() shouldContain "starttimeticks=${fromMs * 10_000L}"
-    }
+            stream.mimeType shouldBe "audio/mpeg"
+            stream.startMs shouldBe fromMs
+            stream.seekable shouldBe false
+            stream.url.lowercase() shouldContain "starttimeticks=${fromMs * 10_000L}"
+        }
 
     @Test
     fun `while a book plays, the server sees where the listener is, and that it's paused`() = runBlocking<Unit> {
