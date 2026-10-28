@@ -13,7 +13,9 @@ import org.jellyfin.mobile.player.session.withPlayableUri
  * the place, repeat and speed carry over, the player left behind stops, and the session gets the
  * new player through [setSessionPlayer], wrapped by [wrap] the way the app wraps its own player.
  * Playing carries over onto a cast device; back here, playback waits paused rather than starting
- * out of the phone's speaker. A stopped player's queue carries over stopped.
+ * out of the phone's speaker. A stopped player's queue carries over stopped. Back here, the place is
+ * set through the app's wrapper too, which knows where this device's streams start (a transcode
+ * started part way, say): a cast player's places are always the song's.
  *
  * A cast device's queue is [CastQueuePlayer]'s own, still there once its session has ended, where
  * it had got to; one it emptied leaves nothing to pick up here. With nothing here to cast, a cast
@@ -41,9 +43,11 @@ class SessionPlayerSwitcher(
         previous.stop()
         player = next
         if (next === local) volume?.let { local.volume = it }
+        val wrapped = wrap(next)
         when {
             state != null -> {
                 next.setMediaItems(state.items, state.index, state.positionMs)
+                if (next === local && wrapped !== next) wrapped.seekTo(state.index, state.positionMs)
                 next.repeatMode = state.repeatMode
                 next.playbackParameters = state.playbackParameters
                 next.playWhenReady = state.playWhenReady && next !== local
@@ -53,7 +57,7 @@ class SessionPlayerSwitcher(
             next === local -> next.clearMediaItems()
             else -> (next as? CastQueuePlayer)?.takeUpDevice()
         }
-        setSessionPlayer(wrap(next))
+        setSessionPlayer(wrapped)
     }
 
     private data class PlaybackState(

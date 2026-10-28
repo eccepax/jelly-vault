@@ -16,8 +16,10 @@ import androidx.media3.common.Timeline
  * from the target (the server transcodes from [START_PARAM]). Positions and the length still count
  * from the start of the whole track, for everything that reads them. A track started part way is
  * put back to its start once it's left, so going back to it later plays it from its beginning.
+ * Without [streamOffsets] (wrapping a cast player, which starts and seeks its own streams and counts
+ * from the track's start: see common-cast's CastQueuePlayer) only the chapters are this one's.
  */
-class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
+class AudiobookPlayer(player: Player, private val streamOffsets: Boolean = true) : ForwardingPlayer(player) {
 
     init {
         player.addListener(
@@ -30,7 +32,7 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 
     /** Where the playing stream starts in its track: past 0 when a transcode was started part way. */
-    private val streamStartMs: Long get() = currentMediaItem?.streamStartMs ?: 0L
+    private val streamStartMs: Long get() = if (streamOffsets) currentMediaItem?.streamStartMs ?: 0L else 0L
 
     /**
      * A transcode: one the player has opened and can't seek in, or one already started part way,
@@ -38,6 +40,7 @@ class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
      */
     private val isLiveTranscode: Boolean
         get() {
+            if (!streamOffsets) return false
             if (streamStartMs > 0) return true
             val timeline = currentTimeline
             if (timeline.isEmpty) return false

@@ -225,6 +225,27 @@ class SessionPlayerSwitcherTest {
     }
 
     @Test
+    fun `back here, the place is set through the app's own wrapper, which knows where its streams start`() {
+        // AudioVault's starts a transcode from the place again: the stream it held may have started elsewhere
+        val seeks = mutableListOf<Pair<Int, Long>>()
+        val wrapping = SessionPlayerSwitcher(
+            local,
+            wrap = { player -> if (player === local) Seeking(player, seeks) else player },
+            setSessionPlayer = { sessionPlayers += it },
+        )
+        local.load(index = 0, positionMs = 0L, play = false)
+        wrapping.switchTo(cast)
+        settle()
+        cast.seekTo(1, 40_000L)
+        settle()
+
+        wrapping.switchTo(local)
+        settleHere()
+
+        seeks shouldBe listOf(1 to 40_000L)
+    }
+
+    @Test
     fun `switching to the player already playing does nothing`() {
         switcher.switchTo(local)
 
@@ -327,6 +348,13 @@ class SessionPlayerSwitcherTest {
     }
 
     private class Wrapped(player: Player) : ForwardingPlayer(player)
+
+    private class Seeking(player: Player, private val seeks: MutableList<Pair<Int, Long>>) : ForwardingPlayer(player) {
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            seeks += mediaItemIndex to positionMs
+            super.seekTo(mediaItemIndex, positionMs)
+        }
+    }
 
     private companion object {
         const val SONG_MS = 100_000L

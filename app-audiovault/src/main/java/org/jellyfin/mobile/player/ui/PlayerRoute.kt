@@ -71,7 +71,12 @@ fun PlayerRoute(
     KeepScreenOn(playback.isPlaying)
 
     val playbackInfo = stringResource(
-        if (playback.currentTrack?.fromDevice == true) R.string.playback_info_from_device else R.string.playback_info_streamed,
+        // On a cast device, even a download is streamed
+        if (playback.currentTrack?.fromDevice == true && !playback.isRemote) {
+            R.string.playback_info_from_device
+        } else {
+            R.string.playback_info_streamed
+        },
     )
     val state = playerUiState(playback, progress, playbackInfo).copy(
         speed = speed,

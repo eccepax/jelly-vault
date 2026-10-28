@@ -279,6 +279,20 @@ class AudiobookProgressReporterTest {
     }
 
     @Test
+    fun `a downloaded track playing on a cast device is streamed there, so the server hears of it`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L)
+        controller.state.value = controller.state.value.copy(isRemote = true)
+        runCurrent()
+
+        play(PROGRESS_INTERVAL_MS)
+        pause()
+
+        device.reports.shouldBeEmpty()
+        server.reports shouldBe listOf("started downloaded at 0", "progress downloaded at 10000", "paused downloaded at 10000")
+    }
+
+    @Test
     fun `finishing a downloaded track keeps it as finished`() = runTest {
         reporter()
         controller.playing(downloaded, positionMs = 3_599_000L)
