@@ -117,16 +117,13 @@ private fun placeOf(url: String): Place? {
     } catch (@Suppress("SwallowedException") e: URISyntaxException) {
         return null
     }
-    val scheme = uri.scheme?.lowercase() ?: return null
-    val host = uri.host?.lowercase() ?: return null
-    val port = when {
-        uri.port != -1 -> uri.port
-        scheme == "https" -> HTTPS_PORT
-        scheme == "http" -> HTTP_PORT
-        else -> return null
-    }
+    val scheme = uri.scheme?.lowercase()
+    val host = uri.host?.lowercase()
+    val port = uri.port.takeIf { it != -1 } ?: DEFAULT_PORTS[scheme]
+    if (host == null || port == null) return null
     return Place("$scheme://$host:$port", uri.rawPath.orEmpty().trimEnd('/'))
 }
 
 private const val HTTP_PORT = 80
 private const val HTTPS_PORT = 443
+private val DEFAULT_PORTS = mapOf("http" to HTTP_PORT, "https" to HTTPS_PORT)
