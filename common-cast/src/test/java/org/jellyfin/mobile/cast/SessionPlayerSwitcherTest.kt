@@ -16,6 +16,7 @@ import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.longs.shouldBeInRange
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import org.junit.After
@@ -417,6 +418,61 @@ class SessionPlayerSwitcherTest {
         again.ids shouldBe listOf("a", "b", "c")
         again.isPlaying shouldBe true
         again.release()
+    }
+
+    @Test
+    fun `a volume asked for in an earlier cast isn't this device's after a later cast that asked for none`() {
+        local.load(index = 0, positionMs = 0L, play = false)
+        switcher.switchTo(cast)
+        settle()
+        cast.volume = 0.2f
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+        local.volume = 1f
+
+        device.connect()
+        switcher.switchTo(cast)
+        settle()
+        cast.volume shouldBe 1f
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+
+        local.volume shouldBe 1f
+    }
+
+    @Test
+    fun `the session is on the new player before the one left behind stops, so it never reads stopped mid-switch`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        var stateWhenSwitched: Int? = null
+        val watching = SessionPlayerSwitcher(local, setSessionPlayer = { stateWhenSwitched = local.playbackState })
+
+        watching.switchTo(cast)
+
+        stateWhenSwitched shouldNotBe Player.STATE_IDLE
+        local.playbackState shouldBe Player.STATE_IDLE
+    }
+
+    @Test
+    fun `casting again with nothing here doesn't bring back the queue of the cast before`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        switcher.switchTo(cast)
+        settle()
+        cast.stop()
+        settle()
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+        // As an app stops playback here
+        local.clearMediaItems()
+        settleHere()
+
+        device.connect()
+        switcher.switchTo(cast)
+        settle()
+
+        cast.mediaItemCount shouldBe 0
     }
 
     private class Wrapped(player: Player) : ForwardingPlayer(player)

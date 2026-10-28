@@ -116,7 +116,11 @@ internal class RemoteMediaClientDevice(
     private val sessions = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) = attach(session)
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = attach(session)
-        override fun onSessionEnded(session: CastSession, error: Int) = detach(notify = true)
+
+        // One replaced already (suspended, then back as another) ending late isn't the one attached ending
+        override fun onSessionEnded(session: CastSession, error: Int) {
+            if (this@RemoteMediaClientDevice.session === session) detach(notify = true)
+        }
         override fun onSessionSuspended(session: CastSession, reason: Int) {
             if (this@RemoteMediaClientDevice.session === session) suspended = true
         }
@@ -138,9 +142,11 @@ internal class RemoteMediaClientDevice(
             if (suspended) resumed(session)
             return
         }
-        // Back from a suspended session as another one: the same cast carrying on, not one ending
-        detach(notify = !suspended)
-        val client = session.remoteMediaClient ?: return
+        val client = session.remoteMediaClient
+        // Back from a suspended session as another one: the same cast carrying on, not one ending,
+        // unless the new one has no media channel to carry on with
+        detach(notify = !suspended || client == null)
+        if (client == null) return
         this.session = session
         keyById.clear()
         client.registerCallback(clientCallback)

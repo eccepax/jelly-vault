@@ -558,7 +558,7 @@ internal class CastQueuePlayer(
             status.currentKey != playing.key -> load(wanted, position, goTo)
             // Songs after it still to be found don't hold up play, pause and the rest
             status.keys != wanted.map { it.key } && fixTail(status, wanted) -> Unit
-            else -> syncPlayback(status, repeatFor(repeatMode, status.keys.size == entries.size))
+            else -> syncPlayback(status, deviceRepeat(status.keys.size == entries.size))
         }
     }
 
@@ -566,11 +566,19 @@ internal class CastQueuePlayer(
     private fun syncPlayback(status: DeviceStatus, repeat: CastDevice.Repeat) {
         when {
             status.repeat != repeat -> send { device.setRepeat(repeat, it) }
-            status.state != DeviceStatus.State.IDLE && status.isPlaying != playWhenReady ->
+            // Buffering says neither: a paused cast device buffers too, and isn't told to pause again
+            status.playsOrPauses.let { it != null && it != playWhenReady } ->
                 send(touchesPlayback = true) { if (playWhenReady) device.play(it) else device.pause(it) }
             abs(status.speed - speed) > SPEED_TOLERANCE -> send { device.setSpeed(speed, it) }
         }
     }
+
+    /**
+     * The cast device repeats by itself only when each stream it holds starts at its song's start:
+     * one started part way (a transcode) would repeat from there, so this goes round instead.
+     */
+    private fun deviceRepeat(wholeQueueSent: Boolean): CastDevice.Repeat =
+        if (sent.values.any { it.startMs != 0L }) CastDevice.Repeat.OFF else repeatFor(repeatMode, wholeQueueSent)
 
     /** The entries the cast device should hold: [window] of them from [from], round the queue as repeat goes. */
     private fun windowFrom(from: Int): List<Entry> {
@@ -612,7 +620,7 @@ internal class CastQueuePlayer(
         val items = ready.mapIndexed { i, entry -> sentItem(entry, if (i == 0) fromMs else 0L) }
         sent.clear()
         items.forEach { sent[it.key] = it.stream }
-        val repeat = repeatFor(repeatMode, ready.size == entries.size)
+        val repeat = deviceRepeat(ready.size == entries.size)
         send({ ok -> if (ok && target === goTo) target = null }, touchesPlayback = true) {
             device.load(items, 0, fromMs - items[0].stream.startMs, playWhenReady, repeat, speed, it)
         }
