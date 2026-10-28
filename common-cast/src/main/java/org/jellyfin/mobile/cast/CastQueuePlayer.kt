@@ -41,6 +41,9 @@ internal class CastQueuePlayer(
     private val device: CastDevice,
     private val sources: CastSourceFinder,
     private val window: Int = WINDOW,
+    /** How far skip back and forward go: as far as this device's player does (see SessionCasting). */
+    private val seekBackMs: Long = C.DEFAULT_SEEK_BACK_INCREMENT_MS,
+    private val seekForwardMs: Long = C.DEFAULT_SEEK_FORWARD_INCREMENT_MS,
     looper: Looper = Looper.getMainLooper(),
     private val now: () -> Long = SystemClock::elapsedRealtime,
 ) : SimpleBasePlayer(looper), CastDevice.Listener {
@@ -101,6 +104,9 @@ internal class CastQueuePlayer(
     /** Taking up what the cast device plays, once it has said (see [takeUpDevice]). */
     private var takingUp = false
 
+    /** Taking up play or pause as the cast device next says it, from a queue taken up while it buffered. */
+    private var adoptPlayback = false
+
     init {
         device.listener = this
     }
@@ -143,8 +149,8 @@ internal class CastQueuePlayer(
             .setCurrentMediaItemIndex(if (entries.isEmpty()) C.INDEX_UNSET else index)
             .setContentPositionMs { position }
             .setIsLoading(inFlight && playbackState != Player.STATE_IDLE && playbackState != Player.STATE_ENDED)
-            .setSeekBackIncrementMs(C.DEFAULT_SEEK_BACK_INCREMENT_MS)
-            .setSeekForwardIncrementMs(C.DEFAULT_SEEK_FORWARD_INCREMENT_MS)
+            .setSeekBackIncrementMs(seekBackMs)
+            .setSeekForwardIncrementMs(seekForwardMs)
             .setMaxSeekToPreviousPositionMs(C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS)
             .build()
     }
@@ -192,6 +198,9 @@ internal class CastQueuePlayer(
 
     override fun handlePrepare(): ListenableFuture<*> {
         prepared = true
+        // After an error the cast device may still hold the song it couldn't play: it's sent again
+        val playing = current
+        if (error != null && playing != null) target = Target(playing.key, position, reload = true)
         error = null
         failures = 0
         return changed()
@@ -313,7 +322,6 @@ internal class CastQueuePlayer(
         when {
             stillThere >= 0 -> index = stillThere
             playingReplaced && entries.isNotEmpty() -> moveTo(fromIndex.coerceAtMost(entries.lastIndex), 0L)
-            index >= toIndex -> index += replacements.size - replaced.size
         }
         return changed()
     }
@@ -347,7 +355,7 @@ internal class CastQueuePlayer(
      */
     fun takeUpDevice() {
         val status = device.status
-        if (status == null) {
+        if (status == null || !status.queueKnown) {
             takingUp = true
             return
         }
@@ -367,6 +375,14 @@ internal class CastQueuePlayer(
         held.forEach { sent[it.key] = it.stream }
         prepared = true
         playWhenReady = status.isPlaying
+        // Buffering says neither play nor pause: the first that it does say is taken up as it is
+        adoptPlayback = status.playsOrPauses == null
+        repeatMode = when (status.repeat) {
+            CastDevice.Repeat.OFF -> Player.REPEAT_MODE_OFF
+            CastDevice.Repeat.ONE -> Player.REPEAT_MODE_ONE
+            CastDevice.Repeat.ALL -> Player.REPEAT_MODE_ALL
+        }
+        speed = status.speed
         target = null
         followDevice(status)
         invalidateState()
@@ -378,6 +394,7 @@ internal class CastQueuePlayer(
         if (released) return
         connection++
         inFlight = false
+        failures = 0
         lastKey = null
         lastPlaying = null
         if (!connected) {
@@ -434,6 +451,10 @@ internal class CastQueuePlayer(
     /** Its place in the song playing, and play or pause where its remote changed that. */
     private fun followPlayback(key: String, status: DeviceStatus) {
         val playsOrPauses = status.playsOrPauses
+        if (adoptPlayback && playsOrPauses != null) {
+            playWhenReady = playsOrPauses
+            adoptPlayback = false
+        }
         if (lastPlaying != null && playsOrPauses != null && playsOrPauses != lastPlaying) playWhenReady = playsOrPauses
         anchor = Anchor(
             positionMs = status.positionMs + (sent[key]?.startMs ?: 0L),
@@ -487,6 +508,7 @@ internal class CastQueuePlayer(
             val next = nextIndex()
             if (next == C.INDEX_UNSET) {
                 position = duration
+                ended = true
                 break
             }
             position -= duration
@@ -521,7 +543,11 @@ internal class CastQueuePlayer(
         val status = device.status?.takeIf { it.queueKnown } ?: return
         val playing = current
         if (!prepared || playing == null) {
-            if (status.state != DeviceStatus.State.IDLE && !status.playsOther) send { device.stop(it) }
+            if (status.state != DeviceStatus.State.IDLE && !status.playsOther) {
+                send(
+                    touchesPlayback = true,
+                ) { device.stop(it) }
+            }
             return
         }
         if (ended || error != null || status.playsOther) return
@@ -541,7 +567,7 @@ internal class CastQueuePlayer(
         when {
             status.repeat != repeat -> send { device.setRepeat(repeat, it) }
             status.state != DeviceStatus.State.IDLE && status.isPlaying != playWhenReady ->
-                send { if (playWhenReady) device.play(it) else device.pause(it) }
+                send(touchesPlayback = true) { if (playWhenReady) device.play(it) else device.pause(it) }
             abs(status.speed - speed) > SPEED_TOLERANCE -> send { device.setSpeed(speed, it) }
         }
     }
@@ -569,8 +595,12 @@ internal class CastQueuePlayer(
         when {
             goTo.reload || stream == null || !stream.seekable && goTo.positionMs != stream.startMs ->
                 load(wanted, goTo.positionMs, goTo)
-            status.currentKey == goTo.key -> send(confirm) { device.seek(goTo.positionMs - stream.startMs, it) }
-            goTo.key in status.keys -> send(confirm) { device.jumpTo(goTo.key, goTo.positionMs - stream.startMs, it) }
+            status.currentKey == goTo.key -> send(
+                confirm,
+                touchesPlayback = true,
+            ) { device.seek(goTo.positionMs - stream.startMs, it) }
+            goTo.key in status.keys ->
+                send(confirm, touchesPlayback = true) { device.jumpTo(goTo.key, goTo.positionMs - stream.startMs, it) }
             else -> load(wanted, goTo.positionMs, goTo)
         }
     }
@@ -583,7 +613,7 @@ internal class CastQueuePlayer(
         sent.clear()
         items.forEach { sent[it.key] = it.stream }
         val repeat = repeatFor(repeatMode, ready.size == entries.size)
-        send({ ok -> if (ok && target === goTo) target = null }) {
+        send({ ok -> if (ok && target === goTo) target = null }, touchesPlayback = true) {
             device.load(items, 0, fromMs - items[0].stream.startMs, playWhenReady, repeat, speed, it)
         }
     }
@@ -637,14 +667,23 @@ internal class CastQueuePlayer(
         }
     }
 
-    private fun send(onDone: (Boolean) -> Unit = {}, command: ((Boolean) -> Unit) -> Unit) {
+    /**
+     * Sends a command, and when it's answered looks at what's next. One that [touchesPlayback] (may
+     * change play or pause) leaves what the cast device says of that as its doing, not its remote's.
+     */
+    private fun send(
+        onDone: (Boolean) -> Unit = {},
+        touchesPlayback: Boolean = false,
+        command: ((Boolean) -> Unit) -> Unit,
+    ) {
         inFlight = true
         val session = connection
         command { ok ->
             if (released || session != connection) return@command
             inFlight = false
-            // Play or pause as it says now may be this command's doing, not its remote's
-            lastPlaying = null
+            // Lost with the session gone for a moment, not turned down: it goes again once the session's back
+            if (!ok && !device.isConnected) return@command
+            if (touchesPlayback) lastPlaying = null
             onDone(ok)
             if (ok) failures = 0 else failed()
             device.status?.let(::followDevice)

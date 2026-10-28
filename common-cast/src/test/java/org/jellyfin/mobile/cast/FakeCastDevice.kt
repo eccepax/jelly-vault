@@ -63,10 +63,17 @@ internal class FakeCastDevice(
     /** While true, it says nothing of what it does. */
     var quiet = false
 
+    /** While true, it says it hasn't yet said what all its items are (the Cast framework's queue still fetching). */
+    var queueUnknown = false
+
+    /** Told of each command as it's taken, by name. */
+    var onCommand: ((String) -> Unit)? = null
+
     private val songEnds = Runnable(::songEnded)
 
-    /** The commands taken whose answers haven't come yet. */
+    /** The commands taken whose answers haven't come yet, and their callbacks. */
     private val answers = mutableListOf<Runnable>()
+    private val failing = mutableListOf<(Boolean) -> Unit>()
 
     val keys: List<String> get() = queue.map { it.key }
     val playing: SentItem? get() = queue.getOrNull(current).takeUnless { other }
@@ -91,14 +98,21 @@ internal class FakeCastDevice(
         status = null
         handler.removeCallbacksAndMessages(null)
         answers.clear()
+        failing.clear()
         listener?.onConnectionChanged(false)
     }
 
-    /** The network goes for a moment: it plays on, unheard, and the answers on their way are lost. */
-    fun suspend() {
+    /**
+     * The network goes for a moment: it plays on, unheard, and the answers on their way are lost, or
+     * come back as failures ([failAnswers]) as the Cast framework's do when its channel goes.
+     */
+    fun suspend(failAnswers: Boolean = false) {
         isConnected = false
         answers.forEach(handler::removeCallbacks)
         answers.clear()
+        val lost = failing.toList()
+        failing.clear()
+        if (failAnswers) lost.forEach { it(false) }
     }
 
     /** The session is back. */
@@ -113,6 +127,9 @@ internal class FakeCastDevice(
     fun skipOnRemote() = remote { if (current < queue.lastIndex) startAt(current + 1, 0L) }
     fun stopOnRemote() = remote { idle(IdleReason.CANCELED) }
     fun failToPlay() = remote { idle(IdleReason.ERROR) }
+
+    /** It says what it holds again, with nothing changed. */
+    fun sayAgain() = remote {}
 
     /** Its remote seeks: it buffers a round trip, then plays or stays paused there as it was. */
     fun seekOnRemote(positionMs: Long) {
@@ -232,9 +249,11 @@ internal class FakeCastDevice(
     private fun command(name: String, done: (Boolean) -> Unit, apply: () -> Unit) {
         check(isConnected) { "$name with no session" }
         commands += name
+        onCommand?.invoke(name)
         lateinit var answer: Runnable
         answer = Runnable {
             answers -= answer
+            failing -= done
             run {
                 if (failNext > 0) {
                     failNext--
@@ -253,6 +272,7 @@ internal class FakeCastDevice(
             }
         }
         answers += answer
+        failing += done
         handler.postDelayed(answer, roundTripMs)
     }
 
@@ -333,6 +353,7 @@ internal class FakeCastDevice(
             speed = speed,
             durationMs = if (playingItem?.stream?.seekable == true) streamLength(current) else C.TIME_UNSET,
             repeat = repeat,
+            queueKnown = !queueUnknown,
         )
         status = next
         if (notify) listener?.onStatus(next)
