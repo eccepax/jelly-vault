@@ -55,6 +55,24 @@ class TranscodedAudiobookPlayerTest {
     private val lastStreamUrl: String get() = transcodes.created.last().localConfiguration!!.uri.toString()
 
     @Test
+    fun `wrapping a cast player, where a stream starts and how it seeks are the cast player's`() {
+        // CastQueuePlayer asks for each stream from where it should start, and counts from the track's start
+        val onCast = AudiobookPlayer(exoPlayer, streamOffsets = false)
+        val partWay = track("a").toMediaItem { "https://vault.test/Audio/$it/universal?StartTimeTicks=600000000" }
+        onCast.setMediaItems(listOf(partWay))
+        onCast.prepare()
+        settle()
+        val streams = transcodes.created.size
+
+        onCast.currentPosition shouldBe exoPlayer.currentPosition
+        onCast.seekTo(30_000L)
+        settle()
+
+        transcodes.created.size shouldBe streams
+        exoPlayer.currentPosition shouldBe 30_000L
+    }
+
+    @Test
     fun `a seek starts the stream again from there`() {
         load(track("a"))
 

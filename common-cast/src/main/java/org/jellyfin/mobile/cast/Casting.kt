@@ -2,9 +2,6 @@ package org.jellyfin.mobile.cast
 
 import android.content.Context
 import androidx.annotation.OptIn
-import androidx.media3.cast.CastPlayer
-import androidx.media3.cast.MediaItemConverter
-import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
@@ -31,15 +28,29 @@ interface Casting {
 
     /** Ends the cast: the cast device stops, and playback comes back here (see SessionCasting). */
     fun stopCasting()
+
+    /**
+     * Ends the cast and forgets what it was playing, so nothing of it comes back here: for signing
+     * out, since the cast device holds stream urls with the token in them. Queues are emptied first,
+     * in the playback services themselves, so it doesn't wait on a controller's stop arriving.
+     */
+    fun forgetCast()
 }
 
-/** Makes players for the cast device (see [SessionCasting]); kept in this module with Media3's unstable cast API. */
+/** The cast device for playback services (see [SessionCasting]). */
 @UnstableApi
 internal interface CastPlayers {
-    /** Runs [onReady] once the Cast framework has started (at once if it has); never if it can't. */
-    fun whenReady(onReady: () -> Unit)
+    /**
+     * Runs [onReady] once the Cast framework has started (at once if it has); never if it can't.
+     * The answer takes it back while it's still waiting.
+     */
+    fun whenReady(onReady: () -> Unit): () -> Unit
 
-    fun newCastPlayer(converter: MediaItemConverter): CastPlayer
+    /** The cast device, through the framework once it has started; [live] sends items as live streams. */
+    fun newDevice(live: Boolean): CastDevice
+
+    /** [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. */
+    fun forgetsWithCast(player: CastQueuePlayer): () -> Unit
 }
 
 /**
@@ -58,12 +69,14 @@ object NoCasting : Casting {
     override val isAvailable: StateFlow<Boolean> = MutableStateFlow(false)
     override val castDevice: StateFlow<String?> = MutableStateFlow(null)
     override fun stopCasting() = Unit
+    override fun forgetCast() = Unit
 }
 
 @UnstableApi
 private class CastContextCasting(private val context: Context) : Casting, CastPlayers {
     private var castContext: CastContext? = null
     private val gate = StartGate()
+    private val players = mutableSetOf<CastQueuePlayer>()
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -125,19 +138,21 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
         castContext?.sessionManager?.endCurrentSession(true)
     }
 
-    /**
-     * With the context, the player names the system's routing session for the cast (see the
-     * MediaTransferReceiver in the manifest), so the volume keys and the system's volume panel
-     * reach the cast device; without it, Android says to use the cast device's remote instead.
-     */
-    override fun newCastPlayer(converter: MediaItemConverter): CastPlayer = CastPlayer(
-        context,
-        checkNotNull(castContext) { "The Cast framework hasn't started" },
-        converter,
-        C.DEFAULT_SEEK_BACK_INCREMENT_MS,
-        C.DEFAULT_SEEK_FORWARD_INCREMENT_MS,
-        C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS,
-    )
+    override fun forgetCast() {
+        players.toList().forEach {
+            it.stop()
+            it.clearMediaItems()
+        }
+        stopCasting()
+    }
+
+    override fun newDevice(live: Boolean): CastDevice =
+        RemoteMediaClientDevice(context, checkNotNull(castContext) { "The Cast framework hasn't started" }, live)
+
+    override fun forgetsWithCast(player: CastQueuePlayer): () -> Unit {
+        players += player
+        return { players -= player }
+    }
 
     private val CastSession.deviceName: String? get() = castDevice?.friendlyName
 }

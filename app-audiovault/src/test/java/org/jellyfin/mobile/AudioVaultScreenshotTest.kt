@@ -117,6 +117,7 @@ class AudioVaultScreenshotTest {
             override val isAvailable = MutableStateFlow(false)
             override val castDevice = MutableStateFlow<String?>("Living Room TV")
             override fun stopCasting() = Unit
+            override fun forgetCast() = Unit
         }
         capture("player-cast") { PlayerRoute(onBack = {}, viewModel = playerViewModel(), casting = casting) }
     }

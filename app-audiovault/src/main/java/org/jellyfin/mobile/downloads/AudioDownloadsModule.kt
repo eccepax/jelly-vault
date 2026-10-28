@@ -108,7 +108,7 @@ val audioDownloadsModule = module {
                 sleepTimer.cancel()
                 reporter.finishAndStop()
             },
-            stopCasting = casting::stopCasting,
+            forgetCast = casting::forgetCast,
             forgetDownloads = { downloadsOnSignOut() },
         )
     }

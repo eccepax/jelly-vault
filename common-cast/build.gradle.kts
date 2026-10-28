@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-// Chromecast for the vault apps, through Media3's CastPlayer and Google's Default Media Receiver.
+// Chromecast for the vault apps, through the Cast framework and Google's Default Media Receiver.
 // The only module that needs Google Play services: an app built without it doesn't cast.
 android {
     namespace = "org.jellyfin.mobile.cast"
@@ -20,14 +20,16 @@ android {
 }
 
 dependencies {
-    api(libs.androidx.media3.cast)
+    implementation(libs.androidx.media3.cast)
     api(libs.play.services.cast.framework)
     implementation(libs.androidx.mediarouter)
     implementation(libs.androidx.media3.session)
     implementation(libs.bundles.coroutines)
     implementation(libs.bundles.compose)
     implementation(libs.timber)
+    implementation(project(":common"))
     implementation(project(":common-media"))
+    implementation(libs.jellyfin.sdk)
 
     // Testing
     testImplementation(libs.junit.api)

@@ -5,22 +5,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.AlertDialog
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.jellyfin.mobile.common.ui.components.ConfirmDialog
 
 /**
  * "Playing on <device>" under a player's controls while casting; nothing while playing here.
@@ -29,7 +28,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun PlayingOnLabel(castDevice: String?, onStopCasting: () -> Unit, modifier: Modifier = Modifier) {
     if (castDevice == null) return
-    var confirming by remember { mutableStateOf(false) }
+    // Kept through rotation, like the other confirmations
+    var confirming by rememberSaveable { mutableStateOf(false) }
     val playingOn = stringResource(R.string.playing_on, castDevice)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -47,22 +47,11 @@ fun PlayingOnLabel(castDevice: String?, onStopCasting: () -> Unit, modifier: Mod
         Text(text = playingOn, style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary)
     }
     if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text(playingOn) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirming = false
-                        onStopCasting()
-                    },
-                ) {
-                    Text(stringResource(R.string.stop_casting))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirming = false }) { Text(stringResource(android.R.string.cancel)) }
-            },
+        ConfirmDialog(
+            message = playingOn,
+            confirmLabel = stringResource(R.string.stop_casting),
+            onConfirm = onStopCasting,
+            onDismiss = { confirming = false },
         )
     }
 }

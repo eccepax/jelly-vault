@@ -151,7 +151,8 @@ class AudiobookProgressReporter(
     }
 
     private fun report(track: AudiobookTrack, send: suspend AudiobookProgressSink.() -> Unit) {
-        val sink = if (track.fromDevice) device else server
+        // A download playing on a cast device is streamed there, from the server
+        val sink = if (track.fromDevice && !controller.state.value.isRemote) device else server
         reports.trySend { sink.send() }
     }
 

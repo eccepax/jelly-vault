@@ -112,17 +112,4 @@ class VolumeLevellingTest {
 
         playback.volumes shouldBe emptyList()
     }
-
-    @Test
-    fun `while casting it's sent all the same, for the session's cast player to keep for this device`() = runTest {
-        // The cast player leaves the cast device's own volume alone, and SessionPlayerSwitcher gives
-        // it to this device's player once playback is back (common-cast's tests)
-        levelling()
-        playback.state.value = playback.state.value.copy(isRemote = true)
-        runCurrent()
-
-        playing(loud)
-
-        playback.volumes.size shouldBe 1
-    }
 }

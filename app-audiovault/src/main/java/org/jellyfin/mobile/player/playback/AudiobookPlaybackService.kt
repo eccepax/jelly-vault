@@ -106,19 +106,23 @@ class AudiobookPlaybackService : MediaSessionService() {
             }
     }
 
-    /** What the cast device fetches for [item]: from the server, even when it plays from a download here. */
-    private fun castStream(item: MediaItem): CastStream? {
+    /**
+     * What the cast device fetches for [item], from [fromMs]: from the server, even when it plays from
+     * a download here. Without its format (an item another controller added), as an mp3 transcode.
+     */
+    private fun castStream(item: MediaItem, fromMs: Long): CastStream? {
         val track = item.toAudiobookTrack().takeIf { it.id.isNotEmpty() } ?: return null
-        return audiobooks.castStream(track.id, track.container, track.audioCodec, item.streamStartMs)
+        return audiobooks.castStream(track.id, track.container, track.audioCodec, fromMs)
     }
 
     /**
-     * Chapters and transcode seeking on either player, wrapped once each: a wrapper listens to its
-     * player for good, so a new one per cast would pile up.
+     * Chapters on either player, and transcode seeking on this device's (a cast player starts and
+     * seeks its own streams), wrapped once each: a wrapper listens to its player for good, so a new
+     * one per cast would pile up.
      */
     private fun castingWrapper(exoPlayer: ExoPlayer, audiobookPlayer: AudiobookPlayer): (Player) -> Player {
         val wrapped = mutableMapOf<Player, Player>(exoPlayer to audiobookPlayer)
-        return { player -> wrapped.getOrPut(player) { AudiobookPlayer(player) } }
+        return { player -> wrapped.getOrPut(player) { AudiobookPlayer(player, streamOffsets = false) } }
     }
 
     /** Uses the FFmpeg decoders for what the device can't play itself. */

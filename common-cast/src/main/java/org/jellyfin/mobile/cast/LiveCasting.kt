@@ -2,7 +2,6 @@ package org.jellyfin.mobile.cast
 
 import android.net.Uri
 import androidx.annotation.OptIn
-import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -43,23 +42,21 @@ interface LiveCasting {
     fun release()
 }
 
+private const val HLS_MIME_TYPE = "application/x-mpegURL"
+
 /** Casting live streams through [casting]; never connected where casting can't work. */
 @OptIn(UnstableApi::class)
 fun liveCasting(casting: Casting): LiveCasting {
     val castPlayers = casting as? CastPlayers ?: return NoLiveCasting
     val live = PlayerLiveCasting(casting.castDevice, endCast = casting::stopCasting)
     castPlayers.whenReady {
-        val castPlayer = castPlayers.newCastPlayer(VaultMediaItemConverter(live = true))
-        castPlayer.setSessionAvailabilityListener(
-            object : SessionAvailabilityListener {
-                override fun onCastSessionAvailable() = live.onConnectionChanged(connected = true)
-                override fun onCastSessionUnavailable() = live.onConnectionChanged(connected = false)
-            },
+        val device = castPlayers.newDevice(live = true)
+        val castPlayer = CastQueuePlayer(
+            device,
+            streamFor = { item, _ -> defaultCastStream(item, { it }, HLS_MIME_TYPE) },
         )
-        if (!live.start(castPlayer, castPlayer.isCastSessionAvailable)) {
-            castPlayer.setSessionAvailabilityListener(null)
-            castPlayer.release()
-        }
+        castPlayer.onConnectionChange = live::onConnectionChanged
+        if (!live.start(castPlayer, device.isConnected)) castPlayer.release()
     }
     return live
 }

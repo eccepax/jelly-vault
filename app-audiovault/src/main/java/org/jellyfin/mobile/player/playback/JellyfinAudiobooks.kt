@@ -5,7 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.cast.CastStream
 import org.jellyfin.mobile.cast.castFormatOf
-import org.jellyfin.mobile.common.server.withAccessToken
+import org.jellyfin.mobile.cast.serverCastStream
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -67,25 +67,12 @@ class JellyfinAudiobooks(
         )
 
     /**
-     * [itemId] as a cast device gets it, and the type it comes as (the receiver needs one): as it is
-     * where a cast device plays the file's [container] and [audioCodec] (see [castFormatOf]), else
-     * as mp3. It fetches the stream itself, so the token is in the url. A transcode started part way
-     * on this device ([startMs]) starts there for the cast device too, so positions in it agree.
+     * [itemId] as a cast device gets it, from [fromMs] (see [serverCastStream]): as it is where a
+     * cast device plays the file's [container] and [audioCodec] (see [castFormatOf]), else as mp3.
      */
-    fun castStream(itemId: String, container: String?, audioCodec: String?, startMs: Long = 0L): CastStream {
+    fun castStream(itemId: String, container: String?, audioCodec: String?, fromMs: Long = 0L): CastStream {
         val format = castFormatOf(container, audioCodec)
-        val url = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
-            itemId = itemId.toUUID(),
-            container = format.asked,
-            deviceId = apiClient.deviceInfo.id,
-            transcodingContainer = format.transcodeTo,
-            transcodingProtocol = MediaStreamProtocol.HTTP,
-            audioCodec = format.transcodeCodec,
-            maxAudioSampleRate = format.maxSampleRate,
-            maxAudioBitDepth = format.maxBitDepth,
-            startTimeTicks = startMs.takeIf { it > 0 }?.times(AudiobookPlayer.TICKS_PER_MS),
-        )
-        return CastStream(withAccessToken(url, apiClient.accessToken), format.mimeType)
+        return serverCastStream(apiClient, itemId, format, format.playsAsIs(container, audioCodec), fromMs)
     }
 
     /** The track's own cover, or its book's when it has none (one part of a book in files). */
