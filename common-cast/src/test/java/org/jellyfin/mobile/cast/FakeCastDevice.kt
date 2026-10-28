@@ -20,12 +20,23 @@ import org.jellyfin.mobile.cast.DeviceStatus.State
  */
 internal class FakeCastDevice(
     private val roundTripMs: Long = ROUND_TRIP_MS,
-    /**
-     * Whether a command's answer comes before the listener hears what it did (its [status] has it
-     * already, as the Cast framework's media status does when the answer comes).
-     */
-    private val answerFirst: Boolean = false,
+    /** When a command's answer comes, against its report of what the command did. */
+    private val answers: Answers = Answers.AFTER_REPORT,
 ) : CastDevice {
+
+    enum class Answers {
+        /** The report, then the answer. */
+        AFTER_REPORT,
+
+        /**
+         * The answer before the listener hears what it did, its [status] having it already, as the
+         * Cast framework's media status does when the answer comes.
+         */
+        WITH_REPORT,
+
+        /** The answer, and the report a round trip later: [status] is still what it said before. */
+        BEFORE_REPORT,
+    }
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -72,7 +83,7 @@ internal class FakeCastDevice(
     private val songEnds = Runnable(::songEnded)
 
     /** The commands taken whose answers haven't come yet, and their callbacks. */
-    private val answers = mutableListOf<Runnable>()
+    private val waiting = mutableListOf<Runnable>()
     private val failing = mutableListOf<(Boolean) -> Unit>()
 
     val keys: List<String> get() = queue.map { it.key }
@@ -97,7 +108,7 @@ internal class FakeCastDevice(
         isConnected = false
         status = null
         handler.removeCallbacksAndMessages(null)
-        answers.clear()
+        waiting.clear()
         failing.clear()
         listener?.onConnectionChanged(false)
     }
@@ -108,8 +119,8 @@ internal class FakeCastDevice(
      */
     fun suspend(failAnswers: Boolean = false) {
         isConnected = false
-        answers.forEach(handler::removeCallbacks)
-        answers.clear()
+        waiting.forEach(handler::removeCallbacks)
+        waiting.clear()
         val lost = failing.toList()
         failing.clear()
         if (failAnswers) lost.forEach { it(false) }
@@ -220,9 +231,12 @@ internal class FakeCastDevice(
 
     override fun heldItems(): List<SentItem?> = queue.map { it.takeUnless { other } }
 
+    /** Its volume changes a round trip later, as a cast session's does. */
     override fun setVolume(volume: Int) {
-        this.volume = volume
-        listener?.onVolumeChanged()
+        handler.postDelayed({
+            this.volume = volume
+            listener?.onVolumeChanged()
+        }, roundTripMs)
     }
 
     override fun setMuted(muted: Boolean) {
@@ -252,7 +266,7 @@ internal class FakeCastDevice(
         onCommand?.invoke(name)
         lateinit var answer: Runnable
         answer = Runnable {
-            answers -= answer
+            waiting -= answer
             failing -= done
             run {
                 if (failNext > 0) {
@@ -260,18 +274,25 @@ internal class FakeCastDevice(
                     done(false)
                 } else {
                     apply()
-                    if (answerFirst) {
-                        val said = report(notify = false)
-                        done(true)
-                        said?.let { listener?.onStatus(it) }
-                    } else {
-                        report()
-                        done(true)
+                    when (answers) {
+                        Answers.AFTER_REPORT -> {
+                            report()
+                            done(true)
+                        }
+                        Answers.WITH_REPORT -> {
+                            val said = report(notify = false)
+                            done(true)
+                            said?.let { listener?.onStatus(it) }
+                        }
+                        Answers.BEFORE_REPORT -> {
+                            done(true)
+                            handler.postDelayed({ report() }, roundTripMs)
+                        }
                     }
                 }
             }
         }
-        answers += answer
+        waiting += answer
         failing += done
         handler.postDelayed(answer, roundTripMs)
     }

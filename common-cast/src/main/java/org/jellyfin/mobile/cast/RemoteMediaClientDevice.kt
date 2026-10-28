@@ -68,13 +68,21 @@ internal class RemoteMediaClientDevice(
 
     private val routing: Routing? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Routing(context) else null
 
-    override val deviceInfo: DeviceInfo
-        get() = DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE)
-            .setMaxVolume(CastDevice.MAX_VOLUME)
-            .setRoutingControllerId(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.controllerId() else null,
-            )
-            .build()
+    /** Made again only when the routing changes (read with every state of the player). */
+    override var deviceInfo: DeviceInfo = deviceInfoNow()
+        private set
+
+    private fun deviceInfoNow(): DeviceInfo = DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE)
+        .setMaxVolume(CastDevice.MAX_VOLUME)
+        .setRoutingControllerId(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.controllerId() else null,
+        )
+        .build()
+
+    private fun routingChanged() {
+        deviceInfo = deviceInfoNow()
+        listener?.onVolumeChanged()
+    }
 
     // Not every session can say (one mid-teardown throws): no volume then
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -133,7 +141,7 @@ internal class RemoteMediaClientDevice(
 
     init {
         castContext.sessionManager.addSessionManagerListener(sessions, CastSession::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.start { listener?.onVolumeChanged() }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.start(::routingChanged)
         castContext.sessionManager.currentCastSession?.let(::attach)
     }
 
@@ -164,6 +172,7 @@ internal class RemoteMediaClientDevice(
 
     private fun connected(session: CastSession, client: RemoteMediaClient) {
         status = null
+        deviceInfo = deviceInfoNow()
         listener?.onConnectionChanged(true)
         // What it holds now, before anything is sent: it may still be playing what this app sent before
         client.requestStatus().setResultCallback { if (this.session === session && !suspended) reported() }
@@ -187,7 +196,7 @@ internal class RemoteMediaClientDevice(
         val client = client ?: return
         val media = client.mediaStatus
         val said = if (media != null) {
-            statusOf(client, media)
+            statusOf(client, media).also { forgetGone(it, client, media) }
         } else {
             ids = IntArray(0)
             EMPTY.copy(atMs = SystemClock.elapsedRealtime())
@@ -228,6 +237,13 @@ internal class RemoteMediaClientDevice(
             repeat = repeatOf(media.queueRepeatMode),
             queueKnown = known,
         )
+    }
+
+    /** Each load and append brings new ids: once the whole queue is known, the keys of those it no longer holds go. */
+    private fun forgetGone(said: DeviceStatus, client: RemoteMediaClient, media: MediaStatus) {
+        if (said.queueKnown && client.mediaQueue.itemIds.isNotEmpty()) {
+            keyById.keys.retainAll(ids.toSet() + media.currentItemId)
+        }
     }
 
     /**

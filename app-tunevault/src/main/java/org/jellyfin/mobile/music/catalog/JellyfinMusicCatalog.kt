@@ -128,12 +128,15 @@ class JellyfinMusicCatalog(
     /**
      * Where a cast device gets the song from (see [serverCastSource]): from the server, even when it
      * plays from a download here. At the original quality, in its own format where a cast device
-     * plays that; at a lower quality (which the server transcodes down to anyway), as MP3.
+     * plays that; at a lower quality (which the server transcodes down to anyway), as MP3. The
+     * quality is the one set when each stream is asked for.
      */
-    suspend fun castSource(trackId: String): CastSource {
-        val quality = streamingQuality()
-        return serverCastSource(apiClient, trackId, quality == StreamingQuality.ORIGINAL, quality.maxBitrate)
-    }
+    suspend fun castSource(trackId: String): CastSource = serverCastSource(
+        apiClient,
+        trackId,
+        keepFormat = { streamingQuality() == StreamingQuality.ORIGINAL },
+        maxBitrate = { streamingQuality().maxBitrate },
+    )
 
     /**
      * Where to fetch [trackId] from at [quality], without a token: downloads store this URI for as
