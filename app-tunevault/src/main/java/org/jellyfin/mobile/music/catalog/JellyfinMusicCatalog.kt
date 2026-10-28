@@ -3,8 +3,8 @@ package org.jellyfin.mobile.music.catalog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jellyfin.mobile.cast.CastSource
-import org.jellyfin.mobile.cast.serverCastSource
+import org.jellyfin.mobile.cast.CastStream
+import org.jellyfin.mobile.cast.serverCastStreamNow
 import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.mobile.music.domain.Album
 import org.jellyfin.mobile.music.domain.Artist
@@ -131,11 +131,11 @@ class JellyfinMusicCatalog(
      * plays that; at a lower quality (which the server transcodes down to anyway), as MP3. The
      * quality is the one set when each stream is asked for.
      */
-    suspend fun castSource(trackId: String): CastSource = serverCastSource(
+    fun castStream(trackId: String): CastStream = serverCastStreamNow(
         apiClient,
         trackId,
-        keepFormat = { streamingQuality() == StreamingQuality.ORIGINAL },
-        maxBitrate = { streamingQuality().maxBitrate },
+        keepFormat = streamingQuality() == StreamingQuality.ORIGINAL,
+        maxBitrate = streamingQuality().maxBitrate,
     )
 
     /**

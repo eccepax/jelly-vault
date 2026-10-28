@@ -64,6 +64,8 @@ fun NowPlayingScreen(
     actions: NowPlayingActions,
     sleepTimer: SleepTimerUi? = SleepTimerUi(),
     castDevice: String? = null,
+    /** The cast device being connected to, until it's [castDevice]. */
+    connectingTo: String? = null,
     onStopCasting: () -> Unit = {},
     castButton: @Composable () -> Unit = {},
 ) {
@@ -122,7 +124,7 @@ fun NowPlayingScreen(
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
             TransportControls(state, actions)
-            PlayingOnLabel(castDevice, onStopCasting, Modifier.padding(top = 4.dp))
+            PlayingOnLabel(castDevice, onStopCasting, Modifier.padding(top = 4.dp), connectingTo = connectingTo)
             sleepTimer?.let { SleepTimerLabel(it.state, stringResource(R.string.sleeps_after_song)) }
         }
     }
@@ -144,10 +146,11 @@ private fun TransportControls(state: NowPlayingUiState, actions: NowPlayingActio
             )
         }
         PlayPauseButton(
-            isPlaying = state.isPlaying,
+            isPlaying = state.isPlaying || state.isBuffering,
             onClick = actions.onTogglePlayPause,
             modifier = Modifier.size(72.dp),
             iconSize = 56,
+            isLoading = state.isBuffering,
         )
         IconButton(onClick = actions.onNext) {
             Icon(

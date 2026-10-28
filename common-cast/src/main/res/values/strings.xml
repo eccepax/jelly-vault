@@ -2,4 +2,5 @@
 <resources>
     <string name="playing_on">Playing on %1$s</string>
     <string name="stop_casting">Stop casting</string>
+    <string name="connecting_to">Connecting to %1$s…</string>
 </resources>

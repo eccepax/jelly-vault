@@ -3,6 +3,7 @@ package org.jellyfin.mobile.music.search
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -41,7 +42,7 @@ class SearchScreenTest {
 
     private fun show(state: SearchUiState, initialQuery: String = "") {
         composeRule.setContent {
-            var query by mutableStateOf(initialQuery)
+            var query by remember { mutableStateOf(initialQuery) }
             SearchScreen(
                 query = query,
                 state = state,

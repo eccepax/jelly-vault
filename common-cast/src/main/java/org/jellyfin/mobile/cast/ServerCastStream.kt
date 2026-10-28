@@ -95,3 +95,30 @@ internal fun serverCastStream(
     )
     return CastStream(withAccessToken(url, apiClient.accessToken), format.mimeType, startMs, seekable = choice.asIs)
 }
+
+/** Every format a cast device plays as it is (see [castFormatOf]): the server picks, file by file. */
+private val CAST_AS_IS =
+    listOf("mp3", "flac", "aac", "m4a|aac", "mp4|aac", "ogg|vorbis", "ogg|opus", "opus|opus", "webm|opus")
+
+/**
+ * [itemId] from the server as a cast device fetches it, known at once, with nothing asked of the
+ * server first: as it is where it's in a format a cast device plays (and [keepFormat] says to keep
+ * it), else transcoded to MP3; [maxBitrate] caps either. The type sent is MP3's either way.
+ */
+fun serverCastStreamNow(
+    apiClient: ApiClient,
+    itemId: String,
+    keepFormat: Boolean = true,
+    maxBitrate: Int? = null,
+): CastStream {
+    val url = apiClient.universalAudioApi.getUniversalAudioStreamUrl(
+        itemId = itemId.toUUID(),
+        container = if (keepFormat) CAST_AS_IS else emptyList(),
+        deviceId = apiClient.deviceInfo.id,
+        maxStreamingBitrate = maxBitrate,
+        transcodingContainer = CAST_MP3.transcodeTo,
+        transcodingProtocol = MediaStreamProtocol.HTTP,
+        audioCodec = CAST_MP3.transcodeCodec,
+    )
+    return CastStream(withAccessToken(url, apiClient.accessToken), CAST_MP3.mimeType)
+}

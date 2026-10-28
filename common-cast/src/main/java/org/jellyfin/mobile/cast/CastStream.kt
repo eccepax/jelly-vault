@@ -14,3 +14,9 @@ data class CastStream(val url: String, val mimeType: String, val startMs: Long =
 fun interface CastSource {
     fun streamFrom(fromMs: Long): CastStream
 }
+
+/**
+ * The most songs a cast device is sent at once: the Cast framework refuses a message over 512 KB,
+ * and a queue goes in one. An app with longer queues holds them a window at a time while cast.
+ */
+const val CAST_QUEUE_LIMIT = 50

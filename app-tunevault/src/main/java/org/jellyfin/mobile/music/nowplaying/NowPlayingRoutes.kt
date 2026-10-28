@@ -27,6 +27,7 @@ fun PlayerShell(
     val state by viewModel.state.collectAsState()
     val casting: Casting = koinInject()
     val castDevice by casting.castDevice.collectAsState()
+    val connectingTo by casting.connectingTo.collectAsState()
     // Now Playing recomposes as the song plays: the same lambda keeps the top bar from redrawing
     val castButton: @Composable () -> Unit = remember(casting) { { CastButton(casting) } }
     PlayerScaffold(
@@ -67,6 +68,7 @@ fun PlayerShell(
                         ),
                         sleepTimer = sleepTimer,
                         castDevice = castDevice,
+                        connectingTo = connectingTo,
                         onStopCasting = casting::stopCasting,
                         castButton = castButton,
                     )
