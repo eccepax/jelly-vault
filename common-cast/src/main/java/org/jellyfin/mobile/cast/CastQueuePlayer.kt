@@ -28,15 +28,18 @@ import kotlin.math.abs
  * the next step. The cast device moving on by itself (a song ending, its remote) is followed when no
  * change from here is on its way; meanwhile what it says of the song and the place is set aside.
  *
- * Each song's stream comes from [streamFor], from where it should start: a transcode can't seek, so
- * it's asked for from the place and sent again for a seek, and places are always the song's.
+ * Each song's stream comes from its [CastSource], from where it should start: a transcode can't
+ * seek, so it's asked for from the place and sent again for a seek, and places are always the
+ * song's. [sources] finds each entry's source once, perhaps later (it may ask the server what the
+ * file is); a song goes to the cast device once its source is found, and the songs after it as
+ * theirs are, without holding it up.
  */
 // One handler per Player command SimpleBasePlayer takes, and a few steps of keeping the cast device in line
 @Suppress("TooManyFunctions")
 @UnstableApi
 internal class CastQueuePlayer(
     private val device: CastDevice,
-    private val streamFor: (MediaItem, Long) -> CastStream,
+    private val sources: CastSourceFinder,
     private val window: Int = WINDOW,
     looper: Looper = Looper.getMainLooper(),
     private val now: () -> Long = SystemClock::elapsedRealtime,
@@ -65,6 +68,11 @@ internal class CastQueuePlayer(
 
     /** The streams the cast device was sent, by key. */
     private val sent = mutableMapOf<String, CastStream>()
+
+    /** Each entry's source, by key, once found; and the entries whose sources are being looked for. */
+    private val found = mutableMapOf<String, CastSource>()
+    private val looking = mutableSetOf<String>()
+    private var lookingNow = false
 
     private var inFlight = false
     private var failures = 0
@@ -170,6 +178,8 @@ internal class CastQueuePlayer(
 
     private fun queueChanged() {
         playlistVersion++
+        val keys = entries.mapTo(mutableSetOf()) { it.key }
+        found.keys.retainAll(keys)
     }
 
     // Playback
@@ -347,13 +357,14 @@ internal class CastQueuePlayer(
     private fun takeUp(status: DeviceStatus) {
         takingUp = false
         if (entries.isNotEmpty() || status.playsOther || status.currentKey == null) return
+        val held = device.heldItems().filterNotNull()
         entries.clear()
-        status.keys.zip(status.items).forEach { (key, item) ->
-            if (key != null && item != null) entries += Entry(key, item)
-        }
+        entries += held.map { Entry(it.key, it.item) }
         queueChanged()
         index = entries.indexOfFirst { it.key == status.currentKey }.coerceAtLeast(0)
+        // Where each one's stream starts, so places stay the song's
         sent.clear()
+        held.forEach { sent[it.key] = it.stream }
         prepared = true
         playWhenReady = status.isPlaying
         target = null
@@ -408,7 +419,7 @@ internal class CastQueuePlayer(
         if (key != null && key == current?.key && status.state != DeviceStatus.State.IDLE) followPlayback(key, status)
         if (status.state == DeviceStatus.State.IDLE && prepared) followIdle(status)
         lastKey = key
-        lastPlaying = status.isPlaying
+        status.playsOrPauses?.let { lastPlaying = it }
     }
 
     /** It moved on to [key] (a song ended, its remote): so does this. */
@@ -422,7 +433,8 @@ internal class CastQueuePlayer(
 
     /** Its place in the song playing, and play or pause where its remote changed that. */
     private fun followPlayback(key: String, status: DeviceStatus) {
-        if (lastPlaying != null && status.isPlaying != lastPlaying) playWhenReady = status.isPlaying
+        val playsOrPauses = status.playsOrPauses
+        if (lastPlaying != null && playsOrPauses != null && playsOrPauses != lastPlaying) playWhenReady = playsOrPauses
         anchor = Anchor(
             positionMs = status.positionMs + (sent[key]?.startMs ?: 0L),
             atMs = status.atMs,
@@ -518,8 +530,9 @@ internal class CastQueuePlayer(
         when {
             goTo != null -> go(goTo, status, wanted)
             status.currentKey != playing.key -> load(wanted, position, goTo)
-            status.keys != wanted.map { it.key } -> fixTail(status, wanted)
-            else -> syncPlayback(status, repeatFor(repeatMode, wanted.size == entries.size))
+            // Songs after it still to be found don't hold up play, pause and the rest
+            status.keys != wanted.map { it.key } && fixTail(status, wanted) -> Unit
+            else -> syncPlayback(status, repeatFor(repeatMode, status.keys.size == entries.size))
         }
     }
 
@@ -562,33 +575,67 @@ internal class CastQueuePlayer(
         }
     }
 
+    /** Sends [wanted] from the first, [fromMs] in: as many as have their sources, once the first has. */
     private fun load(wanted: List<Entry>, fromMs: Long, goTo: Target?) {
-        val items = wanted.mapIndexed { i, entry -> sentItem(entry, if (i == 0) fromMs else 0L) }
+        val ready = withSources(wanted)
+        if (ready.isEmpty()) return
+        val items = ready.mapIndexed { i, entry -> sentItem(entry, if (i == 0) fromMs else 0L) }
         sent.clear()
         items.forEach { sent[it.key] = it.stream }
-        val repeat = repeatFor(repeatMode, wanted.size == entries.size)
+        val repeat = repeatFor(repeatMode, ready.size == entries.size)
         send({ ok -> if (ok && target === goTo) target = null }) {
             device.load(items, 0, fromMs - items[0].stream.startMs, playWhenReady, repeat, speed, it)
         }
     }
 
-    /** The cast device plays the right song: the songs after it are brought in line by key. */
-    private fun fixTail(status: DeviceStatus, wanted: List<Entry>) {
+    /**
+     * The cast device plays the right song: the songs after it are brought in line by key. False if
+     * there's nothing to send yet (the next songs' sources are still being found).
+     */
+    private fun fixTail(status: DeviceStatus, wanted: List<Entry>): Boolean {
         val wantedKeys = wanted.map { it.key }
         val held = status.keys
         when {
             held.any { it == null || it !in wantedKeys } -> send { device.keepOnly(wantedKeys.toSet(), it) }
             held == wantedKeys.take(held.size) -> {
-                val more = wanted.drop(held.size).map { sentItem(it, 0L) }
+                val more = withSources(wanted.drop(held.size)).map { sentItem(it, 0L) }
+                if (more.isEmpty()) return false
                 more.forEach { sent[it.key] = it.stream }
                 send { device.append(more, it) }
             }
             // In another order: all but the song playing go, and come back in order
             else -> send { device.keepOnly(setOf(wantedKeys.first()), it) }
         }
+        return true
     }
 
-    private fun sentItem(entry: Entry, fromMs: Long) = SentItem(entry.key, entry.item, streamFor(entry.item, fromMs))
+    private fun sentItem(entry: Entry, fromMs: Long) =
+        SentItem(entry.key, entry.item, found.getValue(entry.key).streamFrom(fromMs))
+
+    /**
+     * The first of [wanted] that have their sources, up to one that hasn't; those without are looked
+     * for, and once one is found what the cast device should hold is looked at again.
+     */
+    private fun withSources(wanted: List<Entry>): List<Entry> {
+        lookingNow = true
+        wanted.filter { it.key !in found && it.key !in looking }.forEach(::lookFor)
+        lookingNow = false
+        return wanted.takeWhile { it.key in found }
+    }
+
+    private fun lookFor(entry: Entry) {
+        looking += entry.key
+        sources.find(entry.item) { source ->
+            looking -= entry.key
+            if (released || entries.none { it.key == entry.key }) return@find
+            found[entry.key] = source
+            // Found at once, it's sent with the rest; found later, it's sent now
+            if (!lookingNow) {
+                sync()
+                invalidateState()
+            }
+        }
+    }
 
     private fun send(onDone: (Boolean) -> Unit = {}, command: ((Boolean) -> Unit) -> Unit) {
         inFlight = true
@@ -654,4 +701,9 @@ internal class CastQueuePlayer(
             )
             .build()
     }
+}
+
+/** Finds a song's [CastSource] for [CastQueuePlayer], at once or later, answering on the main thread. */
+internal fun interface CastSourceFinder {
+    fun find(item: MediaItem, found: (CastSource) -> Unit)
 }

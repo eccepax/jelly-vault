@@ -17,17 +17,44 @@ data class CastFormat(
     val maxBitDepth: Int? = null,
 ) {
     /**
-     * Whether a file in [container] holding [audioCodec] is one of those [asked] for, so the server
-     * sends it as it is; a codec not known counts as one asked for (the server then transcodes it,
-     * from its start, if it isn't).
+     * Whether [file] is known to be one of those [asked] for, within [maxSampleRate] and
+     * [maxBitDepth], so the server sends it as it is. One that may not be (its codec or its sample
+     * rate not known) isn't: the server would transcode it, from its start, where a stream asked
+     * for as it is is taken to start.
      */
-    fun playsAsIs(container: String?, audioCodec: String?): Boolean {
-        val name = container?.lowercase() ?: return false
-        return asked.any { entry ->
+    fun playsAsIs(file: AudioFileInfo): Boolean {
+        val name = file.container?.lowercase() ?: return false
+        val within = maxSampleRate.allows(file.sampleRate) && maxBitDepth.allows(file.bitDepth)
+        return within && asked.any { entry ->
             val (askedContainer, askedCodec) = entry.split('|').let { it[0] to it.getOrNull(1) }
-            askedContainer == name && (askedCodec == null || audioCodec == null || askedCodec.equals(audioCodec, true))
+            askedContainer == name && (askedCodec == null || askedCodec.equals(file.codec, ignoreCase = true))
         }
     }
+
+    private fun Int?.allows(value: Int?) = this == null || value != null && value <= this
+}
+
+/** What a server says an audio file is, as far as casting it goes; null where it didn't say. */
+data class AudioFileInfo(
+    val container: String?,
+    val codec: String?,
+    val sampleRate: Int? = null,
+    val bitDepth: Int? = null,
+)
+
+/** How a file is cast: in [format], and as it is if [asIs] (else transcoded). */
+internal data class CastChoice(val format: CastFormat, val asIs: Boolean)
+
+/**
+ * How [file] is cast: in its own format where a cast device plays that, as it is where it's known
+ * to be fit (see [CastFormat.playsAsIs]); MP3 otherwise, and when its format isn't to be kept
+ * ([keepFormat] false: a lower quality, which the server transcodes down to anyway) or the server
+ * couldn't say what it is.
+ */
+internal fun castChoiceOf(file: AudioFileInfo?, keepFormat: Boolean): CastChoice {
+    if (!keepFormat || file == null) return CastChoice(CAST_MP3, asIs = false)
+    val format = castFormatOf(file.container, file.codec)
+    return CastChoice(format, format.playsAsIs(file))
 }
 
 /**
@@ -61,7 +88,7 @@ private val MP4_CONTAINERS = setOf("m4b", "m4a", "mp4")
 
 /**
  * How a file in [container] holding [audioCodec] (null when not known) is cast; MP3 when it can't go
- * as it is. Whether a file does go as it is: [CastFormat.playsAsIs].
+ * as it is. Whether a file does go as it is: [CastFormat.playsAsIs] (and see [castChoiceOf]).
  */
 fun castFormatOf(container: String?, audioCodec: String? = null): CastFormat {
     val name = container?.lowercase() ?: return CAST_MP3
