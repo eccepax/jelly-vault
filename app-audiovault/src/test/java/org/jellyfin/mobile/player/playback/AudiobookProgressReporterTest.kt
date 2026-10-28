@@ -320,6 +320,22 @@ class AudiobookProgressReporterTest {
     }
 
     @Test
+    fun `a download back from a cast device ends and goes on where it was, before the player here has got there`() =
+        runTest {
+            reporter()
+            controller.playing(downloaded, positionMs = 0L, isRemote = true)
+            runCurrent()
+            play(5_000L)
+
+            // This device's player has the track, and not yet the place it was given
+            controller.positionMs = 0L
+            cast(false)
+
+            server.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+            device.reports shouldBe listOf("started downloaded at 5000")
+        }
+
+    @Test
     fun `a streamed track cast part way goes on as one listen on the server`() = runTest {
         reporter()
         controller.playing(streamed, positionMs = 0L)

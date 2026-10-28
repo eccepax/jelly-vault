@@ -274,6 +274,14 @@ class PlayerRouteTest {
         keepsScreenOn() shouldBe false
     }
 
+    @Test
+    fun `the screen isn't kept on while the book plays on a cast device`() {
+        controller.playing(book, isPlaying = true, isRemote = true)
+        show()
+
+        keepsScreenOn() shouldBe false
+    }
+
     private fun keepsScreenOn(): Boolean = composeRule.activity.window.decorView.anyKeepsScreenOn()
 
     private fun View.anyKeepsScreenOn(): Boolean =

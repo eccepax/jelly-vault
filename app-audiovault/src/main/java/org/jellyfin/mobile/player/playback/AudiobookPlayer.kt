@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.player.playback
 
-import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 
 /**
@@ -9,7 +8,7 @@ import androidx.media3.common.Player
  * chapters, and on to the next or previous track past the first or last one, so the notification,
  * lock screen, headphones and the app's own chapter buttons all do the same.
  */
-class AudiobookPlayer(player: Player) : ForwardingPlayer(player) {
+class AudiobookPlayer(player: Player) : OwnCommandsPlayer(player) {
 
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 

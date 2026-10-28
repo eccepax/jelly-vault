@@ -2,7 +2,6 @@ package org.jellyfin.mobile.player.playback
 
 import android.net.Uri
 import androidx.media3.common.C
-import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -20,16 +19,33 @@ import androidx.media3.common.Timeline
  * don't lose it. A queue set or added to, however it's done, starts its streams from their
  * beginnings, whatever their uris said.
  *
+ * Seeking is offered whenever something is loaded, as the player's own commands don't once a
+ * transcode has opened.
+ *
  * Only for this device's player: a cast player starts and seeks its own streams and counts from the
  * track's start (see common-cast's CastQueuePlayer). [AudiobookPlayer] goes on top for the chapters.
  */
-class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
+class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
 
     /** A place asked for (the track, by its id, and where in it) before its stream was open. */
     private var pendingStart: Pair<String, Long>? = null
 
-    /** The playing item's stream start, read from its uri once for each item rather than on every position read. */
-    private var streamStartOf: Pair<MediaItem, Long>? = null
+    /**
+     * What's known of the playing item's stream, for the item and timeline it was read from: where
+     * it starts in its track, whether it's open yet, and whether it's a transcode. Read once for
+     * each, rather than on every position, length and command read.
+     */
+    private class Stream(
+        val item: MediaItem?,
+        val timeline: Timeline,
+        val index: Int,
+        val startMs: Long,
+        val isOpening: Boolean,
+        val isLiveTranscode: Boolean,
+    )
+
+    private var stream: Stream? = null
+    private val window = Timeline.Window()
 
     init {
         player.addListener(
@@ -41,27 +57,29 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
         )
     }
 
-    /** Where the playing stream starts in its track: past 0 when a transcode was started part way. */
-    private val streamStartMs: Long
+    private val playing: Stream
         get() {
-            val item = currentMediaItem ?: return 0L
-            streamStartOf?.takeIf { it.first === item }?.let { return it.second }
-            return item.streamStartMs.also { streamStartOf = item to it }
+            val item = currentMediaItem
+            val timeline = currentTimeline
+            val index = currentMediaItemIndex
+            stream?.takeIf { it.item === item && it.timeline === timeline && it.index == index }?.let { return it }
+            val startMs = item?.streamStartMs ?: 0L
+            val opening = index >= timeline.windowCount || timeline.getWindow(index, window).isPlaceholder
+            return Stream(item, timeline, index, startMs, opening, startMs > 0 || isKnownTranscode(index))
+                .also { stream = it }
         }
+
+    /** Where the playing stream starts in its track: past 0 when a transcode was started part way. */
+    private val streamStartMs: Long get() = playing.startMs
 
     /**
      * A transcode: one the player has opened and can't seek in, or one already started part way,
      * which only a transcode is (it's still loading, so the player doesn't know yet).
      */
-    private val isLiveTranscode: Boolean
-        get() = streamStartMs > 0 || isKnownTranscode(currentMediaItemIndex)
+    private val isLiveTranscode: Boolean get() = playing.isLiveTranscode
 
     /** Whether the playing item's stream isn't open yet, so whether it can seek isn't known. */
-    private val isOpening: Boolean
-        get() {
-            val timeline = currentTimeline
-            return timeline.isEmpty || timeline.getWindow(currentMediaItemIndex, Timeline.Window()).isPlaceholder
-        }
+    private val isOpening: Boolean get() = playing.isOpening
 
     override fun getCurrentPosition(): Long = super.getCurrentPosition() + streamStartMs
 
@@ -79,6 +97,16 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
     override fun getContentDuration(): Long = duration
 
     override fun isCurrentMediaItemSeekable(): Boolean = isLiveTranscode || super.isCurrentMediaItemSeekable()
+
+    override fun isCommandAvailable(command: Int): Boolean = command in seekCommands || super.isCommandAvailable(command)
+
+    override fun getAvailableCommands(): Player.Commands {
+        val commands = super.getAvailableCommands()
+        return if (seekCommands.isEmpty()) commands else commands.buildUpon().addAll(*seekCommands).build()
+    }
+
+    /** Seeking, whenever something is loaded: in a transcode, it starts the stream again from the place. */
+    private val seekCommands: IntArray get() = if (mediaItemCount == 0) IntArray(0) else SEEK_COMMANDS
 
     override fun seekTo(positionMs: Long) {
         if (isLiveTranscode) return restartStreamAt(positionMs)
@@ -99,7 +127,7 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
     private fun isKnownTranscode(index: Int): Boolean {
         val timeline = currentTimeline
         if (index >= timeline.windowCount) return false
-        val window = timeline.getWindow(index, Timeline.Window())
+        timeline.getWindow(index, window)
         return !window.isPlaceholder && !window.isSeekable
     }
 
@@ -114,8 +142,9 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
     // Every way of setting or adding to the queue, since ForwardingPlayer sends each straight on
 
     override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
-        super.setMediaItems(mediaItems.map { it.fromItsStart() }, startIndex, startPositionMs)
+        // Before the player has them: it tells its listeners of the new queue while they're being set
         pendingStart = mediaItems.getOrNull(startIndex)?.mediaId?.takeIf { startPositionMs > 0 }?.let { it to startPositionMs }
+        super.setMediaItems(mediaItems.map { it.fromItsStart() }, startIndex, startPositionMs)
     }
 
     override fun setMediaItems(mediaItems: List<MediaItem>) = setMediaItems(mediaItems, true)
@@ -184,6 +213,12 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
         /** Jellyfin's stream parameter for where in the item a transcode starts. */
         const val START_PARAM = "StartTimeTicks"
         private const val TICKS_PER_MS = 10_000L
+
+        private val SEEK_COMMANDS = intArrayOf(
+            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_SEEK_BACK,
+            Player.COMMAND_SEEK_FORWARD,
+        )
 
         /** Close enough to a track's start that starting its transcode again there gains nothing. */
         private const val AT_ITS_START_MS = 1_000L

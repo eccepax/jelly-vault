@@ -68,7 +68,8 @@ fun PlayerRoute(
     LeaveWhenStopped(presence) { leave() }
     ForgetStartFailuresOnLeaving(viewModel)
     ToastErrors(playback.error)
-    KeepScreenOn(playback.isPlaying)
+    // Not while casting: the phone may sit there for the whole book
+    KeepScreenOn(playback.isPlayingHere)
 
     val playbackInfo = stringResource(
         // On a cast device, even a download is streamed

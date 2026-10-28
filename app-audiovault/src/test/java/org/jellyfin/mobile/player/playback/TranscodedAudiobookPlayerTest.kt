@@ -115,6 +115,45 @@ class TranscodedAudiobookPlayerTest {
         player.isCurrentMediaItemSeekable shouldBe true
     }
 
+    /**
+     * The app's MediaController and the lock screen only send commands the session said were
+     * available, and the session hears them as they change: from here, not from this device's
+     * player, which can't seek in a transcode and has no chapters.
+     */
+    @Test
+    fun `once it has opened, seeking and chapters are still offered, as listeners hear it`() {
+        val heard = mutableListOf<Player.Commands>()
+        player.addListener(object : Player.Listener {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                heard += availableCommands
+            }
+        })
+
+        load(track("a"))
+
+        exoPlayer.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) shouldBe false
+        for (command in offered) {
+            player.isCommandAvailable(command) shouldBe true
+            heard.last().contains(command) shouldBe true
+        }
+    }
+
+    @Test
+    fun `a listener taken off hears nothing more`() {
+        val heard = mutableListOf<Player.Commands>()
+        val listener = object : Player.Listener {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                heard += availableCommands
+            }
+        }
+        player.addListener(listener)
+        player.removeListener(listener)
+
+        load(track("a"))
+
+        heard shouldBe emptyList()
+    }
+
     @Test
     fun `skipping back and forward start the stream again too`() {
         load(track("a"))
@@ -339,6 +378,14 @@ class TranscodedAudiobookPlayerTest {
         forCast shouldNotContain TranscodeSeekingPlayer.START_PARAM
         forCast shouldContain "api_key=x"
     }
+
+    private val offered = listOf(
+        Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+        Player.COMMAND_SEEK_BACK,
+        Player.COMMAND_SEEK_FORWARD,
+        Player.COMMAND_SEEK_TO_NEXT,
+        Player.COMMAND_SEEK_TO_PREVIOUS,
+    )
 
     private fun item(id: String, query: String = "") =
         track(
