@@ -13,7 +13,8 @@ import org.jellyfin.mobile.livetv.domain.LiveChannel
 /**
  * Plays a channel on the cast device while one is connected ([cast]), else here ([local]). The
  * stream must be opened for where it plays (see [LivePlayer.onCastDevice]); on the cast device it
- * shows as the channel [describe] gives (number, name, what's on and its logo).
+ * shows as the channel [describe] gives (number, name and logo). Not what's on: that's sent once,
+ * with the stream, so it would still show the program before long after it ended.
  */
 class CastingLivePlayer(
     private val local: LivePlayer,
@@ -33,7 +34,10 @@ class CastingLivePlayer(
 
     init {
         local.listenWith { if (!onCast) listener?.onError() }
-        cast.listenWith { if (onCast) listener?.onError() }
+        cast.listenWith(
+            onError = { if (onCast) listener?.onError() },
+            onStopped = { if (onCast) listener?.onStoppedElsewhere() },
+        )
     }
 
     override fun play(url: String, channelId: String) {
@@ -43,7 +47,7 @@ class CastingLivePlayer(
             cast.play(
                 CastStream(url, MimeTypes.APPLICATION_M3U8),
                 title = channel?.let { "${it.number} ${it.displayName}" } ?: channelId,
-                subtitle = channel?.nowPlaying?.title,
+                subtitle = null,
                 artworkUri = channel?.logoUrl,
             )
         } else {

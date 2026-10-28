@@ -140,6 +140,8 @@ class FakeLiveCasting(private val log: EventLog) : LiveCasting {
     override val deviceName = MutableStateFlow<String?>(null)
     var onError: (() -> Unit)? = null
         private set
+    var onStopped: (() -> Unit)? = null
+        private set
 
     /** What the cast device was last sent: stream, title, subtitle, artwork. */
     var sent: List<String?>? = null
@@ -158,8 +160,9 @@ class FakeLiveCasting(private val log: EventLog) : LiveCasting {
         log += "cast.stop"
     }
 
-    override fun listenWith(onError: (() -> Unit)?) {
+    override fun listenWith(onError: (() -> Unit)?, onStopped: (() -> Unit)?) {
         this.onError = onError
+        this.onStopped = onStopped
     }
 
     override fun stopCasting() {
@@ -168,5 +171,19 @@ class FakeLiveCasting(private val log: EventLog) : LiveCasting {
 
     override fun release() {
         released = true
+    }
+}
+
+/** What the app is kept alive for while a channel plays on a cast device: null while it isn't. */
+class FakeCastKeepAlive : CastKeepAlive {
+    var holding: Pair<String, String?>? = null
+        private set
+
+    override fun hold(channel: String, device: String?) {
+        holding = channel to device
+    }
+
+    override fun release() {
+        holding = null
     }
 }

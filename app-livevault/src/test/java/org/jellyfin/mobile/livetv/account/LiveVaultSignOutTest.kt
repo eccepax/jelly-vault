@@ -28,9 +28,23 @@ class LiveVaultSignOutTest {
         val closer = StreamCloser(streams, ledger, scope = backgroundScope)
         closer.track(stream("a").ticket)
 
-        liveVaultSignOut(closer, memory, session, logout = { log += "logout" })()
+        liveVaultSignOut(closer, memory, session, logout = { log += "logout" }, forgetCast = { log += "forget cast" })()
 
-        log.events shouldContainExactly listOf("close:ls-a-1", "end session", "logout")
+        log.events shouldContainExactly listOf("close:ls-a-1", "forget cast", "end session", "logout")
+    }
+
+    @Test
+    fun `a cast is ended and forgotten even when closing the streams fails, since its url carries the token`() = runTest {
+        val closer = StreamCloser(streams, ledger, scope = backgroundScope)
+        var forgotten = 0
+
+        runCatching {
+            liveVaultSignOut(closer, memory, session, logout = {}, forgetCast = { forgotten++ }, closeAll = {
+                error("offline")
+            })()
+        }
+
+        forgotten shouldBe 1
     }
 
     @Test
@@ -39,7 +53,7 @@ class LiveVaultSignOutTest {
         closer.track(stream("a").ticket)
         streams.closeFailures = Int.MAX_VALUE
 
-        liveVaultSignOut(closer, memory, session, logout = {})()
+        liveVaultSignOut(closer, memory, session, logout = {}, forgetCast = {})()
 
         ledger.all().shouldBeEmpty()
     }
@@ -48,7 +62,7 @@ class LiveVaultSignOutTest {
     fun `what was watched is forgotten`() = runTest {
         val closer = StreamCloser(streams, ledger, scope = backgroundScope)
 
-        liveVaultSignOut(closer, memory, session, logout = {})()
+        liveVaultSignOut(closer, memory, session, logout = {}, forgetCast = {})()
 
         memory.lastChannelId.value shouldBe null
         memory.tag shouldBe null

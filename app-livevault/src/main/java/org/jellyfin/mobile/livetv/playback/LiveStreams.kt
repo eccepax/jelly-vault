@@ -17,7 +17,12 @@ interface LiveStreams {
 }
 
 interface LivePlayer {
-    fun interface Listener { fun onError() }
+    fun interface Listener {
+        fun onError()
+
+        /** The cast device stopped playing the channel by itself (its remote, another app) while still connected. */
+        fun onStoppedElsewhere() = Unit
+    }
 
     /** Whether the video is actually rendering (not just the stream opened); reset by [play] and [stop]. */
     val videoStarted: Flow<Boolean>

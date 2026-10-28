@@ -41,12 +41,12 @@ class CastingLivePlayerTest {
     }
 
     @Test
-    fun `the cast device shows the channel, what's on and its logo`() {
+    fun `the cast device shows the channel and its logo, but not what's on, which would go stale`() {
         cast.connected.value = true
 
         player.play("https://vault/a/master.m3u8", devils.id)
 
-        cast.sent!!.drop(2) shouldBe listOf("4.1 Devils", "Devils at Rangers", "https://vault.test/logo.png")
+        cast.sent!!.drop(2) shouldBe listOf("4.1 Devils", null, "https://vault.test/logo.png")
     }
 
     @Test
@@ -143,5 +143,24 @@ class CastingLivePlayerTest {
 
         local.released shouldBe true
         cast.released shouldBe true
+    }
+
+    @Test
+    fun `the channel stopped on the cast device itself is passed on`() {
+        var stopped = 0
+        player.listenWith(
+            object : LivePlayer.Listener {
+                override fun onError() = Unit
+                override fun onStoppedElsewhere() {
+                    stopped++
+                }
+            },
+        )
+        cast.connected.value = true
+        player.play("https://vault/a/master.m3u8", devils.id)
+
+        cast.onStopped!!()
+
+        stopped shouldBe 1
     }
 }

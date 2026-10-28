@@ -24,6 +24,7 @@ import org.jellyfin.mobile.livetv.playback.JellyfinLiveTvSessions
 import org.jellyfin.mobile.livetv.playback.LiveStreams
 import org.jellyfin.mobile.livetv.playback.LiveTvSessions
 import org.jellyfin.mobile.livetv.playback.PreferencesStreamLedger
+import org.jellyfin.mobile.livetv.playback.ServiceCastKeepAlive
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.StreamLedger
 import org.jellyfin.mobile.livetv.playback.WatchViewModel
@@ -59,11 +60,27 @@ val liveAppModule = module {
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
     single<LiveTvSessions> { JellyfinLiveTvSessions(get()) }
     // Account
-    single { liveVaultSignOut(get(), get(), get(), get<ApiClientController>()::logoutUser) }
+    single {
+        liveVaultSignOut(
+            get(),
+            get(),
+            get(),
+            get<ApiClientController>()::logoutUser,
+            forgetCast = get<Casting>()::forgetCast,
+        )
+    }
     viewModel { AccountViewModel(signOut = { get<SignOut>()() }) }
 
     viewModel {
-        WatchViewModel(get(), get(), ExoLivePlayer(androidContext()), liveCasting(get()), get(), get())
+        WatchViewModel(
+            get(),
+            get(),
+            ExoLivePlayer(androidContext()),
+            liveCasting(get()),
+            get(),
+            get(),
+            keepAlive = ServiceCastKeepAlive(androidContext()),
+        )
     }
 }
 

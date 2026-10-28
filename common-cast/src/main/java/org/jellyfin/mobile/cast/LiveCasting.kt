@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -24,7 +25,7 @@ interface LiveCasting {
     /** The name of the cast device connected; null while none is. */
     val deviceName: StateFlow<String?>
 
-    /** Whether the cast device is actually playing what it was sent; reset by [play] and [stop]. */
+    /** Whether the cast device is playing what it was sent right now: not while it loads or stalls. */
     val started: StateFlow<Boolean>
 
     /** Sends [stream] to the connected cast device, showing [title], [subtitle] and [artworkUri] there. */
@@ -32,8 +33,12 @@ interface LiveCasting {
 
     fun stop()
 
-    /** [onError] is told when the cast device can't play what it was sent. */
-    fun listenWith(onError: (() -> Unit)?)
+    /**
+     * [onError] is told when the cast device can't play what it was sent; [onStopped] when it
+     * stops playing it while still connected (its remote's stop, another app casting, the stream
+     * ending), so the app can free the stream.
+     */
+    fun listenWith(onError: (() -> Unit)?, onStopped: (() -> Unit)? = null)
 
     /** Ends the cast (see [Casting.stopCasting]). */
     fun stopCasting()
@@ -42,23 +47,27 @@ interface LiveCasting {
     fun release()
 }
 
-private const val HLS_MIME_TYPE = "application/x-mpegURL"
-
 /** Casting live streams through [casting]; never connected where casting can't work. */
 @OptIn(UnstableApi::class)
 fun liveCasting(casting: Casting): LiveCasting {
     val castPlayers = casting as? CastPlayers ?: return NoLiveCasting
     val live = PlayerLiveCasting(casting.castDevice, endCast = casting::stopCasting)
-    castPlayers.whenReady {
+    live.waiting = castPlayers.whenReady {
+        live.waiting = null
         val device = castPlayers.newDevice(live = true)
         val castPlayer = CastQueuePlayer(
             device,
             sources = CastSourceFinder { item, found ->
-                found(CastSource { defaultCastStream(item, { it }, HLS_MIME_TYPE) })
+                found(CastSource { defaultCastStream(item, { it }, MimeTypes.APPLICATION_M3U8) })
             },
         )
         castPlayer.onConnectionChange = live::onConnectionChanged
-        if (!live.start(castPlayer, device.isConnected)) castPlayer.release()
+        if (live.start(castPlayer, device.isConnected)) {
+            // Signing out empties it, since the stream url it holds carries the token
+            live.forgetting = castPlayers.forgetsWithCast(castPlayer)
+        } else {
+            castPlayer.release()
+        }
     }
     return live
 }
@@ -69,7 +78,7 @@ private object NoLiveCasting : LiveCasting {
     override val deviceName: StateFlow<String?> = MutableStateFlow(null)
     override fun play(stream: CastStream, title: String, subtitle: String?, artworkUri: String?) = Unit
     override fun stop() = Unit
-    override fun listenWith(onError: (() -> Unit)?) = Unit
+    override fun listenWith(onError: (() -> Unit)?, onStopped: (() -> Unit)?) = Unit
     override fun stopCasting() = Unit
     override fun release() = Unit
 }
@@ -82,6 +91,16 @@ internal class PlayerLiveCasting(
     private var player: Player? = null
     private var released = false
     private var onError: (() -> Unit)? = null
+    private var onStopped: (() -> Unit)? = null
+
+    /** Whether a stream was sent and hasn't been stopped from here: one that stops is stopped there. */
+    private var sent = false
+
+    /** Takes back the wait for the Cast framework, while it's still waiting. */
+    internal var waiting: (() -> Unit)? = null
+
+    /** Takes the cast player off what [Casting.forgetCast] empties. */
+    internal var forgetting: (() -> Unit)? = null
 
     private val _connected = MutableStateFlow(false)
     override val connected: StateFlow<Boolean> = _connected.asStateFlow()
@@ -91,11 +110,20 @@ internal class PlayerLiveCasting(
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) _started.value = true
+            _started.value = isPlaying
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val stopped = playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED
+            if (!sent || !stopped || player?.playerError != null) return
+            sent = false
+            _started.value = false
+            onStopped?.invoke()
         }
 
         override fun onPlayerError(error: PlaybackException) {
             Timber.e(error, "Live playback failed on the cast device")
+            sent = false
             onError?.invoke()
         }
     }
@@ -111,7 +139,10 @@ internal class PlayerLiveCasting(
 
     fun onConnectionChanged(connected: Boolean) {
         _connected.value = connected
-        if (!connected) _started.value = false
+        if (!connected) {
+            sent = false
+            _started.value = false
+        }
     }
 
     override fun play(stream: CastStream, title: String, subtitle: String?, artworkUri: String?) {
@@ -131,23 +162,30 @@ internal class PlayerLiveCasting(
         player.setMediaItem(item)
         player.prepare()
         player.playWhenReady = true
+        sent = true
     }
 
     override fun stop() {
+        sent = false
         _started.value = false
         val player = player ?: return
         player.stop()
         player.clearMediaItems()
     }
 
-    override fun listenWith(onError: (() -> Unit)?) {
+    override fun listenWith(onError: (() -> Unit)?, onStopped: (() -> Unit)?) {
         this.onError = onError
+        this.onStopped = onStopped
     }
 
     override fun stopCasting() = endCast()
 
     override fun release() {
         released = true
+        waiting?.invoke()
+        waiting = null
+        forgetting?.invoke()
+        forgetting = null
         if (connected.value) endCast()
         _connected.value = false
         player?.removeListener(listener)

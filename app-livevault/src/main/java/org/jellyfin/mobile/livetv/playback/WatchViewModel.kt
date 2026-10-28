@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.cast.LiveCasting
+import org.jellyfin.mobile.livetv.channels.displayName
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
@@ -21,7 +23,8 @@ import timber.log.Timber
 /**
  * The channel being watched, here on [localPlayer] or on the cast device while one is connected
  * ([cast]). Activity-scoped, so the stream (and the player) survive rotation; when the activity
- * finishes for good the stream is closed ([onCleared]).
+ * finishes for good the stream is closed ([onCleared]). While a channel plays on a cast device the
+ * app is kept alive ([keepAlive]), so the stream is still reported, and closed, from the background.
  */
 class WatchViewModel(
     streams: LiveStreams,
@@ -30,12 +33,21 @@ class WatchViewModel(
     private val cast: LiveCasting,
     private val sessions: LiveTvSessions,
     private val memory: ViewingMemory,
+    private val keepAlive: CastKeepAlive = CastKeepAlive.None,
 ) : ViewModel() {
 
     private val lineup = MutableStateFlow<Map<String, LiveChannel>>(emptyMap())
     private val player = CastingLivePlayer(localPlayer, cast, describe = { lineup.value[it] })
-    private val playback = LivePlayback(streams, player, closer, viewModelScope)
     private val _watching = MutableStateFlow(false)
+
+    // Stopped on the cast device itself, the viewer stopped watching: back to the channels
+    private val playback = LivePlayback(
+        streams,
+        player,
+        closer,
+        viewModelScope,
+        onStoppedOnCastDevice = { _watching.value = false },
+    )
 
     /** Whether the player screen is up. */
     val watching: StateFlow<Boolean> = _watching.asStateFlow()
@@ -72,6 +84,14 @@ class WatchViewModel(
     )
 
     init {
+        viewModelScope.launch {
+            combine(playback.state, cast.connected, cast.deviceName, lineup) { state, connected, device, lineup ->
+                val channelId = state.channelId?.takeIf { connected && state !is PlaybackState.Failed }
+                channelId?.let { id -> (lineup[id]?.let { "${it.number} ${it.displayName}" } ?: id) to device }
+            }.distinctUntilChanged().collect { casting ->
+                if (casting == null) keepAlive.release() else keepAlive.hold(casting.first, casting.second)
+            }
+        }
         // Where the viewer actually ended up watching: a zap's landing, not a channel that failed.
         viewModelScope.launch {
             playback.state.collect { state ->
@@ -119,13 +139,6 @@ class WatchViewModel(
     public override fun onCleared() {
         playback.release()
         player.release()
+        keepAlive.release()
     }
-
-    private val PlaybackState.channelId: String?
-        get() = when (this) {
-            is PlaybackState.Tuning -> channelId
-            is PlaybackState.Playing -> channelId
-            is PlaybackState.Failed -> channelId
-            PlaybackState.Idle -> null
-        }
 }

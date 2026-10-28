@@ -26,6 +26,7 @@ class WatchViewModelTest {
     private val ledger = FakeStreamLedger()
     private val sessions = FakeLiveTvSessions()
     private val memory = FakeViewingMemory()
+    private val keepAlive = FakeCastKeepAlive()
     private val bulls = channel("1", "Bulls")
     private val espn = channel("43", "ESPN")
     private val tubi = channel("5001", "FREE| Movies", tags = listOf("Free"))
@@ -53,6 +54,7 @@ class WatchViewModelTest {
             cast,
             sessions,
             memory,
+            keepAlive,
         )
         try {
             block(viewModel)
@@ -258,5 +260,41 @@ class WatchViewModelTest {
         viewModel.stopCasting()
 
         cast.castsStopped shouldBe 1
+    }
+
+    @Test
+    fun `the app is kept alive while a channel plays on a cast device, and only then`() = watchTest { viewModel ->
+        cast.connected.value = true
+        cast.deviceName.value = "Main Bedroom TV"
+        keepAlive.holding shouldBe null
+
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        keepAlive.holding shouldBe ("1 Bulls" to "Main Bedroom TV")
+
+        viewModel.exit()
+        settle()
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `a channel playing here keeps nothing alive`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `a channel stopped on the cast device itself closes the player`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        cast.onStopped!!()
+        settle()
+
+        viewModel.watching.value shouldBe false
+        keepAlive.holding shouldBe null
     }
 }

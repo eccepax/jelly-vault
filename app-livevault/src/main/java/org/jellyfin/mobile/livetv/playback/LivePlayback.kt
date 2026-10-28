@@ -24,6 +24,15 @@ sealed interface PlaybackState {
     data class Failed(val channelId: String) : PlaybackState
 }
 
+/** The channel tuning, playing or failed; null when idle. */
+val PlaybackState.channelId: String?
+    get() = when (this) {
+        is PlaybackState.Tuning -> channelId
+        is PlaybackState.Playing -> channelId
+        is PlaybackState.Failed -> channelId
+        PlaybackState.Idle -> null
+    }
+
 /**
  * Live TV playback, built around one rule: every stream the server opens gets closed. The provider
  * allows a single connection, so a leaked stream blocks every channel.
@@ -36,6 +45,8 @@ sealed interface PlaybackState {
  *   player is on one. When the player moves to or from a cast device, the channel is opened again
  *   for where it now plays (closing the old stream first, as ever). In the background the channel
  *   carries on on the cast device; if the cast ends there, the stream is freed as for any background.
+ *   Stopped on the cast device itself (its remote, another app casting), the stream is closed and
+ *   [onStoppedOnCastDevice] told: the viewer stopped watching, wherever they did it.
  *
  * Not thread-safe: call it, and run [scope], on one thread (the main thread in the app).
  */
@@ -44,6 +55,7 @@ class LivePlayback(
     private val player: LivePlayer,
     private val closer: StreamCloser,
     private val scope: CoroutineScope,
+    private val onStoppedOnCastDevice: () -> Unit = {},
 ) {
     private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -63,7 +75,13 @@ class LivePlayback(
     private var progressJob: Job? = null
 
     init {
-        player.listenWith { onPlayerError() }
+        player.listenWith(
+            object : LivePlayer.Listener {
+                override fun onError() = onPlayerError()
+
+                override fun onStoppedElsewhere() = onStoppedThere()
+            },
+        )
         scope.launch { player.onCastDevice.drop(1).collect(::onCastDeviceChanged) }
     }
 
@@ -136,6 +154,16 @@ class LivePlayback(
         Timber.w("Player failed on channel %s", channel)
         stop()
         _state.value = PlaybackState.Failed(channel)
+        // Failed on the cast device while in the background: tried again on the way back, as ever
+        if (inBackground) resumeChannel = channel
+    }
+
+    private fun onStoppedThere() {
+        if (state.value.channelId == null) return
+        Timber.i("The channel was stopped on the cast device")
+        resumeChannel = null
+        stop()
+        onStoppedOnCastDevice()
     }
 
     private fun request(channelId: String?, debounce: Boolean) {
@@ -210,14 +238,6 @@ class LivePlayback(
             Timber.w(e, "Reporting live playback failed")
         }
     }
-
-    private val PlaybackState.channelId: String?
-        get() = when (this) {
-            is PlaybackState.Tuning -> channelId
-            is PlaybackState.Playing -> channelId
-            is PlaybackState.Failed -> channelId
-            PlaybackState.Idle -> null
-        }
 
     companion object {
         const val PROGRESS_INTERVAL_MS = 10_000L

@@ -26,11 +26,14 @@ class LivePlaybackTest {
     private val ledger = FakeStreamLedger()
     private val lineup = listOf("a", "b", "c", "d")
 
+    private var stoppedOnCastDevice = 0
+
     private fun TestScope.playback() = LivePlayback(
         streams = streams,
         player = player,
         closer = StreamCloser(streams, ledger, scope = backgroundScope),
         scope = backgroundScope,
+        onStoppedOnCastDevice = { stoppedOnCastDevice++ },
     )
 
     /** After everything settles, no stream is left open on the server except [expected]. */
@@ -507,5 +510,56 @@ class LivePlaybackTest {
         runCurrent()
 
         player.channel shouldBe "b"
+    }
+
+    @Test
+    fun `a channel stopped on the cast device itself frees its stream`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+
+        player.listener!!.onStoppedElsewhere()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Idle
+        assertOnlyOpen()
+        stoppedOnCastDevice shouldBe 1
+    }
+
+    @Test
+    fun `a channel stopped on the cast device while in the background isn't tuned again on the way back`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+
+        player.listener!!.onStoppedElsewhere()
+        settle()
+        log.events.clear()
+        playback.resume()
+        settle()
+
+        log.events.filter { it.startsWith("open") }.shouldBeEmpty()
+        assertOnlyOpen()
+    }
+
+    @Test
+    fun `a channel that fails on the cast device while in the background is tried again on the way back`() = runTest {
+        val playback = playback()
+        player.onCastDevice.value = true
+        playback.play("a", lineup)
+        runCurrent()
+        playback.pause()
+
+        player.listener!!.onError()
+        settle()
+        playback.state.value shouldBe PlaybackState.Failed("a")
+        playback.resume()
+        settle()
+
+        playback.state.value shouldBe PlaybackState.Playing("a")
+        assertOnlyOpen("ls-a-2")
     }
 }

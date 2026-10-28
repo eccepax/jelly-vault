@@ -141,12 +141,90 @@ class PlayerLiveCastingTest {
     fun `a stream the cast device can't play is reported`() {
         connect()
         var errors = 0
-        casting.listenWith { errors++ }
+        casting.listenWith(onError = { errors++ })
 
         casting.play(CastStream("https://vault.test/broken", "application/x-mpegURL"), "4.1 Devils", null, null)
         settle()
 
         errors shouldBe 1
+    }
+
+    @Test
+    fun `a stream stopped on the cast device itself is reported, so the app can free it`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        // Its remote's stop, another sender taking over, the stream ending: the cast player stops
+        device.stop()
+        settle()
+
+        stopped shouldBe 1
+        casting.started.value shouldBe false
+    }
+
+    @Test
+    fun `stopping it from here isn't reported as stopped there`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        casting.stop()
+        settle()
+
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `a stream the cast device can't play is reported as that, not as stopped`() {
+        connect()
+        var errors = 0
+        var stopped = 0
+        casting.listenWith(onError = { errors++ }, onStopped = { stopped++ })
+
+        casting.play(CastStream("https://vault.test/broken", "application/x-mpegURL"), "4.1 Devils", null, null)
+        settle()
+
+        errors shouldBe 1
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `the stream shows as not started again while the cast device stops playing it (a stall)`() {
+        connect()
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+        settle()
+        casting.started.value shouldBe true
+
+        device.pause()
+        settle()
+
+        casting.started.value shouldBe false
+    }
+
+    @Test
+    fun `released before the cast framework starts, nothing is left waiting for it`() {
+        val framework = WaitingCastPlayers()
+        val live = liveCasting(framework)
+
+        live.release()
+        framework.start()
+
+        framework.devicesMade shouldBe 0
+    }
+
+    @Test
+    fun `the live cast player is emptied when the cast is forgotten (signing out)`() {
+        val framework = WaitingCastPlayers()
+        liveCasting(framework)
+        framework.start()
+
+        framework.forgotten.size shouldBe 1
     }
 
     @Test
@@ -201,6 +279,35 @@ class PlayerLiveCastingTest {
         casting.start(device, connected = true)
 
         casting.connected.value shouldBe false
+    }
+
+    /** The Cast framework, started when the test says ([start]); its cast device never connects. */
+    private class WaitingCastPlayers : Casting, CastPlayers {
+        private val waiting = mutableListOf<() -> Unit>()
+        var devicesMade = 0
+        val forgotten = mutableListOf<CastQueuePlayer>()
+
+        override val isAvailable = MutableStateFlow(false)
+        override val castDevice = MutableStateFlow<String?>(null)
+        override fun stopCasting() = Unit
+        override fun forgetCast() = Unit
+
+        override fun whenReady(onReady: () -> Unit): () -> Unit {
+            waiting += onReady
+            return { waiting -= onReady }
+        }
+
+        fun start() = waiting.toList().forEach { it() }
+
+        override fun newDevice(live: Boolean): CastDevice {
+            devicesMade++
+            return FakeCastDevice()
+        }
+
+        override fun forgetsWithCast(player: CastQueuePlayer): () -> Unit {
+            forgotten += player
+            return { forgotten -= player }
+        }
     }
 
     /** Fake sources that play, except a url ending "broken", which fails like a stream the device can't open. */

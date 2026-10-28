@@ -384,14 +384,16 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit, casting: Cast
         castButton = { CastButton(casting) },
         video = {
             val exoPlayer = (viewModel.localPlayer as? ExoLivePlayer)?.exoPlayer
+            // On only while the channel plays here: a cast plays on the TV, and the phone can sleep
+            val playsHere = state.castDevice == null
             AndroidView(
                 factory = { context ->
                     PlayerView(context).apply {
                         useController = false
-                        keepScreenOn = true
                         player = exoPlayer
                     }
                 },
+                update = { it.keepScreenOn = playsHere },
                 onRelease = { it.player = null },
                 modifier = Modifier.fillMaxSize(),
             )
