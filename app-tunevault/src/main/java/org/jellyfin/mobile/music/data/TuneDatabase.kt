@@ -2,6 +2,7 @@ package org.jellyfin.mobile.music.data
 
 import androidx.room.AutoMigration
 import androidx.room.Database
+import androidx.room.DeleteColumn
 import androidx.room.DeleteTable
 import androidx.room.RoomDatabase
 import androidx.room.migration.AutoMigrationSpec
@@ -31,13 +32,14 @@ import org.jellyfin.mobile.music.playback.PendingPlayEntity
         DownloadGroupItemEntity::class,
         PendingPlayEntity::class,
     ],
-    version = 6,
+    version = 7,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5, spec = TuneDatabase.SharedDownloads::class),
         AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7, spec = TuneDatabase.NoDownloadContainer::class),
     ],
 )
 abstract class TuneDatabase : RoomDatabase() {
@@ -62,4 +64,11 @@ abstract class TuneDatabase : RoomDatabase() {
             val FORGET_DOWNLOADS = listOf("DELETE FROM download_collection", "DELETE FROM download_track")
         }
     }
+
+    /**
+     * Downloaded songs' containers were kept for casting them (version 6), which now asks the server
+     * what each file is when it's cast.
+     */
+    @DeleteColumn(tableName = "download_track", columnName = "container")
+    class NoDownloadContainer : AutoMigrationSpec
 }

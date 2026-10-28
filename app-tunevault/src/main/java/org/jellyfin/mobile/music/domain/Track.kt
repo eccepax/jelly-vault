@@ -15,6 +15,4 @@ data class Track(
     val normalizationGainDb: Float? = null,
     /** The artist whose page this track leads to: its album's artist, else its own; null if none is known. */
     val artistId: String? = null,
-    /** The file's container as the server names it (flac, mp3, m4a, ...); null if it didn't say. */
-    val container: String? = null,
 )

@@ -2,6 +2,7 @@ package org.jellyfin.mobile.cast
 
 import android.app.Application
 import android.net.Uri
+import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -59,12 +60,12 @@ class CastQueueItemsTest {
         val theirs = MediaQueueItem.Builder(MediaInfo.Builder("https://elsewhere.test/a").build()).build()
 
         CastQueueItems.keyOf(theirs).shouldBeNull()
-        CastQueueItems.mediaItemOf(theirs).shouldBeNull()
+        CastQueueItems.sentItemOf(theirs).shouldBeNull()
     }
 
     @Test
     fun `items come back as the app gave them, with their own uri rather than the cast stream's`() {
-        val back = CastQueueItems.mediaItemOf(CastQueueItems.queueItemOf(SentItem("key", item(), stream)))!!
+        val back = CastQueueItems.sentItemOf(CastQueueItems.queueItemOf(SentItem("key", item(), stream)))!!.item
 
         back.mediaId shouldBe "42"
         back.localConfiguration?.uri.toString() shouldBe "https://vault.test/Audio/1/universal"
@@ -75,13 +76,59 @@ class CastQueueItemsTest {
     }
 
     @Test
+    fun `items come back with the details an app keeps in their extras, request and length`() {
+        val detailed = item().buildUpon()
+            .setMediaMetadata(
+                item().mediaMetadata.buildUpon()
+                    .setDurationMs(180_000L)
+                    .setExtras(
+                        Bundle().apply {
+                            putLongArray("starts", longArrayOf(0L, 60_000L))
+                            putStringArray("names", arrayOf("One", "Two"))
+                            putBoolean("fromDevice", true)
+                            putString("container", "m4b")
+                        },
+                    )
+                    .build(),
+            )
+            .setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setMediaUri(Uri.parse("https://vault.test/Audio/1/universal"))
+                    .setExtras(Bundle().apply { putString("container", "flac") })
+                    .build(),
+            )
+            .build()
+
+        val back = CastQueueItems.sentItemOf(CastQueueItems.queueItemOf(SentItem("key", detailed, stream)))!!.item
+
+        back.mediaMetadata.durationMs shouldBe 180_000L
+        back.mediaMetadata.extras!!.getLongArray("starts")!!.toList() shouldBe listOf(0L, 60_000L)
+        back.mediaMetadata.extras!!.getStringArray("names")!!.toList() shouldBe listOf("One", "Two")
+        back.mediaMetadata.extras!!.getBoolean("fromDevice") shouldBe true
+        back.mediaMetadata.extras!!.getString("container") shouldBe "m4b"
+        back.requestMetadata.mediaUri.toString() shouldBe "https://vault.test/Audio/1/universal"
+        back.requestMetadata.extras!!.getString("container") shouldBe "flac"
+    }
+
+    @Test
+    fun `each comes back with its key and the stream it was sent, where that starts and all`() {
+        val transcode =
+            CastStream("https://vault.test/cast/42?from=5000", "audio/mpeg", startMs = 5_000L, seekable = false)
+
+        val back = CastQueueItems.sentItemOf(CastQueueItems.queueItemOf(SentItem("key", item(), transcode)))!!
+
+        back.key shouldBe "key"
+        back.stream shouldBe transcode
+    }
+
+    @Test
     fun `an item that can't say how to play it is still sent, rather than crash the playback service`() {
         // As another controller (system UI, Android Auto) can add one: no uri, nothing to restore it from
         val bare = MediaItem.Builder().setMediaId("42").build()
 
         val sent = CastQueueItems.queueItemOf(SentItem("key", bare, CastStream("42", "audio/mpeg")))
 
-        CastQueueItems.mediaItemOf(sent)?.mediaId shouldBe "42"
+        CastQueueItems.sentItemOf(sent)?.item?.mediaId shouldBe "42"
     }
 
     @Test

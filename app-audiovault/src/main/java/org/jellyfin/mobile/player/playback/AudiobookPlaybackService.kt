@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.cast.CastStream
+import org.jellyfin.mobile.cast.CastSource
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.cast.SessionCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
@@ -101,19 +101,14 @@ class AudiobookPlaybackService : MediaSessionService() {
                     exoPlayer,
                     casting,
                     wrap = castingWrapper(exoPlayer, audiobookPlayer),
-                    castStream = ::castStream,
+                    castSource = ::castSource,
                 )
             }
     }
 
-    /**
-     * What the cast device fetches for [item], from [fromMs]: from the server, even when it plays from
-     * a download here. Without its format (an item another controller added), as an mp3 transcode.
-     */
-    private fun castStream(item: MediaItem, fromMs: Long): CastStream? {
-        val track = item.toAudiobookTrack().takeIf { it.id.isNotEmpty() } ?: return null
-        return audiobooks.castStream(track.id, track.container, track.audioCodec, fromMs)
-    }
+    /** Where the cast device fetches [item] from: the server, even when it plays from a download here. */
+    private suspend fun castSource(item: MediaItem): CastSource? =
+        item.toAudiobookTrack().id.takeIf { it.isNotEmpty() }?.let { audiobooks.castSource(it) }
 
     /**
      * Chapters on either player, and transcode seeking on this device's (a cast player starts and

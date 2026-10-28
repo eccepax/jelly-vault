@@ -66,16 +66,42 @@ class CastFormatTest {
     }
 
     @Test
-    fun `whether a file goes as it is, by its container and its codec where that's known`() {
-        castFormatOf("flac").playsAsIs("flac", null) shouldBe true
-        castFormatOf("mp3").playsAsIs("MP3", "mp3") shouldBe true
-        castFormatOf("ogg").playsAsIs("ogg", "vorbis") shouldBe true
-        castFormatOf("ogg").playsAsIs("ogg", "flac") shouldBe false
-        // Not known: as it is, as far as can be told (the server transcodes from the start if not)
-        castFormatOf("ogg").playsAsIs("ogg", null) shouldBe true
-        castFormatOf("wav").playsAsIs("wav", null) shouldBe false
-        castFormatOf("m4a", "alac").playsAsIs("m4a", "alac") shouldBe false
-        castFormatOf(null).playsAsIs(null, null) shouldBe false
+    fun `whether a file goes as it is, by its container and its codec`() {
+        castFormatOf("mp3").playsAsIs(AudioFileInfo("MP3", "mp3")) shouldBe true
+        castFormatOf("ogg").playsAsIs(AudioFileInfo("ogg", "vorbis")) shouldBe true
+        castFormatOf("ogg").playsAsIs(AudioFileInfo("ogg", "flac")) shouldBe false
+        castFormatOf("wav").playsAsIs(AudioFileInfo("wav", "pcm_s16le", 44_100, 16)) shouldBe false
+        castFormatOf("m4a", "alac").playsAsIs(AudioFileInfo("m4a", "alac")) shouldBe false
+        castFormatOf(null).playsAsIs(AudioFileInfo(null, null)) shouldBe false
+    }
+
+    @Test
+    fun `a file that may not be one a cast device plays isn't sent as it is, since the server would transcode it from its start`() {
+        // Its codec not known, where the container holds others too (ALAC in m4a, FLAC in ogg)
+        castFormatOf("ogg").playsAsIs(AudioFileInfo("ogg", null)) shouldBe false
+        castFormatOf("m4a").playsAsIs(AudioFileInfo("m4a", null)) shouldBe false
+        // Past what a cast device decodes, or not known to be within it
+        castFormatOf("flac").playsAsIs(AudioFileInfo("flac", "flac", 192_000, 24)) shouldBe false
+        castFormatOf("flac").playsAsIs(AudioFileInfo("flac", "flac", 96_000, 32)) shouldBe false
+        castFormatOf("flac").playsAsIs(AudioFileInfo("flac", "flac", null, 16)) shouldBe false
+        castFormatOf("flac").playsAsIs(AudioFileInfo("flac", "flac", 44_100, 16)) shouldBe true
+        castFormatOf("flac").playsAsIs(AudioFileInfo("flac", "flac", 96_000, 24)) shouldBe true
+        // Where the format has no limits, none need be known
+        castFormatOf("mp3").playsAsIs(AudioFileInfo("mp3", "mp3", null, null)) shouldBe true
+    }
+
+    @Test
+    fun `a file is cast in its own format where it can, and as mp3 where it can't or isn't to be kept`() {
+        castChoiceOf(AudioFileInfo("flac", "flac", 44_100, 16), keepFormat = true) shouldBe
+            CastChoice(castFormatOf("flac"), asIs = true)
+        castChoiceOf(AudioFileInfo("flac", "flac", 192_000, 24), keepFormat = true) shouldBe
+            CastChoice(castFormatOf("flac"), asIs = false)
+        castChoiceOf(AudioFileInfo("m4b", "alac"), keepFormat = true) shouldBe CastChoice(CAST_MP3, asIs = false)
+        // The server couldn't say what it is
+        castChoiceOf(null, keepFormat = true) shouldBe CastChoice(CAST_MP3, asIs = false)
+        // A lower quality: the server transcodes it down anyway
+        castChoiceOf(AudioFileInfo("flac", "flac", 44_100, 16), keepFormat = false) shouldBe
+            CastChoice(CAST_MP3, asIs = false)
     }
 
     @Test

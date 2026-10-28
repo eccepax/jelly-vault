@@ -14,6 +14,7 @@ import androidx.media3.test.utils.TestExoPlayerBuilder
 import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.longs.shouldBeInRange
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -38,7 +39,8 @@ class SessionPlayerSwitcherTest {
         .setMediaSourceFactory(FakeAudioSourceFactory())
         .build()
     private val device = FakeCastDevice()
-    private val cast = CastQueuePlayer(device, ::stream)
+    private val sources = CastSourceFinder { item, found -> found(CastSource { stream(item, it) }) }
+    private val cast = CastQueuePlayer(device, sources)
     private val sessionPlayers = mutableListOf<Player>()
     private val switcher = SessionPlayerSwitcher(local, setSessionPlayer = { sessionPlayers += it })
 
@@ -225,27 +227,6 @@ class SessionPlayerSwitcherTest {
     }
 
     @Test
-    fun `back here, the place is set through the app's own wrapper, which knows where its streams start`() {
-        // AudioVault's starts a transcode from the place again: the stream it held may have started elsewhere
-        val seeks = mutableListOf<Pair<Int, Long>>()
-        val wrapping = SessionPlayerSwitcher(
-            local,
-            wrap = { player -> if (player === local) Seeking(player, seeks) else player },
-            setSessionPlayer = { sessionPlayers += it },
-        )
-        local.load(index = 0, positionMs = 0L, play = false)
-        wrapping.switchTo(cast)
-        settle()
-        cast.seekTo(1, 40_000L)
-        settle()
-
-        wrapping.switchTo(local)
-        settleHere()
-
-        seeks shouldBe listOf(1 to 40_000L)
-    }
-
-    @Test
     fun `switching to the player already playing does nothing`() {
         switcher.switchTo(local)
 
@@ -303,15 +284,106 @@ class SessionPlayerSwitcherTest {
     }
 
     @Test
-    fun `songs a player can't say how to play are left out rather than crash this device's player`() {
+    fun `songs a player can't say how to play carry over too, so the queue lines up with the app's, without a crash`() {
         switcher.switchTo(cast)
-        cast.setMediaItems(listOf(MediaItem.Builder().setMediaId("nowhere").build()))
+        cast.setMediaItems(items("a") + MediaItem.Builder().setMediaId("nowhere").build() + items("c"), 2, 0L)
         settle()
 
         switcher.switchTo(local)
         settleHere()
 
-        local.mediaItemCount shouldBe 0
+        local.ids shouldBe listOf("a", "nowhere", "c")
+        local.currentMediaItemIndex shouldBe 2
+        // ExoPlayer's own sources need one: playing it fails then, rather than taking it now
+        local.getMediaItemAt(1).localConfiguration.shouldNotBeNull()
+    }
+
+    @Test
+    fun `the place is read and set through the app's wrapper, which knows where this device's streams start`() {
+        // As AudioVault's player, whose transcode started part way counts from where it started
+        val offset = Offset(local, startMs = 60_000L)
+        val wrapping = SessionPlayerSwitcher(
+            local,
+            wrap = { if (it === local) offset else it },
+            setSessionPlayer = { sessionPlayers += it },
+        )
+        local.load(index = 1, positionMs = 10_000L, play = false)
+
+        wrapping.switchTo(cast)
+        settle()
+        cast.currentPosition shouldBe 70_000L
+
+        cast.seekTo(80_000L)
+        settle()
+        wrapping.switchTo(local)
+        settleHere()
+
+        offset.currentPosition.near(80_000L)
+        local.currentPosition.near(20_000L)
+    }
+
+    @Test
+    fun `a moment without the network leaves playback on the cast device`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        switcher.switchTo(cast)
+        cast.onConnectionChange = { switcher.switchTo(if (it) cast else local) }
+        settle()
+
+        device.suspend()
+        settle(5_000L)
+        device.resume()
+        settle()
+
+        switcher.player shouldBeSameInstanceAs cast
+        sessionPlayers.size shouldBe 1
+        device.isPlaying shouldBe true
+    }
+
+    @Test
+    fun `moving straight on to another cast device keeps playing there`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        switcher.switchTo(cast)
+        settle()
+
+        // Another device picked: this session ends, and the next comes up
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+        device.connect()
+        switcher.switchTo(cast)
+        settle()
+
+        cast.isPlaying shouldBe true
+        device.isPlaying shouldBe true
+    }
+
+    @Test
+    fun `casting again a while after, or after playing here meanwhile, starts as playback here is`() {
+        local.load(index = 0, positionMs = 0L, play = true)
+        switcher.switchTo(cast)
+        settle()
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+
+        settle(SessionPlayerSwitcher.CARRY_ON_WITHIN_MS + 1_000L)
+        device.connect()
+        switcher.switchTo(cast)
+        settle()
+        cast.playWhenReady shouldBe false
+
+        cast.play()
+        settle()
+        device.drop()
+        switcher.switchTo(local)
+        settleHere()
+        local.play()
+        local.pause()
+        settleHere()
+        device.connect()
+        switcher.switchTo(cast)
+        settle()
+        cast.playWhenReady shouldBe false
     }
 
     @Test
@@ -332,13 +404,13 @@ class SessionPlayerSwitcherTest {
     @Test
     fun `with nothing here to cast, what the cast device is playing is taken up`() {
         // Another of this app's players sent it, before the service started again
-        val before = CastQueuePlayer(device, ::stream)
+        val before = CastQueuePlayer(device, sources)
         before.setMediaItems(items("a", "b", "c"))
         before.playWhenReady = true
         before.prepare()
         settle()
         before.release()
-        val again = CastQueuePlayer(device, ::stream)
+        val again = CastQueuePlayer(device, sources)
 
         switcher.switchTo(again)
 
@@ -349,11 +421,12 @@ class SessionPlayerSwitcherTest {
 
     private class Wrapped(player: Player) : ForwardingPlayer(player)
 
-    private class Seeking(player: Player, private val seeks: MutableList<Pair<Int, Long>>) : ForwardingPlayer(player) {
-        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
-            seeks += mediaItemIndex to positionMs
-            super.seekTo(mediaItemIndex, positionMs)
-        }
+    /** A wrapper whose places are [startMs] on from its player's. */
+    private class Offset(player: Player, private val startMs: Long) : ForwardingPlayer(player) {
+        override fun getCurrentPosition() = super.getCurrentPosition() + startMs
+
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) =
+            super.setMediaItems(mediaItems, startIndex, startPositionMs - startMs)
     }
 
     private companion object {

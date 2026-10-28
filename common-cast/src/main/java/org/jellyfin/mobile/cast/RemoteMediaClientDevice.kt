@@ -34,8 +34,12 @@ import kotlin.math.roundToInt
  * (RemoteMediaClient) for the queue and playback, and the session for the volume. Each item goes
  * with the key of its entry (see [CastQueueItems]), which the cast device sends back, so its items
  * are known by key; the queue's item ids come from the framework's MediaQueue, which fetches items
- * it hasn't seen ([DeviceStatus.queueKnown] is false until it has). A [live] device sends items as
- * live streams.
+ * it hasn't seen ([DeviceStatus.queueKnown] is false until it has). What it says is put together
+ * once each time it says something, and read from there. A [live] device sends items as live streams.
+ *
+ * A session suspended (the network gone for a moment) isn't a session ended: commands wait for it
+ * to come back, and then it's connected again (see [CastDevice.Listener.onConnectionChanged]), so
+ * playback stays on the cast device rather than coming back here and going out again.
  */
 @UnstableApi
 internal class RemoteMediaClientDevice(
@@ -46,23 +50,21 @@ internal class RemoteMediaClientDevice(
 
     private val handler = Handler(Looper.getMainLooper())
     private var session: CastSession? = null
-    private val client: RemoteMediaClient? get() = session?.remoteMediaClient
+    private var suspended = false
+    private val client: RemoteMediaClient? get() = session?.takeUnless { suspended }?.remoteMediaClient
 
     /** Keys of the items this session has seen, by their item id: the queue's items aren't all in each report. */
     private val keyById = mutableMapOf<Int, String>()
-    private var hasReported = false
+
+    /** The queue's item ids as last said, in the order of [status]'s keys. */
+    private var ids = IntArray(0)
 
     override var listener: CastDevice.Listener? = null
 
     override val isConnected: Boolean get() = client != null
 
-    override val status: DeviceStatus?
-        get() {
-            val client = client ?: return null
-            if (!hasReported) return null
-            val media = client.mediaStatus ?: return EMPTY.copy(atMs = SystemClock.elapsedRealtime())
-            return statusOf(client, media)
-        }
+    override var status: DeviceStatus? = null
+        private set
 
     private val routing: Routing? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Routing(context) else null
 
@@ -111,8 +113,10 @@ internal class RemoteMediaClientDevice(
     private val sessions = object : SessionManagerListener<CastSession> {
         override fun onSessionStarted(session: CastSession, sessionId: String) = attach(session)
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = attach(session)
-        override fun onSessionEnded(session: CastSession, error: Int) = detach()
-        override fun onSessionSuspended(session: CastSession, reason: Int) = detach()
+        override fun onSessionEnded(session: CastSession, error: Int) = detach(notify = true)
+        override fun onSessionSuspended(session: CastSession, reason: Int) {
+            if (this@RemoteMediaClientDevice.session === session) suspended = true
+        }
         override fun onSessionStarting(session: CastSession) = Unit
         override fun onSessionStartFailed(session: CastSession, error: Int) = Unit
         override fun onSessionEnding(session: CastSession) = Unit
@@ -127,21 +131,36 @@ internal class RemoteMediaClientDevice(
     }
 
     private fun attach(session: CastSession) {
-        if (this.session === session) return
-        detach()
+        if (this.session === session) {
+            if (suspended) resumed(session)
+            return
+        }
+        // Back from a suspended session as another one: the same cast carrying on, not one ending
+        detach(notify = !suspended)
         val client = session.remoteMediaClient ?: return
         this.session = session
         keyById.clear()
-        hasReported = false
         client.registerCallback(clientCallback)
         client.mediaQueue.registerCallback(queueCallback)
         session.addCastListener(castListener)
-        listener?.onConnectionChanged(true)
-        // What it holds now, before anything is sent: it may still be playing what this app sent before
-        client.requestStatus().setResultCallback { if (this.session === session) reported() }
+        connected(session, client)
     }
 
-    private fun detach() {
+    /** The session is back: what it holds is asked for again, and the commands lost meanwhile go again. */
+    private fun resumed(session: CastSession) {
+        suspended = false
+        val client = session.remoteMediaClient ?: return detach(notify = true)
+        connected(session, client)
+    }
+
+    private fun connected(session: CastSession, client: RemoteMediaClient) {
+        status = null
+        listener?.onConnectionChanged(true)
+        // What it holds now, before anything is sent: it may still be playing what this app sent before
+        client.requestStatus().setResultCallback { if (this.session === session && !suspended) reported() }
+    }
+
+    private fun detach(notify: Boolean) {
         val session = session ?: return
         session.remoteMediaClient?.let {
             it.unregisterCallback(clientCallback)
@@ -149,25 +168,35 @@ internal class RemoteMediaClientDevice(
         }
         session.removeCastListener(castListener)
         this.session = null
-        hasReported = false
-        listener?.onConnectionChanged(false)
+        suspended = false
+        status = null
+        ids = IntArray(0)
+        if (notify) listener?.onConnectionChanged(false)
     }
 
     private fun reported() {
-        hasReported = true
-        status?.let { listener?.onStatus(it) }
+        val client = client ?: return
+        val media = client.mediaStatus
+        val said = if (media != null) {
+            statusOf(client, media)
+        } else {
+            ids = IntArray(0)
+            EMPTY.copy(atMs = SystemClock.elapsedRealtime())
+        }
+        status = said
+        listener?.onStatus(said)
     }
 
     private fun statusOf(client: RemoteMediaClient, media: MediaStatus): DeviceStatus {
         media.queueItems.forEach { learn(it) }
         val queue = client.mediaQueue
         val ids = queue.itemIds.takeIf { it.isNotEmpty() } ?: media.queueItems.map { it.itemId }.toIntArray()
+        this.ids = ids
         var known = true
-        val items = ids.mapIndexed { index, id ->
+        ids.forEachIndexed { index, id ->
             val item = media.getQueueItemById(id) ?: queue.getItemAtIndex(index, true)
             if (item == null && id !in keyById) known = false
             item?.let(::learn)
-            item
         }
         val currentId = media.currentItemId
         val currentItem = media.getQueueItemById(currentId)
@@ -188,8 +217,16 @@ internal class RemoteMediaClientDevice(
             durationMs = media.mediaInfo?.streamDuration?.takeIf { it > 0 } ?: C.TIME_UNSET,
             repeat = repeatOf(media.queueRepeatMode),
             queueKnown = known,
-            items = items.map { it?.let(CastQueueItems::mediaItemOf) },
         )
+    }
+
+    override fun heldItems(): List<SentItem?> {
+        val client = client ?: return emptyList()
+        val media = client.mediaStatus
+        return ids.mapIndexed { index, id ->
+            val item = media?.getQueueItemById(id) ?: client.mediaQueue.getItemAtIndex(index, false)
+            item?.let(CastQueueItems::sentItemOf)
+        }
     }
 
     private fun stateOf(playerState: Int) = when (playerState) {
@@ -250,8 +287,9 @@ internal class RemoteMediaClientDevice(
     }
 
     override fun keepOnly(keys: Set<String>, done: (Boolean) -> Unit) {
-        val client = client ?: return later(done, false)
-        val ids = client.mediaQueue.itemIds.filter { keyById[it] !in keys }
+        if (client == null) return later(done, false)
+        // The ids its status was made from, so what goes is what its keys said was there
+        val ids = ids.filter { keyById[it] !in keys }
         if (ids.isEmpty()) return later(done, true)
         send(done) { it.queueRemoveItems(ids.toIntArray(), null) }
     }
@@ -296,13 +334,7 @@ internal class RemoteMediaClientDevice(
     override fun release() {
         castContext.sessionManager.removeSessionManagerListener(sessions, CastSession::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) routing?.stop()
-        val session = session ?: return
-        session.remoteMediaClient?.let {
-            it.unregisterCallback(clientCallback)
-            it.mediaQueue.unregisterCallback(queueCallback)
-        }
-        session.removeCastListener(castListener)
-        this.session = null
+        detach(notify = false)
     }
 
     /** Sends a command on this session's media channel; its answer, if this session is still up. */
