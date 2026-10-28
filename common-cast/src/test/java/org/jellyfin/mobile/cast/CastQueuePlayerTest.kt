@@ -10,6 +10,7 @@ import androidx.media3.common.util.UnstableApi
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.longs.shouldBeInRange
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -189,6 +190,22 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
     }
 
     @Test
+    fun `repeating a transcode cast from part way plays it again from its start, not from where it was cast`() {
+        transcodes = setOf("a")
+        playing("a", "b", "c", positionMs = 60_000L)
+        player.repeatMode = Player.REPEAT_MODE_ONE
+        settle()
+
+        settle(SONG_MS - 60_000L)
+        settle()
+
+        player.currentMediaItemIndex shouldBe 0
+        asked shouldContain ("a" to 0L)
+        device.playing?.stream?.startMs shouldBe 0L
+        player.currentPosition shouldBeInRange 0L..10_000L
+    }
+
+    @Test
     fun `repeating a queue short enough to send whole repeats it there`() {
         playing("a", "b", index = 1)
 
@@ -300,13 +317,16 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
         device.pressPause()
         settle()
 
+        val sentBefore = device.commands.size
+
         device.seekOnRemote(50_000L)
         player.playWhenReady shouldBe false
         settle()
 
         player.playWhenReady shouldBe false
         device.isPlaying shouldBe false
-        device.commands.last() shouldBe "pause"
+        // Buffering isn't playing: nothing is sent to pause it again
+        device.commands.drop(sentBefore) shouldBe emptyList()
         player.currentPosition.near(50_000L)
     }
 

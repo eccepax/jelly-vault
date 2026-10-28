@@ -23,11 +23,16 @@ import org.jellyfin.mobile.player.session.withPlayableUri
  * player's queue carries over stopped.
  *
  * A cast device's queue is [CastQueuePlayer]'s own, still there once its session has ended, where
- * it had got to; one it emptied leaves nothing to pick up here. With nothing here to cast, a cast
- * player takes up what the cast device is already playing ([CastQueuePlayer.takeUpDevice]).
+ * it had got to; one it emptied leaves nothing to pick up here. Once it's picked up here the cast
+ * player lets it go, so each cast starts afresh. With nothing here to cast, a cast player takes up
+ * what the cast device is already playing ([CastQueuePlayer.takeUpDevice]).
+ *
+ * The session moves to the new player before the one left behind stops, so nothing reading it sees
+ * playback stop in the middle of the switch.
  *
  * A volume asked for while casting (a sleep timer's fade, say) isn't the cast device's (see
- * [CastQueuePlayer.volumeAskedFor]): back here, it's this device's player's.
+ * [CastQueuePlayer.volumeAskedFor]): back here, it's this device's player's. Each cast starts from
+ * this device's player's volume.
  */
 // It reads CastQueuePlayer, which is built on Media3's unstable SimpleBasePlayer
 @OptIn(UnstableApi::class)
@@ -61,9 +66,9 @@ class SessionPlayerSwitcher(
         val volume = (previous as? CastQueuePlayer)?.volumeAskedFor
         val carryOn = pausedComingBackAt?.let { now() - it <= CARRY_ON_WITHIN_MS } == true
         pausedComingBackAt = if (next === local && state?.playWhenReady == true) now() else null
-        previous.stop()
         player = next
-        if (next === local) volume?.let { local.volume = it }
+        // Each cast starts from this device's volume, so one asked for in an earlier cast never comes back
+        if (next === local) volume?.let { local.volume = it } else next.volume = local.volume
         val wrapped = wrap(next)
         when {
             state != null -> {
@@ -77,7 +82,11 @@ class SessionPlayerSwitcher(
             next === local -> next.clearMediaItems()
             else -> (next as? CastQueuePlayer)?.takeUpDevice()
         }
+        // Only once the session is on the new player, so nothing reading it sees playback stop mid-switch
         setSessionPlayer(wrapped)
+        previous.stop()
+        // What it held is here now: the next cast starts from what's here then, not from this
+        if (previous is CastQueuePlayer) previous.clearMediaItems()
     }
 
     private data class PlaybackState(
