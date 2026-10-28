@@ -81,7 +81,7 @@ class AudiobookPlaybackService : MediaSessionService() {
                 addListener(WakeModeFollowsTrack({ downloads.fileFor(it.mediaId) != null }, ::setWakeMode))
             }
 
-        val audiobookPlayer = AudiobookPlayer(exoPlayer)
+        val audiobookPlayer = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer))
         return MediaSession.Builder(this, audiobookPlayer)
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
@@ -100,8 +100,11 @@ class AudiobookPlaybackService : MediaSessionService() {
                     session,
                     exoPlayer,
                     casting,
-                    wrap = castingWrapper(exoPlayer, audiobookPlayer),
+                    // Chapters on either player; transcode seeking only on this device's, whose wrapper
+                    // holds what it's waiting to seek to (a cast player starts and seeks its own streams)
+                    wrap = { player -> if (player === exoPlayer) audiobookPlayer else AudiobookPlayer(player) },
                     castSource = ::castSource,
+                    castUri = audiobooks::castUri,
                 )
             }
     }
@@ -109,16 +112,6 @@ class AudiobookPlaybackService : MediaSessionService() {
     /** Where the cast device fetches [item] from: the server, even when it plays from a download here. */
     private suspend fun castSource(item: MediaItem): CastSource? =
         item.toAudiobookTrack().id.takeIf { it.isNotEmpty() }?.let { audiobooks.castSource(it) }
-
-    /**
-     * Chapters on either player, and transcode seeking on this device's (a cast player starts and
-     * seeks its own streams), wrapped once each: a wrapper listens to its player for good, so a new
-     * one per cast would pile up.
-     */
-    private fun castingWrapper(exoPlayer: ExoPlayer, audiobookPlayer: AudiobookPlayer): (Player) -> Player {
-        val wrapped = mutableMapOf<Player, Player>(exoPlayer to audiobookPlayer)
-        return { player -> wrapped.getOrPut(player) { AudiobookPlayer(player, streamOffsets = false) } }
-    }
 
     /** Uses the FFmpeg decoders for what the device can't play itself. */
     private fun renderersFactory() = DefaultRenderersFactory(this)
@@ -276,6 +269,8 @@ class AudiobookSessionCallback(
         if (customCommand.customAction != SET_SKIP_SILENCE.customAction) {
             return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
         }
+        // This device's player only, also while casting: the Default Media Receiver can't skip silence,
+        // so it plays a cast as it is, and the setting is this device's once playback is back here
         exoPlayer.skipSilenceEnabled = args.getBoolean(KEY_ENABLED)
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }

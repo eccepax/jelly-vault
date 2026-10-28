@@ -28,7 +28,7 @@ class AudiobookPlayerTest {
     private val exoPlayer: ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
         .setMediaSourceFactory(sources)
         .build()
-    private val player = AudiobookPlayer(exoPlayer)
+    private val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer))
 
     private val chapters = listOf(Chapter(0L, "One"), Chapter(30_000L, "Two"), Chapter(60_000L, "Three"))
 

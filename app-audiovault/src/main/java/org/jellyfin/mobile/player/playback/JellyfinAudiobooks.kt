@@ -1,10 +1,13 @@
 package org.jellyfin.mobile.player.playback
 
+import android.net.Uri
+import androidx.core.net.toUri
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.cast.CastSource
 import org.jellyfin.mobile.cast.serverCastSource
+import org.jellyfin.mobile.common.server.withAccessToken
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -68,6 +71,9 @@ class JellyfinAudiobooks(
      */
     suspend fun castSource(itemId: String): CastSource = serverCastSource(apiClient, itemId)
 
+    /** [uri] as a cast device fetches it alone (see [castUrl]). */
+    fun castUri(uri: Uri): Uri = castUrl(uri.toString(), apiClient.baseUrl, apiClient.accessToken).toUri()
+
     /** The track's own cover, or its book's when it has none (one part of a book in files). */
     fun coverUrl(item: BaseItemDto): String? {
         val ownTag = item.imageTags?.get(ImageType.PRIMARY)
@@ -84,4 +90,14 @@ class JellyfinAudiobooks(
             tag = tag,
         )
     }
+}
+
+/**
+ * [url] as a cast device fetches it, with no auth header of its own: one from the server at
+ * [baseUrl] carries [token] in the url; anything else is left as it is, so the token goes nowhere else.
+ */
+internal fun castUrl(url: String, baseUrl: String?, token: String?): String {
+    val server = baseUrl?.trimEnd('/') ?: return url
+    val fromServer = url == server || url.startsWith("$server/") || url.startsWith("$server?")
+    return if (fromServer) withAccessToken(url, token) else url
 }

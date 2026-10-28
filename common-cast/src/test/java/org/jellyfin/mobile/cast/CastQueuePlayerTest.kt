@@ -1,95 +1,29 @@
 package org.jellyfin.mobile.cast
 
 import android.app.Application
+import android.os.Handler
 import android.os.Looper
 import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.longs.shouldBeInRange
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.cast.CastDevice.Repeat
-import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import java.time.Duration
 
-/**
- * The queue owned here, with a window of it on the cast device. The cast device is a
- * [FakeCastDevice], which takes each command a round trip later and plays as time goes on; songs
- * last [SONG_MS], and those in [transcodes] are cast as a stream that starts where it's asked for.
- */
+/** Playback and the queue on the cast device (see [CastQueuePlayerFixture]). */
 @RunWith(RobolectricTestRunner::class)
 @OptIn(UnstableApi::class)
 @Config(application = Application::class)
-class CastQueuePlayerTest {
-
-    private val device = FakeCastDevice()
-    private var transcodes = setOf<String>()
-
-    /** The streams asked for: the song and from where. */
-    private val asked = mutableListOf<Pair<String, Long>>()
-
-    private fun stream(item: MediaItem, fromMs: Long): CastStream {
-        asked += item.mediaId to fromMs
-        return if (item.mediaId in transcodes) {
-            CastStream(
-                "https://vault.test/${item.mediaId}?from=$fromMs",
-                "audio/mpeg",
-                startMs = fromMs,
-                seekable = false,
-            )
-        } else {
-            CastStream("https://vault.test/${item.mediaId}", "audio/flac")
-        }
-    }
-
-    /** Each song's source, found at once. */
-    private val sources = CastSourceFinder { item, found -> found(CastSource { stream(item, it) }) }
-
-    private val player = CastQueuePlayer(device, sources)
-
-    init {
-        device.connect()
-    }
-
-    @After
-    fun tearDown() {
-        player.release()
-    }
-
-    private fun item(id: String, durationMs: Long = SONG_MS) = MediaItem.Builder()
-        .setMediaId(id)
-        .setUri("https://vault.test/local/$id")
-        .setMediaMetadata(MediaMetadata.Builder().setTitle("Song $id").setDurationMs(durationMs).build())
-        .build()
-
-    private fun items(vararg ids: String) = ids.map { item(it) }
-
-    private fun settle(ms: Long = SETTLE_MS) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
-
-    private fun playing(vararg ids: String, index: Int = 0, positionMs: Long = 0L, play: Boolean = true) {
-        player.setMediaItems(items(*ids), index, positionMs)
-        player.playWhenReady = play
-        player.prepare()
-        settle()
-    }
-
-    private val Player.ids get() = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId }
-
-    /** The songs on the cast device, by their ids here. */
-    private val onDevice get() = device.queue.map { it.item.mediaId }
-
-    private fun Long.near(expectedMs: Long) = shouldBeInRange(expectedMs - SLACK_MS..expectedMs + SLACK_MS)
+internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
 
     @Test
     fun `the cast device gets the song playing and the two after it, not the whole queue`() {
@@ -435,6 +369,22 @@ class CastQueuePlayerTest {
     }
 
     @Test
+    fun `skips back and forward as far as this device's player does`() {
+        val skips = CastQueuePlayer(device, sources, seekBackMs = 10_000L, seekForwardMs = 30_000L)
+        skips.setMediaItems(items("a"), 0, 50_000L)
+        skips.prepare()
+        settle()
+
+        skips.seekBackIncrement shouldBe 10_000L
+        skips.seekForwardIncrement shouldBe 30_000L
+        skips.seekBack()
+        skips.currentPosition shouldBe 40_000L
+        skips.seekForward()
+        skips.currentPosition shouldBe 70_000L
+        skips.release()
+    }
+
+    @Test
     fun `speed goes to the cast device`() {
         playing("a")
 
@@ -466,111 +416,31 @@ class CastQueuePlayerTest {
     }
 
     @Test
-    fun `when the cast ends, the queue and the place stay here, no further on`() {
-        playing("a", "b")
-        settle(20_000L)
+    fun `a pause on the TV's remote while the window is topped up stays paused`() {
+        playing("a", "b", "c", "d")
+        device.onCommand = {
+            if (it.startsWith("keepOnly")) Handler(Looper.getMainLooper()).post { device.pressPause() }
+        }
 
-        device.drop()
-        val left = player.currentPosition
-        settle(10_000L)
+        settle(SONG_MS)
 
-        left.near(20_000L + SETTLE_MS)
-        player.currentPosition shouldBe left
-        player.ids shouldBe listOf("a", "b")
-        player.isPlaying shouldBe false
-    }
-
-    @Test
-    fun `a session back after a moment without the network carries on as it was, without sending the queue again`() {
-        playing("a", "b", "c")
-        val connections = mutableListOf<Boolean>()
-        player.onConnectionChange = { connections += it }
-        val commands = device.commands.size
-
-        device.suspend()
-        settle(5_000L)
-        device.resume()
-        settle()
-
-        connections shouldBe listOf(true)
-        device.commands.size shouldBe commands
-        player.isPlaying shouldBe true
-        device.isPlaying shouldBe true
-        player.currentPosition.near(5_000L + 2 * SETTLE_MS)
-    }
-
-    @Test
-    fun `what changed here while the session was away goes once it's back, answers lost then too`() {
-        playing("a", "b")
-
-        player.seekTo(30_000L)
-        device.suspend()
-        player.pause()
-        settle()
-        device.resume()
-        settle()
-
+        device.commands.filter { it.startsWith("keepOnly") }.shouldNotBeEmpty()
+        player.playWhenReady shouldBe false
         device.isPlaying shouldBe false
-        device.songPositionMs.near(30_000L)
-        player.currentPosition.near(30_000L)
     }
 
     @Test
-    fun `a cast device that went quiet before the cast ended is left as far on as it would have got`() {
-        playing("a", "b", "c")
-        settle(90_000L)
+    fun `pressing play after the cast device couldn't play a song tries it again`() {
+        playing("a")
+        device.failToPlay()
+        player.playerError.shouldNotBeNull()
 
-        device.quiet = true
-        settle(30_000L)
-        device.drop()
-
-        player.currentMediaItemIndex shouldBe 1
-        player.currentPosition.near(20_000L + SETTLE_MS)
-    }
-
-    @Test
-    fun `another player of this app's can take up what's on the cast device`() {
-        playing("a", "b", "c", "d", index = 1)
-        player.release()
-        val next = CastQueuePlayer(device, sources)
-
-        next.takeUpDevice()
-
-        next.ids shouldBe listOf("b", "c", "d")
-        next.currentMediaItemIndex shouldBe 0
-        next.isPlaying shouldBe true
-        next.release()
-    }
-
-    @Test
-    fun `a queue taken up keeps where its transcodes start, so its place is still the song's`() {
-        transcodes = setOf("b")
-        playing("a", "b", "c", index = 1, positionMs = 30_000L)
-        player.release()
-        val next = CastQueuePlayer(device, sources)
-
-        next.takeUpDevice()
-
-        next.currentMediaItem?.mediaId shouldBe "b"
-        next.currentPosition.near(30_000L)
-        next.release()
-    }
-
-    @Test
-    fun `a taken-up song seeked in finds its source then, and its stream starts there`() {
-        transcodes = setOf("b")
-        playing("b", "c", positionMs = 30_000L)
-        player.release()
-        val next = CastQueuePlayer(device, sources)
-        next.takeUpDevice()
-        asked.clear()
-
-        next.seekTo(60_000L)
+        player.prepare()
         settle()
 
-        asked shouldContain ("b" to 60_000L)
-        device.songPositionMs.near(60_000L)
-        next.release()
+        player.playerError.shouldBeNull()
+        device.isPlaying shouldBe true
+        player.playbackState shouldBe Player.STATE_READY
     }
 
     @Test
@@ -666,13 +536,5 @@ class CastQueuePlayerTest {
 
         device.queue.shouldBeEmpty()
         player.playbackState shouldBe Player.STATE_ENDED
-    }
-
-    private companion object {
-        const val SONG_MS = 100_000L
-
-        /** Time enough for the commands a change takes, each a round trip. */
-        const val SETTLE_MS = 1_000L
-        const val SLACK_MS = 1_000L
     }
 }

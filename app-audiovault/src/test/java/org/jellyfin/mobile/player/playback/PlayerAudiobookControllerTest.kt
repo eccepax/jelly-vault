@@ -37,7 +37,7 @@ class PlayerAudiobookControllerTest {
         .build()
     private val skipSilence = mutableListOf<Boolean>()
     private val controller = PlayerAudiobookController(
-        AudiobookPlayer(exoPlayer),
+        AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)),
         streamUrl = { "https://vault.test/Audio/$it/universal" },
         setSkipSilence = { skipSilence += it },
     )
@@ -267,7 +267,7 @@ class PlayerAudiobookControllerTest {
 
     @Test
     fun `playback on a cast device shows as remote, and back here as local`() {
-        val castable = Castable(AudiobookPlayer(exoPlayer))
+        val castable = Castable(AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)))
         val onCast = PlayerAudiobookController(castable, streamUrl = {
             "https://vault.test/Audio/$it/universal"
         }, setSkipSilence = {})

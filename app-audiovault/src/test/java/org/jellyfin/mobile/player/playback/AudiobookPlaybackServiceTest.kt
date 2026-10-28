@@ -70,7 +70,9 @@ class AudiobookPlaybackServiceTest {
     }
 
     private val player get() = service.onGetSession(mockk())!!.player
-    private val exoPlayer get() = (player as ForwardingPlayer).wrappedPlayer as ExoPlayer
+
+    // The chapters' wrapper, then transcode seeking's
+    private val exoPlayer get() = ((player as ForwardingPlayer).wrappedPlayer as ForwardingPlayer).wrappedPlayer as ExoPlayer
 
     @Test
     fun `next and previous move between chapters`() {

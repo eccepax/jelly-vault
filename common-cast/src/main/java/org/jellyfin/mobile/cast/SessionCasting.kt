@@ -51,7 +51,13 @@ class SessionCasting private constructor(private val casting: Casting) {
     }
 
     private fun start(device: CastDevice, castPlayers: CastPlayers, session: MediaSession, local: Player, wrap: (Player) -> Player, sources: CastSourceFinder) {
-        val player = CastQueuePlayer(device, sources)
+        // Skips go as far there as here (AudioVault's 10 s back and 30 s forward, say)
+        val player = CastQueuePlayer(
+            device,
+            sources,
+            seekBackMs = local.seekBackIncrement,
+            seekForwardMs = local.seekForwardIncrement,
+        )
         this.player = player
         forgetting = castPlayers.forgetsWithCast(player)
         val switcher = SessionPlayerSwitcher(local, wrap, setSessionPlayer = session::setPlayer)
