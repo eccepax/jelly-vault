@@ -11,6 +11,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.downloads.DownloadMethod
@@ -107,6 +108,19 @@ class AudioVaultScreenshotTest {
     @Test
     fun player() {
         capture("player") { PlayerRoute(onBack = {}, viewModel = playerViewModel()) }
+    }
+
+    @Test
+    fun `player while casting`() {
+        // Not available: the real cast button needs the Cast framework. The label is what's shown.
+        val casting = object : Casting {
+            override val isAvailable = MutableStateFlow(false)
+            override val castDevice = MutableStateFlow<String?>("Living Room TV")
+            override val connectingTo = MutableStateFlow<String?>(null)
+            override fun stopCasting() = Unit
+            override fun forgetCast() = Unit
+        }
+        capture("player-cast") { PlayerRoute(onBack = {}, viewModel = playerViewModel(), casting = casting) }
     }
 
     @Test

@@ -17,12 +17,19 @@ class FakeAudiobookController : AudiobookPlaybackController {
     var playsLater = false
 
     /** Puts [tracks] in the queue, [index] current, as if they were playing. */
-    fun playing(vararg tracks: AudiobookTrack, index: Int = 0, positionMs: Long = 0L, isPlaying: Boolean = true) {
+    fun playing(
+        vararg tracks: AudiobookTrack,
+        index: Int = 0,
+        positionMs: Long = 0L,
+        isPlaying: Boolean = true,
+        isRemote: Boolean = false,
+    ) {
         state.value = AudiobookPlaybackState(
             tracks = tracks.toList(),
             currentIndex = index,
             playWhenReady = isPlaying,
             isPlaying = isPlaying,
+            isRemote = isRemote,
         )
         this.positionMs = positionMs
         durationMs = tracks.getOrNull(index)?.durationMs ?: 0L

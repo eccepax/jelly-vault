@@ -71,6 +71,32 @@ class PlayerScreenTest {
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
 
     @Test
+    fun `while casting, it says which device the book is playing on, and offers to stop`() {
+        composeRule.setContent {
+            AppTheme(VaultBrand.AudioVault) {
+                PlayerScreen(
+                    playing,
+                    actions,
+                    castDevice = "Living Room TV",
+                    onStopCasting = { events += "stopCasting" },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Playing on Living Room TV").performClick()
+        composeRule.onNodeWithText("Stop casting").performClick()
+
+        events shouldBe listOf("stopCasting")
+    }
+
+    @Test
+    fun `playing here, no device is named`() {
+        show()
+
+        composeRule.onNodeWithText("Playing on", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `it shows what's playing, where it is and how long it is`() {
         show()
 

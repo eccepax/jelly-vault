@@ -17,6 +17,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.junit.After
 import org.junit.Before
@@ -30,6 +32,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLooper
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -54,6 +58,7 @@ class AudiobookPlaybackServiceTest {
                     single { mockk<AudiobookVoiceSearch>() }
                     single { mockk<JellyfinAudiobooks>() }
                     single { appController }
+                    single<Casting> { NoCasting }
                 },
             )
         }
@@ -67,7 +72,22 @@ class AudiobookPlaybackServiceTest {
     }
 
     private val player get() = service.onGetSession(mockk())!!.player
-    private val exoPlayer get() = (player as ForwardingPlayer).wrappedPlayer as ExoPlayer
+
+    // The chapters' wrapper, then transcode seeking's
+    private val exoPlayer get() = ((player as ForwardingPlayer).wrappedPlayer as ForwardingPlayer).wrappedPlayer as ExoPlayer
+
+    /**
+     * Moves the clock on until the book ends. This service's player keeps real time (not a test
+     * clock), and Media3's run helpers can give up before it gets there.
+     */
+    private fun playUntilEnded() {
+        repeat(MAX_STEPS) {
+            if (exoPlayer.playbackState == Player.STATE_ENDED) return
+            advance(exoPlayer).untilPendingCommandsAreFullyHandled()
+            ShadowLooper.idleMainLooper(STEP_MS, TimeUnit.MILLISECONDS)
+        }
+        exoPlayer.playbackState shouldBe Player.STATE_ENDED
+    }
 
     @Test
     fun `next and previous move between chapters`() {
@@ -168,11 +188,16 @@ class AudiobookPlaybackServiceTest {
         finished.prepare()
         finished.play()
         finished.seekTo(99_900L)
-        advance(exoPlayer).untilState(Player.STATE_ENDED)
+        playUntilEnded()
 
         service.onTaskRemoved(null)
 
         shadowOf(service).isStoppedBySelf shouldBe true
         player shouldNotBe finished
+    }
+
+    private companion object {
+        const val MAX_STEPS = 100
+        const val STEP_MS = 100L
     }
 }

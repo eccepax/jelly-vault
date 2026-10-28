@@ -98,7 +98,7 @@ internal fun serverCastStream(
 
 /** Every format a cast device plays as it is (see [castFormatOf]): the server picks, file by file. */
 private val CAST_AS_IS =
-    listOf("mp3", "flac", "aac", "m4a|aac", "mp4|aac", "ogg|vorbis", "ogg|opus", "opus|opus", "webm|opus")
+    listOf("mp3", "flac", "aac", "m4a|aac", "m4b|aac", "mp4|aac", "ogg|vorbis", "ogg|opus", "opus|opus", "webm|opus")
 
 /**
  * [itemId] from the server as a cast device fetches it, known at once, with nothing asked of the

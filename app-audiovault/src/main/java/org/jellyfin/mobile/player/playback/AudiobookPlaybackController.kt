@@ -15,7 +15,12 @@ data class AudiobookPlaybackState(
     val isEnded: Boolean = false,
     /** Why playback stopped, until another book starts; null when it didn't fail. */
     val error: String? = null,
+    /** True while the session's player is a cast device's, not this device's. */
+    val isRemote: Boolean = false,
 ) {
+    /** Whether sound is coming out of this device: playing, and not on a cast device. */
+    val isPlayingHere: Boolean get() = isPlaying && !isRemote
+
     val currentTrack: AudiobookTrack? get() = tracks.getOrNull(currentIndex)
     val hasNext: Boolean get() = currentIndex < tracks.lastIndex
 }

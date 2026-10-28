@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import android.app.Application
 import android.os.Looper
+import androidx.core.net.toUri
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -31,7 +32,7 @@ class TranscodedAudiobookPlayerTest {
     private val exoPlayer: ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
         .setMediaSourceFactory(transcodes)
         .build()
-    private val player = AudiobookPlayer(exoPlayer)
+    private val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer))
 
     @After
     fun tearDown() {
@@ -53,6 +54,24 @@ class TranscodedAudiobookPlayerTest {
         AudiobookTrack(id = id, title = id, durationMs = 3_600_000L, chapters = chapters)
 
     private val lastStreamUrl: String get() = transcodes.created.last().localConfiguration!!.uri.toString()
+
+    @Test
+    fun `wrapping a cast player, where a stream starts and how it seeks are the cast player's`() {
+        // CastQueuePlayer asks for each stream from where it should start, and counts from the track's start
+        val onCast = AudiobookPlayer(exoPlayer)
+        val partWay = track("a").toMediaItem { "https://vault.test/Audio/$it/universal?StartTimeTicks=600000000" }
+        onCast.setMediaItems(listOf(partWay))
+        onCast.prepare()
+        settle()
+        val streams = transcodes.created.size
+
+        onCast.currentPosition shouldBe exoPlayer.currentPosition
+        onCast.seekTo(30_000L)
+        settle()
+
+        transcodes.created.size shouldBe streams
+        exoPlayer.currentPosition shouldBe 30_000L
+    }
 
     @Test
     fun `a seek starts the stream again from there`() {
@@ -94,6 +113,45 @@ class TranscodedAudiobookPlayerTest {
         load(track("a"))
 
         player.isCurrentMediaItemSeekable shouldBe true
+    }
+
+    /**
+     * The app's MediaController and the lock screen only send commands the session said were
+     * available, and the session hears them as they change: from here, not from this device's
+     * player, which can't seek in a transcode and has no chapters.
+     */
+    @Test
+    fun `once it has opened, seeking and chapters are still offered, as listeners hear it`() {
+        val heard = mutableListOf<Player.Commands>()
+        player.addListener(object : Player.Listener {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                heard += availableCommands
+            }
+        })
+
+        load(track("a"))
+
+        exoPlayer.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) shouldBe false
+        for (command in offered) {
+            player.isCommandAvailable(command) shouldBe true
+            heard.last().contains(command) shouldBe true
+        }
+    }
+
+    @Test
+    fun `a listener taken off hears nothing more`() {
+        val heard = mutableListOf<Player.Commands>()
+        val listener = object : Player.Listener {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                heard += availableCommands
+            }
+        }
+        player.addListener(listener)
+        player.removeListener(listener)
+
+        load(track("a"))
+
+        heard shouldBe emptyList()
     }
 
     @Test
@@ -162,7 +220,7 @@ class TranscodedAudiobookPlayerTest {
 
         player.currentMediaItemIndex shouldBe 0
         player.currentPosition shouldBe 0L
-        lastStreamUrl shouldNotContain AudiobookPlayer.START_PARAM
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
     }
 
     @Test
@@ -176,4 +234,189 @@ class TranscodedAudiobookPlayerTest {
         lastStreamUrl shouldContain "StartTimeTicks=6000000000"
         player.currentPosition shouldBe 600_000L
     }
+
+    @Test
+    fun `a queue set from part way into a transcode starts its stream there`() {
+        // As playback coming back from a cast device does, or a book resumed part way
+        player.setMediaItems(listOf(item("a")), 0, 90_000L)
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=900000000"
+        player.currentPosition shouldBe 90_000L
+    }
+
+    @Test
+    fun `a seek before the stream has opened still gets there, once it turns out to be a transcode`() {
+        player.setMediaItems(listOf(item("a")))
+        player.prepare()
+
+        player.seekTo(300_000L)
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=3000000000"
+        player.currentPosition shouldBe 300_000L
+    }
+
+    @Test
+    fun `a queue set again is played from its tracks' places, not where their streams last started`() {
+        // Items back from a cast device still carry the start of a stream this device had restarted
+        val partWay = item("a", "StartTimeTicks=600000000")
+
+        player.setMediaItems(listOf(partWay, item("b", "StartTimeTicks=600000000")), 0, 0L)
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+        player.getMediaItemAt(1).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+    }
+
+    @Test
+    fun `a queue set any other way is played from its tracks' places too`() {
+        player.setMediaItems(listOf(item("a", "StartTimeTicks=600000000")))
+        player.addMediaItems(listOf(item("b", "StartTimeTicks=600000000")))
+        player.addMediaItem(0, item("c", "StartTimeTicks=600000000"))
+        player.prepare()
+        settle()
+
+        (0 until player.mediaItemCount).forEach {
+            player.getMediaItemAt(it).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        }
+        player.setMediaItem(item("d", "StartTimeTicks=600000000"), true)
+        settle()
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+    }
+
+    @Test
+    fun `a track replaced in the queue is played from its place, not where its uri's stream started`() {
+        load(track("a"), track("b"))
+
+        player.replaceMediaItem(1, item("b", "StartTimeTicks=600000000"))
+        player.replaceMediaItems(0, 1, listOf(item("c", "StartTimeTicks=600000000")))
+        settle()
+
+        (0 until player.mediaItemCount).forEach {
+            player.getMediaItemAt(it).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        }
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+    }
+
+    @Test
+    fun `the track playing, replaced with new details, plays on from the stream it was restarted from`() {
+        load(track("a"))
+        player.seekTo(1_200_000L)
+        settle()
+
+        player.replaceMediaItem(0, item("a"))
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=12000000000"
+        player.currentPosition shouldBe 1_200_000L
+    }
+
+    @Test
+    fun `a place asked for in a queue that never opened isn't where the next queue starts`() {
+        player.setMediaItems(listOf(item("a")), 0, 90_000L)
+
+        player.setMediaItems(listOf(item("b")))
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+    }
+
+    @Test
+    fun `going to the start of a transcode still opening doesn't start it again`() {
+        player.setMediaItems(listOf(item("a")))
+        player.prepare()
+
+        player.seekTo(0L)
+        settle()
+
+        transcodes.created.size shouldBe 1
+        player.currentPosition shouldBe 0L
+    }
+
+    @Test
+    fun `wrapping a cast player, items started part way are left as they are`() {
+        // The cast player asks for its own streams: rewriting its items' uris would only make it resend them
+        val castPlayer = TestExoPlayerBuilder(
+            ApplicationProvider.getApplicationContext(),
+        ).setMediaSourceFactory(transcodes).build()
+        val onCast = AudiobookPlayer(castPlayer)
+        onCast.setMediaItems(listOf(item("a", "StartTimeTicks=600000000"), item("b")))
+        onCast.prepare()
+        advance(castPlayer).untilPendingCommandsAreFullyHandled()
+
+        onCast.seekToNextMediaItem()
+        advance(castPlayer).untilPendingCommandsAreFullyHandled()
+
+        onCast.getMediaItemAt(0).localConfiguration!!.uri.toString() shouldContain "StartTimeTicks=600000000"
+        castPlayer.release()
+    }
+
+    @Test
+    fun `a place asked for still gets there when tracks are added before its stream opens`() {
+        player.setMediaItems(listOf(item("a"), item("b"), item("c")), 2, 90_000L)
+        player.addMediaItem(0, item("z"))
+        player.prepare()
+        settle()
+
+        player.currentMediaItemIndex shouldBe 3
+        lastStreamUrl shouldContain "/c/"
+        lastStreamUrl shouldContain "StartTimeTicks=900000000"
+        player.currentPosition shouldBe 90_000L
+    }
+
+    @Test
+    fun `a seek into another track that's a transcode starts its stream there`() {
+        load(track("a"), track("b"))
+
+        player.seekTo(1, 250_000L)
+        settle()
+
+        player.currentMediaItemIndex shouldBe 1
+        lastStreamUrl shouldContain "/b/"
+        lastStreamUrl shouldContain "StartTimeTicks=2500000000"
+        player.currentPosition shouldBe 250_000L
+    }
+
+    @Test
+    fun `a queue set again keeping the place keeps the track's place, not the restarted stream's`() {
+        load(track("a"))
+        player.seekTo(1_200_000L)
+        settle()
+
+        player.setMediaItems(listOf(item("a")), false)
+        settle()
+
+        player.currentPosition shouldBe 1_200_000L
+        lastStreamUrl shouldContain "StartTimeTicks=12000000000"
+    }
+
+    @Test
+    fun `a stream for a cast device counts from the track's start, whatever this device's stream started from`() {
+        val restarted = "https://vault.test/Audio/a/universal?api_key=x&StartTimeTicks=600000000".toUri()
+
+        val forCast = TranscodeSeekingPlayer.fromTrackStart(restarted).toString()
+
+        forCast shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        forCast shouldContain "api_key=x"
+    }
+
+    private val offered = listOf(
+        Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+        Player.COMMAND_SEEK_BACK,
+        Player.COMMAND_SEEK_FORWARD,
+        Player.COMMAND_SEEK_TO_NEXT,
+        Player.COMMAND_SEEK_TO_PREVIOUS,
+    )
+
+    private fun item(id: String, query: String = "") =
+        track(
+            id,
+        ).toMediaItem { "https://vault.test/Audio/$it/universal?api_key=x${if (query.isEmpty()) "" else "&$query"}" }
 }
