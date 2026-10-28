@@ -1,5 +1,7 @@
 package org.jellyfin.mobile.cast
 
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
@@ -34,12 +36,22 @@ class StartGateTest {
 
     @Test
     fun `what's taken back before it starts never runs, and isn't kept`() {
-        val cancel = gate.whenReady { ran += "gone" }
+        val cancel = gate.whenReady { ran += "gone" }.shouldNotBeNull()
 
         cancel()
         gate.waiting shouldBe 0
         gate.started()
 
         ran shouldBe emptyList()
+    }
+
+    @Test
+    fun `once started, work runs at once and nothing is left to take back`() {
+        gate.started()
+
+        val cancel = gate.whenReady { ran += "now" }
+
+        ran shouldBe listOf("now")
+        cancel.shouldBeNull()
     }
 }

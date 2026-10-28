@@ -6,6 +6,8 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.cast.CastDevice.Repeat
 import org.junit.Test
@@ -115,5 +117,26 @@ internal class CastQueuePlayerTakeUpTest : CastQueuePlayerFixture() {
         asked shouldContain ("b" to 60_000L)
         device.songPositionMs.near(60_000L)
         next.release()
+    }
+
+    @Test
+    fun `a queue taken up after a cast that failed can be played`() {
+        playing("a", "b")
+        device.failToPlay()
+        player.playerError.shouldNotBeNull()
+        // The cast ends; later the TV plays this app's songs again, and a session comes up for it
+        device.drop()
+        player.clearMediaItems()
+        device.pressPlay()
+        player.takeUpDevice()
+        device.connect()
+        settle()
+
+        device.commands.clear()
+        player.seekTo(30_000L)
+        settle()
+
+        player.playerError.shouldBeNull()
+        device.commands shouldContain "seek 30000"
     }
 }

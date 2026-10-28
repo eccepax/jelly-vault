@@ -58,10 +58,29 @@ internal class CastQueuePlayer(
     /** Where playback should be on the cast device, and isn't known to be yet. */
     private class Target(val key: String, val positionMs: Long, val reload: Boolean = false)
 
+    /**
+     * What goes with one cast session: replaced whole when one comes up or ends, so nothing of an
+     * earlier one (a command on its way, its failures, what it last said) carries over, and an answer
+     * from an earlier one changes nothing.
+     */
+    private class Link {
+        var inFlight = false
+        var failures = 0
+
+        /** What the cast device last said with nothing from here on its way. */
+        var lastKey: String? = null
+        var lastPlaying: Boolean? = null
+
+        /** The volume last set from here, read as the cast device's until it says it has got there. */
+        var volumeWanted: Int? = null
+        var volumeSets = 0
+    }
+
     private val entries = mutableListOf<Entry>()
     private var index = 0
     private var anchor = Anchor(0L, now(), moving = false, speed = 1f)
     private var playWhenReady = false
+    private var playWhenReadyReason = Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
     private var prepared = false
     private var ended = false
     private var error: PlaybackException? = null
@@ -69,24 +88,19 @@ internal class CastQueuePlayer(
     private var speed = 1f
     private var target: Target? = null
 
-    /** The streams the cast device was sent, by key. */
-    private val sent = mutableMapOf<String, CastStream>()
+    /**
+     * The streams the cast device holds, by key: each as it took it (not as it was sent, which it
+     * may turn down), and only while it still holds it.
+     */
+    private val held = mutableMapOf<String, CastStream>()
 
     /** Each entry's source, by key, once found; and the entries whose sources are being looked for. */
     private val found = mutableMapOf<String, CastSource>()
     private val looking = mutableSetOf<String>()
     private var lookingNow = false
 
-    private var inFlight = false
-    private var failures = 0
-
-    /** Counts sessions, so an answer from an earlier one changes nothing. */
-    private var connection = 0
+    private var link = Link()
     private var released = false
-
-    /** What the cast device last said with nothing from here on its way. */
-    private var lastKey: String? = null
-    private var lastPlaying: Boolean? = null
 
     private var playlistVersion = 0
     private var playlist: Pair<Triple<Int, Int, Long>, List<MediaItemData>>? = null
@@ -129,26 +143,29 @@ internal class CastQueuePlayer(
     private fun deviceDurationOf(entry: Entry): Long {
         val status = device.status?.takeIf { it.currentKey == entry.key } ?: return C.TIME_UNSET
         if (status.durationMs == C.TIME_UNSET) return C.TIME_UNSET
-        return status.durationMs + (sent[entry.key]?.startMs ?: 0L)
+        return status.durationMs + (held[entry.key]?.startMs ?: 0L)
     }
+
+    /** The cast device's volume, or the one set from here while it gets there. */
+    private val volumeNow: Int get() = link.volumeWanted ?: device.volume
 
     override fun getState(): State {
         val playbackState = playbackState()
         return State.Builder()
             .setAvailableCommands(COMMANDS)
-            .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .setPlayWhenReady(playWhenReady, playWhenReadyReason)
             .setPlaybackState(playbackState)
             .setPlayerError(error)
             .setRepeatMode(repeatMode)
             .setPlaybackParameters(PlaybackParameters(speed))
             .setVolume(volumeAskedFor ?: 1f)
             .setDeviceInfo(device.deviceInfo)
-            .setDeviceVolume(device.volume)
+            .setDeviceVolume(volumeNow)
             .setIsDeviceMuted(device.isMuted)
             .setPlaylist(playlist())
             .setCurrentMediaItemIndex(if (entries.isEmpty()) C.INDEX_UNSET else index)
             .setContentPositionMs { position }
-            .setIsLoading(inFlight && playbackState != Player.STATE_IDLE && playbackState != Player.STATE_ENDED)
+            .setIsLoading(link.inFlight && playbackState != Player.STATE_IDLE && playbackState != Player.STATE_ENDED)
             .setSeekBackIncrementMs(seekBackMs)
             .setSeekForwardIncrementMs(seekForwardMs)
             .setMaxSeekToPreviousPositionMs(C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS)
@@ -192,18 +209,24 @@ internal class CastQueuePlayer(
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         this.playWhenReady = playWhenReady
+        playWhenReadyReason = Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
         if (!playWhenReady) anchor = anchor.copy(positionMs = position, atMs = now(), moving = false)
         return changed()
     }
 
     override fun handlePrepare(): ListenableFuture<*> {
-        prepared = true
         // After an error the cast device may still hold the song it couldn't play: it's sent again
         val playing = current
         if (error != null && playing != null) target = Target(playing.key, position, reload = true)
-        error = null
-        failures = 0
+        startAfresh()
         return changed()
+    }
+
+    /** Playback goes from here as if for the first time: an error, and the failures before it, are over. */
+    private fun startAfresh() {
+        prepared = true
+        error = null
+        link.failures = 0
     }
 
     override fun handleStop(): ListenableFuture<*> {
@@ -237,15 +260,19 @@ internal class CastQueuePlayer(
     }
 
     override fun handleSetDeviceVolume(deviceVolume: Int, flags: Int): ListenableFuture<*> {
-        device.setVolume(deviceVolume.coerceIn(0, CastDevice.MAX_VOLUME))
+        val volume = deviceVolume.coerceIn(0, CastDevice.MAX_VOLUME)
+        link.volumeWanted = volume
+        link.volumeSets++
+        device.setVolume(volume)
         return Futures.immediateVoidFuture()
     }
 
+    // From the volume set last, so quick presses each count before the cast device has caught up
     override fun handleIncreaseDeviceVolume(flags: Int): ListenableFuture<*> =
-        handleSetDeviceVolume(device.volume + 1, flags)
+        handleSetDeviceVolume(volumeNow + 1, flags)
 
     override fun handleDecreaseDeviceVolume(flags: Int): ListenableFuture<*> =
-        handleSetDeviceVolume(device.volume - 1, flags)
+        handleSetDeviceVolume(volumeNow - 1, flags)
 
     override fun handleSetDeviceMuted(muted: Boolean, flags: Int): ListenableFuture<*> {
         device.setMuted(muted)
@@ -371,10 +398,11 @@ internal class CastQueuePlayer(
         queueChanged()
         index = entries.indexOfFirst { it.key == status.currentKey }.coerceAtLeast(0)
         // Where each one's stream starts, so places stay the song's
-        sent.clear()
-        held.forEach { sent[it.key] = it.stream }
-        prepared = true
+        this.held.clear()
+        held.forEach { this.held[it.key] = it.stream }
+        startAfresh()
         playWhenReady = status.isPlaying
+        playWhenReadyReason = Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE
         // Buffering says neither play nor pause: the first that it does say is taken up as it is
         adoptPlayback = status.playsOrPauses == null
         repeatMode = when (status.repeat) {
@@ -384,7 +412,7 @@ internal class CastQueuePlayer(
         }
         speed = status.speed
         target = null
-        followDevice(status)
+        heard(status)
         invalidateState()
     }
 
@@ -392,11 +420,7 @@ internal class CastQueuePlayer(
 
     override fun onConnectionChanged(connected: Boolean) {
         if (released) return
-        connection++
-        inFlight = false
-        failures = 0
-        lastKey = null
-        lastPlaying = null
+        link = Link()
         if (!connected) {
             // Where it had got to, as far as anyone knows, and no further
             leaveAt(now())
@@ -411,17 +435,34 @@ internal class CastQueuePlayer(
     override fun onStatus(status: DeviceStatus) {
         if (released) return
         if (takingUp && status.queueKnown) takeUp(status)
-        followDevice(status)
+        heard(status)
         sync()
         invalidateState()
     }
 
     override fun onVolumeChanged() {
-        if (!released) invalidateState()
+        if (released) return
+        val link = link
+        link.volumeSets--
+        // Got there, or nothing more set from here is on its way: the cast device's own is read again
+        if (device.volume == link.volumeWanted || link.volumeSets <= 0) {
+            link.volumeWanted = null
+            link.volumeSets = 0
+        }
+        invalidateState()
     }
 
     /** Whether what the cast device says now is its own doing: nothing from here is on its way. */
-    private val settled: Boolean get() = target == null && !inFlight
+    private val settled: Boolean get() = target == null && !link.inFlight
+
+    /**
+     * What the cast device said: once nothing from here is on its way, the streams it doesn't list
+     * are no longer held, and what it did by itself this does too.
+     */
+    private fun heard(status: DeviceStatus) {
+        if (settled && status.queueKnown) held.keys.retainAll(status.keys.filterNotNullTo(mutableSetOf()))
+        followDevice(status)
+    }
 
     /** What the cast device has done by itself (with nothing from here on its way), this does too. */
     private fun followDevice(status: DeviceStatus) {
@@ -432,11 +473,11 @@ internal class CastQueuePlayer(
             return
         }
         val key = status.currentKey
-        if (key != null && key != lastKey) followMove(key)
+        if (key != null && key != link.lastKey) followMove(key)
         if (key != null && key == current?.key && status.state != DeviceStatus.State.IDLE) followPlayback(key, status)
         if (status.state == DeviceStatus.State.IDLE && prepared) followIdle(status)
-        lastKey = key
-        status.playsOrPauses?.let { lastPlaying = it }
+        link.lastKey = key
+        status.playsOrPauses?.let { link.lastPlaying = it }
     }
 
     /** It moved on to [key] (a song ended, its remote): so does this. */
@@ -452,26 +493,36 @@ internal class CastQueuePlayer(
     private fun followPlayback(key: String, status: DeviceStatus) {
         val playsOrPauses = status.playsOrPauses
         if (adoptPlayback && playsOrPauses != null) {
-            playWhenReady = playsOrPauses
+            followPlayWhenReady(playsOrPauses)
             adoptPlayback = false
         }
-        if (lastPlaying != null && playsOrPauses != null && playsOrPauses != lastPlaying) playWhenReady = playsOrPauses
+        val lastPlaying = link.lastPlaying
+        if (lastPlaying != null && playsOrPauses != null && playsOrPauses != lastPlaying) {
+            followPlayWhenReady(playsOrPauses)
+        }
         anchor = Anchor(
-            positionMs = status.positionMs + (sent[key]?.startMs ?: 0L),
+            positionMs = status.positionMs + (held[key]?.startMs ?: 0L),
             atMs = status.atMs,
             moving = status.state == DeviceStatus.State.PLAYING,
             speed = status.speed,
         )
     }
 
+    /** Play or pause as the cast device changed it: its remote's doing, or another app's. */
+    private fun followPlayWhenReady(playWhenReady: Boolean) {
+        if (playWhenReady == this.playWhenReady) return
+        this.playWhenReady = playWhenReady
+        playWhenReadyReason = Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE
+    }
+
     private fun stopHere() {
         prepared = false
-        playWhenReady = false
+        followPlayWhenReady(false)
         anchor = anchor.copy(positionMs = position, atMs = now(), moving = false)
     }
 
     private fun followIdle(status: DeviceStatus) {
-        val key = status.currentKey ?: lastKey
+        val key = status.currentKey ?: link.lastKey
         if (key != current?.key) return
         when (status.idleReason) {
             IdleReason.FINISHED -> {
@@ -538,7 +589,7 @@ internal class CastQueuePlayer(
 
     /** Sends the next step towards what the cast device should hold, unless one is on its way. */
     private fun sync() {
-        if (released || inFlight || !device.isConnected) return
+        if (released || link.inFlight || !device.isConnected) return
         // Until it has said what all its items are, which it's playing isn't known: it says again once it has
         val status = device.status?.takeIf { it.queueKnown } ?: return
         val playing = current
@@ -558,7 +609,7 @@ internal class CastQueuePlayer(
             status.currentKey != playing.key -> load(wanted, position, goTo)
             // Songs after it still to be found don't hold up play, pause and the rest
             status.keys != wanted.map { it.key } && fixTail(status, wanted) -> Unit
-            else -> syncPlayback(status, deviceRepeat(status.keys.size == entries.size))
+            else -> syncPlayback(status, deviceRepeat(held.values, status.keys.size == entries.size))
         }
     }
 
@@ -577,8 +628,8 @@ internal class CastQueuePlayer(
      * The cast device repeats by itself only when each stream it holds starts at its song's start:
      * one started part way (a transcode) would repeat from there, so this goes round instead.
      */
-    private fun deviceRepeat(wholeQueueSent: Boolean): CastDevice.Repeat =
-        if (sent.values.any { it.startMs != 0L }) CastDevice.Repeat.OFF else repeatFor(repeatMode, wholeQueueSent)
+    private fun deviceRepeat(streams: Collection<CastStream>, wholeQueueSent: Boolean): CastDevice.Repeat =
+        if (streams.any { it.startMs != 0L }) CastDevice.Repeat.OFF else repeatFor(repeatMode, wholeQueueSent)
 
     /** The entries the cast device should hold: [window] of them from [from], round the queue as repeat goes. */
     private fun windowFrom(from: Int): List<Entry> {
@@ -598,7 +649,7 @@ internal class CastQueuePlayer(
     }
 
     private fun go(goTo: Target, status: DeviceStatus, wanted: List<Entry>) {
-        val stream = sent[goTo.key]
+        val stream = held[goTo.key]
         val confirm = { ok: Boolean -> if (ok && target === goTo) target = null }
         when {
             goTo.reload || stream == null || !stream.seekable && goTo.positionMs != stream.startMs ->
@@ -618,10 +669,16 @@ internal class CastQueuePlayer(
         val ready = withSources(wanted)
         if (ready.isEmpty()) return
         val items = ready.mapIndexed { i, entry -> sentItem(entry, if (i == 0) fromMs else 0L) }
-        sent.clear()
-        items.forEach { sent[it.key] = it.stream }
-        val repeat = deviceRepeat(ready.size == entries.size)
-        send({ ok -> if (ok && target === goTo) target = null }, touchesPlayback = true) {
+        // As it will hold them once it takes them; until then, what it holds stays as it was
+        val repeat = deviceRepeat(items.map { it.stream }, ready.size == entries.size)
+        val taken = { ok: Boolean ->
+            if (ok) {
+                held.clear()
+                items.forEach { held[it.key] = it.stream }
+                if (target === goTo) target = null
+            }
+        }
+        send(taken, touchesPlayback = true) {
             device.load(items, 0, fromMs - items[0].stream.startMs, playWhenReady, repeat, speed, it)
         }
     }
@@ -632,14 +689,13 @@ internal class CastQueuePlayer(
      */
     private fun fixTail(status: DeviceStatus, wanted: List<Entry>): Boolean {
         val wantedKeys = wanted.map { it.key }
-        val held = status.keys
+        val onDevice = status.keys
         when {
-            held.any { it == null || it !in wantedKeys } -> send { device.keepOnly(wantedKeys.toSet(), it) }
-            held == wantedKeys.take(held.size) -> {
-                val more = withSources(wanted.drop(held.size)).map { sentItem(it, 0L) }
+            onDevice.any { it == null || it !in wantedKeys } -> send { device.keepOnly(wantedKeys.toSet(), it) }
+            onDevice == wantedKeys.take(onDevice.size) -> {
+                val more = withSources(wanted.drop(onDevice.size)).map { sentItem(it, 0L) }
                 if (more.isEmpty()) return false
-                more.forEach { sent[it.key] = it.stream }
-                send { device.append(more, it) }
+                send({ ok -> if (ok) more.forEach { held[it.key] = it.stream } }) { device.append(more, it) }
             }
             // In another order: all but the song playing go, and come back in order
             else -> send { device.keepOnly(setOf(wantedKeys.first()), it) }
@@ -684,17 +740,20 @@ internal class CastQueuePlayer(
         touchesPlayback: Boolean = false,
         command: ((Boolean) -> Unit) -> Unit,
     ) {
-        inFlight = true
-        val session = connection
+        val session = link
+        session.inFlight = true
+        val before = device.status
         command { ok ->
-            if (released || session != connection) return@command
-            inFlight = false
+            if (released || session !== link) return@command
+            session.inFlight = false
             // Lost with the session gone for a moment, not turned down: it goes again once the session's back
             if (!ok && !device.isConnected) return@command
-            if (touchesPlayback) lastPlaying = null
+            if (touchesPlayback) session.lastPlaying = null
             onDone(ok)
-            if (ok) failures = 0 else failed()
-            device.status?.let(::followDevice)
+            if (ok) session.failures = 0 else failed()
+            // What it said while this was on its way (set aside then) is heard now. What it said
+            // before this went is no news of it: its report of this comes later.
+            device.status?.takeIf { it !== before }?.let(::heard)
             sync()
             invalidateState()
         }
@@ -702,9 +761,9 @@ internal class CastQueuePlayer(
 
     /** The cast device turned a command down: the queue goes again from where it is, then it's an error. */
     private fun failed() {
-        failures++
+        link.failures++
         val playing = current ?: return
-        if (failures >= MAX_FAILURES) {
+        if (link.failures >= MAX_FAILURES) {
             fail()
         } else {
             target = Target(playing.key, position, reload = true)
