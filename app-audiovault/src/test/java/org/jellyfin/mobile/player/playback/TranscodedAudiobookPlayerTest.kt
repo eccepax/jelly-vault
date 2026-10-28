@@ -289,6 +289,34 @@ class TranscodedAudiobookPlayerTest {
     }
 
     @Test
+    fun `a track replaced in the queue is played from its place, not where its uri's stream started`() {
+        load(track("a"), track("b"))
+
+        player.replaceMediaItem(1, item("b", "StartTimeTicks=600000000"))
+        player.replaceMediaItems(0, 1, listOf(item("c", "StartTimeTicks=600000000")))
+        settle()
+
+        (0 until player.mediaItemCount).forEach {
+            player.getMediaItemAt(it).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        }
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+    }
+
+    @Test
+    fun `the track playing, replaced with new details, plays on from the stream it was restarted from`() {
+        load(track("a"))
+        player.seekTo(1_200_000L)
+        settle()
+
+        player.replaceMediaItem(0, item("a"))
+        settle()
+
+        lastStreamUrl shouldContain "StartTimeTicks=12000000000"
+        player.currentPosition shouldBe 1_200_000L
+    }
+
+    @Test
     fun `a place asked for in a queue that never opened isn't where the next queue starts`() {
         player.setMediaItems(listOf(item("a")), 0, 90_000L)
 

@@ -118,8 +118,13 @@ private fun placeOf(url: String): Place? {
         return null
     }
     val scheme = uri.scheme?.lowercase()
-    val host = uri.host?.lowercase()
-    val port = uri.port.takeIf { it != -1 } ?: DEFAULT_PORTS[scheme]
+    // A host java.net.URI won't take as one (an underscore, as Docker and LAN names often have) leaves
+    // only its authority: the host and port are read from that
+    val authority = uri.rawAuthority?.substringAfterLast('@')
+    val host = (uri.host ?: authority?.substringBefore(':'))?.lowercase()?.takeIf { it.isNotEmpty() }
+    val port = uri.port.takeIf { it != -1 }
+        ?: authority?.takeIf { uri.host == null }?.substringAfter(':', "")?.toIntOrNull()
+        ?: DEFAULT_PORTS[scheme]
     if (host == null || port == null) return null
     return Place("$scheme://$host:$port", uri.rawPath.orEmpty().trimEnd('/'))
 }

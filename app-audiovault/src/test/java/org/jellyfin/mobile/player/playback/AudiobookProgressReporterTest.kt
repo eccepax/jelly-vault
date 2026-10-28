@@ -158,6 +158,23 @@ class AudiobookProgressReporterTest {
     }
 
     @Test
+    fun `played again in its last moments after finishing, a new listen starts`() = runTest {
+        reporter()
+        controller.playing(streamed, positionMs = 3_599_000L)
+        runCurrent()
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        controller.positionMs = 3_596_000L
+        controller.state.value = controller.state.value.copy(isEnded = false, isPlaying = true)
+        runCurrent()
+        play(1_000L)
+        pause()
+
+        server.reports.takeLast(2) shouldBe listOf("started streamed at 3596000", "paused streamed at 3597000")
+    }
+
+    @Test
     fun `a playback error ends the listen, so the server doesn't keep a dead session`() = runTest {
         reporter()
         controller.playing(streamed, positionMs = 50_000L)
@@ -347,6 +364,23 @@ class AudiobookProgressReporterTest {
 
         server.reports shouldBe listOf("started streamed at 0", "paused streamed at 5000")
     }
+
+    @Test
+    fun `a streamed track back from a cast device, paused, keeps its place before the player here has got there`() =
+        runTest {
+            reporter()
+            controller.playing(streamed, positionMs = 2_700_000L, isRemote = true)
+            runCurrent()
+            play(5_000L)
+
+            // Back here paused, in the same change, and this device's player not yet at the place
+            controller.positionMs = 0L
+            controller.state.value =
+                controller.state.value.copy(isRemote = false, playWhenReady = false, isPlaying = false)
+            runCurrent()
+
+            server.reports shouldBe listOf("started streamed at 2700000", "paused streamed at 2705000")
+        }
 
     @Test
     fun `a download finished on a cast device stays finished back here, paused at its end`() = runTest {
