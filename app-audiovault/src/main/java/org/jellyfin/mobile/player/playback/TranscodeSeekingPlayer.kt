@@ -16,16 +16,20 @@ import androidx.media3.common.Timeline
  *
  * Whether a stream is a transcode is only known once it's open: a place asked for before then (a
  * queue set from part way, a seek while it loads) is where a transcode starts once it turns out to
- * be one. A queue set or added to, however it's done, starts its streams from their beginnings,
- * whatever their uris said.
+ * be one. That place is kept with its track, not its index, so tracks added or moved meanwhile
+ * don't lose it. A queue set or added to, however it's done, starts its streams from their
+ * beginnings, whatever their uris said.
  *
  * Only for this device's player: a cast player starts and seeks its own streams and counts from the
  * track's start (see common-cast's CastQueuePlayer). [AudiobookPlayer] goes on top for the chapters.
  */
 class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
 
-    /** A place asked for (the item's index, and where in it) before its stream was open. */
-    private var pendingStart: Pair<Int, Long>? = null
+    /** A place asked for (the track, by its id, and where in it) before its stream was open. */
+    private var pendingStart: Pair<String, Long>? = null
+
+    /** The playing item's stream start, read from its uri once for each item rather than on every position read. */
+    private var streamStartOf: Pair<MediaItem, Long>? = null
 
     init {
         player.addListener(
@@ -38,20 +42,19 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
     }
 
     /** Where the playing stream starts in its track: past 0 when a transcode was started part way. */
-    private val streamStartMs: Long get() = currentMediaItem?.streamStartMs ?: 0L
+    private val streamStartMs: Long
+        get() {
+            val item = currentMediaItem ?: return 0L
+            streamStartOf?.takeIf { it.first === item }?.let { return it.second }
+            return item.streamStartMs.also { streamStartOf = item to it }
+        }
 
     /**
      * A transcode: one the player has opened and can't seek in, or one already started part way,
      * which only a transcode is (it's still loading, so the player doesn't know yet).
      */
     private val isLiveTranscode: Boolean
-        get() {
-            if (streamStartMs > 0) return true
-            val timeline = currentTimeline
-            if (timeline.isEmpty) return false
-            val window = timeline.getWindow(currentMediaItemIndex, Timeline.Window())
-            return !window.isPlaceholder && !window.isSeekable
-        }
+        get() = streamStartMs > 0 || isKnownTranscode(currentMediaItemIndex)
 
     /** Whether the playing item's stream isn't open yet, so whether it can seek isn't known. */
     private val isOpening: Boolean
@@ -79,12 +82,25 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
 
     override fun seekTo(positionMs: Long) {
         if (isLiveTranscode) return restartStreamAt(positionMs)
-        if (isOpening) pendingStart = currentMediaItemIndex to positionMs
+        if (isOpening) pendingStart = currentMediaItem?.let { it.mediaId to positionMs }
         super.seekTo(positionMs - streamStartMs)
     }
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
-        if (mediaItemIndex == currentMediaItemIndex) seekTo(positionMs) else super.seekTo(mediaItemIndex, positionMs)
+        if (mediaItemIndex == currentMediaItemIndex) return seekTo(positionMs)
+        if (mediaItemIndex !in 0 until mediaItemCount) return super.seekTo(mediaItemIndex, positionMs)
+        // A transcode can't seek: it's started again from the place, now if it's known to be one, else once it opens
+        pendingStart = getMediaItemAt(mediaItemIndex).mediaId.takeIf { positionMs > 0 }?.let { it to positionMs }
+        super.seekTo(mediaItemIndex, if (isKnownTranscode(mediaItemIndex)) 0L else positionMs)
+        startPending()
+    }
+
+    /** Whether the item at [index] has its stream open, and can't seek in it. */
+    private fun isKnownTranscode(index: Int): Boolean {
+        val timeline = currentTimeline
+        if (index >= timeline.windowCount) return false
+        val window = timeline.getWindow(index, Timeline.Window())
+        return !window.isPlaceholder && !window.isSeekable
     }
 
     // ForwardingPlayer sends a seek back or forward straight to the player, which can't seek in a transcode
@@ -99,12 +115,16 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
 
     override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
         super.setMediaItems(mediaItems.map { it.fromItsStart() }, startIndex, startPositionMs)
-        pendingStart = (startIndex to startPositionMs).takeIf { startPositionMs > 0 }
+        pendingStart = mediaItems.getOrNull(startIndex)?.mediaId?.takeIf { startPositionMs > 0 }?.let { it to startPositionMs }
     }
 
     override fun setMediaItems(mediaItems: List<MediaItem>) = setMediaItems(mediaItems, true)
 
     override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
+        // Keeping the place is keeping the track's: the stream it's restarted from goes with the old item
+        if (!resetPosition && currentMediaItemIndex in mediaItems.indices) {
+            return setMediaItems(mediaItems, currentMediaItemIndex, currentPosition)
+        }
         pendingStart = null
         super.setMediaItems(mediaItems.map { it.fromItsStart() }, resetPosition)
     }
@@ -132,8 +152,8 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
      * server's transcode again for nothing.
      */
     private fun startPending() {
-        val (index, positionMs) = pendingStart ?: return
-        if (currentMediaItemIndex != index) {
+        val (mediaId, positionMs) = pendingStart ?: return
+        if (currentMediaItem?.mediaId != mediaId) {
             pendingStart = null
             return
         }
@@ -171,6 +191,12 @@ class TranscodeSeekingPlayer(player: Player) : ForwardingPlayer(player) {
         /** Where this item's stream starts in its track: past 0 when it's a transcode started part way. */
         private val MediaItem.streamStartMs: Long
             get() = localConfiguration?.uri?.getQueryParameter(START_PARAM)?.toLongOrNull()?.div(TICKS_PER_MS) ?: 0L
+
+        /**
+         * [uri] counting from its track's start, whatever this device's stream was restarted from: for
+         * a cast device, which asks for its own streams from where it should start.
+         */
+        fun fromTrackStart(uri: Uri): Uri = if (uri.getQueryParameter(START_PARAM) == null) uri else uri.withStart(null)
 
         /** This item, its stream from the beginning; itself when that's how it is already. */
         private fun MediaItem.fromItsStart(): MediaItem {

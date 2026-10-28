@@ -104,7 +104,8 @@ class AudiobookPlaybackService : MediaSessionService() {
                     // holds what it's waiting to seek to (a cast player starts and seeks its own streams)
                     wrap = { player -> if (player === exoPlayer) audiobookPlayer else AudiobookPlayer(player) },
                     castSource = ::castSource,
-                    castUri = audiobooks::castUri,
+                    // Only when no cast source is found: this device's stream may have restarted part way
+                    castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },
                 )
             }
     }
