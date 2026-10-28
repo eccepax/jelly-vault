@@ -31,7 +31,7 @@ class TranscodedAudiobookPlayerTest {
     private val exoPlayer: ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
         .setMediaSourceFactory(transcodes)
         .build()
-    private val player = AudiobookPlayer(exoPlayer)
+    private val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer))
 
     @After
     fun tearDown() {
@@ -57,7 +57,7 @@ class TranscodedAudiobookPlayerTest {
     @Test
     fun `wrapping a cast player, where a stream starts and how it seeks are the cast player's`() {
         // CastQueuePlayer asks for each stream from where it should start, and counts from the track's start
-        val onCast = AudiobookPlayer(exoPlayer, streamOffsets = false)
+        val onCast = AudiobookPlayer(exoPlayer)
         val partWay = track("a").toMediaItem { "https://vault.test/Audio/$it/universal?StartTimeTicks=600000000" }
         onCast.setMediaItems(listOf(partWay))
         onCast.prepare()
@@ -180,7 +180,7 @@ class TranscodedAudiobookPlayerTest {
 
         player.currentMediaItemIndex shouldBe 0
         player.currentPosition shouldBe 0L
-        lastStreamUrl shouldNotContain AudiobookPlayer.START_PARAM
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
     }
 
     @Test
@@ -227,9 +227,49 @@ class TranscodedAudiobookPlayerTest {
         player.prepare()
         settle()
 
-        lastStreamUrl shouldNotContain AudiobookPlayer.START_PARAM
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
         player.currentPosition shouldBe 0L
-        player.getMediaItemAt(1).localConfiguration!!.uri.toString() shouldNotContain AudiobookPlayer.START_PARAM
+        player.getMediaItemAt(1).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+    }
+
+    @Test
+    fun `a queue set any other way is played from its tracks' places too`() {
+        player.setMediaItems(listOf(item("a", "StartTimeTicks=600000000")))
+        player.addMediaItems(listOf(item("b", "StartTimeTicks=600000000")))
+        player.addMediaItem(0, item("c", "StartTimeTicks=600000000"))
+        player.prepare()
+        settle()
+
+        (0 until player.mediaItemCount).forEach {
+            player.getMediaItemAt(it).localConfiguration!!.uri.toString() shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        }
+        player.setMediaItem(item("d", "StartTimeTicks=600000000"), true)
+        settle()
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+    }
+
+    @Test
+    fun `a place asked for in a queue that never opened isn't where the next queue starts`() {
+        player.setMediaItems(listOf(item("a")), 0, 90_000L)
+
+        player.setMediaItems(listOf(item("b")))
+        player.prepare()
+        settle()
+
+        lastStreamUrl shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        player.currentPosition shouldBe 0L
+    }
+
+    @Test
+    fun `going to the start of a transcode still opening doesn't start it again`() {
+        player.setMediaItems(listOf(item("a")))
+        player.prepare()
+
+        player.seekTo(0L)
+        settle()
+
+        transcodes.created.size shouldBe 1
+        player.currentPosition shouldBe 0L
     }
 
     @Test
@@ -238,7 +278,7 @@ class TranscodedAudiobookPlayerTest {
         val castPlayer = TestExoPlayerBuilder(
             ApplicationProvider.getApplicationContext(),
         ).setMediaSourceFactory(transcodes).build()
-        val onCast = AudiobookPlayer(castPlayer, streamOffsets = false)
+        val onCast = AudiobookPlayer(castPlayer)
         onCast.setMediaItems(listOf(item("a", "StartTimeTicks=600000000"), item("b")))
         onCast.prepare()
         advance(castPlayer).untilPendingCommandsAreFullyHandled()

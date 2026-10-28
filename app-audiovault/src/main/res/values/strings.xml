@@ -46,7 +46,7 @@
     <string name="pref_exoplayer_allow_press_speed_up">Hold to speed up</string>
     <string name="pref_exoplayer_allow_press_speed_up_summary">Touch and hold the fast-forward button to play faster until you let go</string>
     <string name="pref_skip_silence_title">Skip silence</string>
-    <string name="pref_skip_silence_summary">Automatically speed through silent passages during playback</string>
+    <string name="pref_skip_silence_summary">Automatically speed through silent passages when playing on this phone (not on a cast device)</string>
 
     <string name="pref_category_downloads">Downloads</string>
     <string name="view_downloads">View downloads</string>
