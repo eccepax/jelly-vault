@@ -24,6 +24,23 @@ class CastUrlTest {
     }
 
     @Test
+    fun `the server's url written another way is still the server's`() {
+        castUrl("https://Vault.Test/Audio/a", "HTTPS://vault.test/", "t") shouldBe "https://Vault.Test/Audio/a?ApiKey=t"
+        castUrl("https://vault.test:443/Audio/a", "https://vault.test", "t") shouldBe "https://vault.test:443/Audio/a?ApiKey=t"
+        castUrl("http://vault.test/Audio/a", "http://vault.test:80", "t") shouldBe "http://vault.test/Audio/a?ApiKey=t"
+    }
+
+    @Test
+    fun `a server under a path is the server only under it, and only at its own scheme and port`() {
+        castUrl("https://vault.test/jellyfin/Audio/a", "https://vault.test/jellyfin", "t") shouldBe
+            "https://vault.test/jellyfin/Audio/a?ApiKey=t"
+        castUrl("https://vault.test/other/a", "https://vault.test/jellyfin", "t") shouldBe "https://vault.test/other/a"
+        castUrl("https://vault.test/jellyfinx/a", "https://vault.test/jellyfin", "t") shouldBe "https://vault.test/jellyfinx/a"
+        castUrl("http://vault.test/Audio/a", "https://vault.test", "t") shouldBe "http://vault.test/Audio/a"
+        castUrl("https://vault.test:8443/Audio/a", "https://vault.test", "t") shouldBe "https://vault.test:8443/Audio/a"
+    }
+
+    @Test
     fun `signed out, there's no token to add`() {
         castUrl("https://vault.test/Audio/a/universal", null, null) shouldBe "https://vault.test/Audio/a/universal"
     }

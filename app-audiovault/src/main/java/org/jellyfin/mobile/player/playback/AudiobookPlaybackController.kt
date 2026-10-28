@@ -18,6 +18,9 @@ data class AudiobookPlaybackState(
     /** True while the session's player is a cast device's, not this device's. */
     val isRemote: Boolean = false,
 ) {
+    /** Whether sound is coming out of this device: playing, and not on a cast device. */
+    val isPlayingHere: Boolean get() = isPlaying && !isRemote
+
     val currentTrack: AudiobookTrack? get() = tracks.getOrNull(currentIndex)
     val hasNext: Boolean get() = currentIndex < tracks.lastIndex
 }

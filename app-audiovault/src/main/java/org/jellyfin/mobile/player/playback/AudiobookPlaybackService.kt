@@ -82,6 +82,8 @@ class AudiobookPlaybackService : MediaSessionService() {
             }
 
         val audiobookPlayer = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer))
+        // One wrapper for the cast player too, so each switch to it installs the same one
+        var onCast: Pair<Player, AudiobookPlayer>? = null
         return MediaSession.Builder(this, audiobookPlayer)
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
@@ -102,7 +104,13 @@ class AudiobookPlaybackService : MediaSessionService() {
                     casting,
                     // Chapters on either player; transcode seeking only on this device's, whose wrapper
                     // holds what it's waiting to seek to (a cast player starts and seeks its own streams)
-                    wrap = { player -> if (player === exoPlayer) audiobookPlayer else AudiobookPlayer(player) },
+                    wrap = { player ->
+                        when {
+                            player === exoPlayer -> audiobookPlayer
+                            else -> onCast?.takeIf { it.first === player }?.second
+                                ?: AudiobookPlayer(player).also { onCast = player to it }
+                        }
+                    },
                     castSource = ::castSource,
                     // Only when no cast source is found: this device's stream may have restarted part way
                     castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },

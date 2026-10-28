@@ -14,14 +14,20 @@ internal class StartGate {
     /** How many are waiting. */
     val waiting: Int get() = pending.size
 
-    /** Runs [onReady] once started; the answer takes it back, if it's still waiting (its service has gone). */
-    fun whenReady(onReady: () -> Unit): () -> Unit {
-        when (state) {
-            State.STARTED -> onReady()
-            State.STARTING -> pending += onReady
-            State.FAILED -> Unit
+    /**
+     * Runs [onReady] once started; the answer takes it back while it's still waiting (its service has
+     * gone), and is null when nothing is: it ran at once, or never will.
+     */
+    fun whenReady(onReady: () -> Unit): (() -> Unit)? = when (state) {
+        State.STARTED -> {
+            onReady()
+            null
         }
-        return { pending.remove(onReady) }
+        State.STARTING -> {
+            pending += onReady
+            { pending.remove(onReady) }
+        }
+        State.FAILED -> null
     }
 
     fun started() {

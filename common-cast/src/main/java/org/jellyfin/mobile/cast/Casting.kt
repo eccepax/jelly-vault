@@ -42,9 +42,9 @@ interface Casting {
 internal interface CastPlayers {
     /**
      * Runs [onReady] once the Cast framework has started (at once if it has); never if it can't.
-     * The answer takes it back while it's still waiting.
+     * The answer takes it back while it's still waiting; null when nothing is (it ran, or never will).
      */
-    fun whenReady(onReady: () -> Unit): () -> Unit
+    fun whenReady(onReady: () -> Unit): (() -> Unit)?
 
     /** The cast device, through the framework once it has started; [live] sends items as live streams. */
     fun newDevice(live: Boolean): CastDevice

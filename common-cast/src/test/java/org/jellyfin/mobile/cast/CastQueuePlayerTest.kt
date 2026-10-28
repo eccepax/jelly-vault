@@ -429,10 +429,97 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
         playing("a")
 
         player.setDeviceVolume(15, 0)
+        settle()
 
         device.volume shouldBe 15
         player.deviceVolume shouldBe 15
         player.deviceInfo.playbackType shouldBe androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE
+    }
+
+    @Test
+    fun `a volume asked for reads as asked while the cast device gets there, and quick presses each count`() {
+        playing("a")
+
+        player.setDeviceVolume(15, 0)
+        player.deviceVolume shouldBe 15
+        player.increaseDeviceVolume(0)
+        player.increaseDeviceVolume(0)
+        player.deviceVolume shouldBe 17
+        settle()
+
+        device.volume shouldBe 17
+        player.deviceVolume shouldBe 17
+    }
+
+    @Test
+    fun `a pause on the TV's remote is the remote's, not a request from here`() {
+        playing("a")
+        val reasons = mutableListOf<Int>()
+        player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                reasons += reason
+            }
+        })
+
+        device.pressPause()
+        player.play()
+        settle()
+
+        reasons shouldBe listOf(Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+    }
+
+    @Test
+    fun `a seek answered before the cast device reports it stays where it was asked for`() {
+        val late = FakeCastDevice(answers = FakeCastDevice.Answers.BEFORE_REPORT)
+        val other = CastQueuePlayer(late, sources)
+        late.connect()
+        other.setMediaItems(items("a"))
+        other.playWhenReady = true
+        other.prepare()
+        settle()
+
+        other.seekTo(60_000L)
+        settle(FakeCastDevice.ROUND_TRIP_MS + 10)
+
+        other.currentPosition.near(60_000L)
+        other.release()
+    }
+
+    @Test
+    fun `a pause answered before the cast device reports it stays paused where it was`() {
+        val late = FakeCastDevice(answers = FakeCastDevice.Answers.BEFORE_REPORT)
+        val other = CastQueuePlayer(late, sources)
+        late.connect()
+        other.setMediaItems(items("a"))
+        other.playWhenReady = true
+        other.prepare()
+        settle()
+
+        other.pause()
+        settle(FakeCastDevice.ROUND_TRIP_MS + 10)
+        val paused = other.currentPosition
+        settle(FakeCastDevice.ROUND_TRIP_MS / 2)
+
+        other.currentPosition shouldBe paused
+        other.release()
+    }
+
+    @Test
+    fun `a transcode cast part way and then taken out of the queue doesn't keep the cast device from repeating`() {
+        transcodes = setOf("a")
+        playing("a", "b", "c")
+        player.seekTo(30_000L)
+        settle()
+        player.seekTo(1, 0L)
+        settle()
+
+        player.removeMediaItem(0)
+        settle()
+        player.repeatMode = Player.REPEAT_MODE_ALL
+        settle()
+
+        onDevice shouldBe listOf("b", "c")
+        device.repeat shouldBe Repeat.ALL
     }
 
     @Test
@@ -505,7 +592,7 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
 
     @Test
     fun `answers that come before the cast device's report land the same`() {
-        val answersFirst = FakeCastDevice(answerFirst = true)
+        val answersFirst = FakeCastDevice(answers = FakeCastDevice.Answers.WITH_REPORT)
         val other = CastQueuePlayer(answersFirst, sources)
         answersFirst.connect()
         other.setMediaItems(items("a", "b", "c", "d", "e"))

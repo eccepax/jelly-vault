@@ -135,10 +135,11 @@ class AudiobookProgressReporter(
                 current.report { stopped(track, current.lastPositionMs) }
             }
             current.sink !== sinkFor(track, state) -> {
-                // Where it plays from changed: the listen ends where it got to, and goes on from there
-                current.lastPositionMs = controller.positionMs
+                // Where it plays from changed: the listen ends where it was last heard to be, and goes
+                // on from there. Not where the player says now: it's the one playback moved to, which
+                // may not have got to the place yet (at 0, or where a stream it restarts begins)
                 end(current)
-                listen = begin(state.currentIndex, track, state)
+                listen = begin(state.currentIndex, track, state, positionMs = current.lastPositionMs)
             }
             state.playWhenReady != current.playWhenReady -> {
                 current.playWhenReady = state.playWhenReady
@@ -156,8 +157,12 @@ class AudiobookProgressReporter(
     private fun isAtEnd(track: AudiobookTrack, positionMs: Long) =
         track.durationMs > 0 && positionMs >= track.durationMs - END_WINDOW_MS
 
-    private fun begin(index: Int, track: AudiobookTrack, state: AudiobookPlaybackState): Listen {
-        val positionMs = controller.positionMs
+    private fun begin(
+        index: Int,
+        track: AudiobookTrack,
+        state: AudiobookPlaybackState,
+        positionMs: Long = controller.positionMs,
+    ): Listen {
         return Listen(index, track, positionMs, sinkFor(track, state)).apply {
             playWhenReady = state.playWhenReady
             report { started(track, positionMs) }

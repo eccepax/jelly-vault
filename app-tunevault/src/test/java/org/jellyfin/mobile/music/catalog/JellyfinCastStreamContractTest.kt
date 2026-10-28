@@ -113,6 +113,19 @@ class JellyfinCastStreamContractTest {
     }
 
     @Test
+    fun `a change of quality while casting reaches a song already found`() = runBlocking<Unit> {
+        var quality = StreamingQuality.ORIGINAL
+        val changing = JellyfinMusicCatalog(VaultTestServer.apiClient, streamingQuality = { quality })
+        val source = changing.castSource(aFlacTrack().id)
+
+        quality = StreamingQuality.LOW
+        val stream = source.streamFrom(0L)
+
+        stream.mimeType shouldBe "audio/mpeg"
+        parameter(stream.url, "maxStreamingBitrate") shouldBe StreamingQuality.LOW.maxBitrate.toString()
+    }
+
+    @Test
     fun `a song cast as it is starts at its start wherever playback is, and the cast device seeks in it`() =
         runBlocking<Unit> {
             val stream = castStreamOf(aFlacTrack(), fromMs = 30_000L)

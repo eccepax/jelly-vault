@@ -23,16 +23,20 @@ private const val LOOKUP_TIMEOUT_MS = 5_000L
  * [itemId] from the server as a cast device fetches it. What its file is comes from the server (as
  * it is there, whether or not it plays from a download here), once, when it's about to be cast; it
  * goes in a format a cast device plays (see [castChoiceOf]): its own where it can, kept unless
- * [keepFormat] is false, and [maxBitrate] caps it.
+ * [keepFormat] says not, and [maxBitrate] caps it. Both are asked each time a stream is, so a
+ * change of quality while casting reaches the songs already found.
  */
 suspend fun serverCastSource(
     apiClient: ApiClient,
     itemId: String,
-    keepFormat: Boolean = true,
-    maxBitrate: Int? = null,
+    keepFormat: () -> Boolean = { true },
+    maxBitrate: () -> Int? = { null },
 ): CastSource {
-    val choice = castChoiceOf(if (keepFormat) audioFileOf(apiClient, itemId) else null, keepFormat)
-    return CastSource { fromMs -> serverCastStream(apiClient, itemId, choice, fromMs, maxBitrate) }
+    val file = audioFileOf(apiClient, itemId)
+    return CastSource { fromMs ->
+        val keep = keepFormat()
+        serverCastStream(apiClient, itemId, castChoiceOf(if (keep) file else null, keep), fromMs, maxBitrate())
+    }
 }
 
 /** What the server says [itemId]'s file is; null if it can't say just now. */
