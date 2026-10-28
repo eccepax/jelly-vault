@@ -25,6 +25,7 @@ import org.jellyfin.mobile.livetv.playback.ServiceCastKeepAlive
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.StreamLedger
 import org.jellyfin.mobile.livetv.playback.WatchViewModel
+import org.jellyfin.mobile.livetv.playback.WatchingNow
 import org.jellyfin.mobile.livetv.viewing.PreferencesViewingMemory
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -56,6 +57,7 @@ val liveAppModule = module {
     // App-wide scope: a stream is closed even when the screen that opened it is gone.
     single { StreamCloser(get(), get(), scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
     single<LiveTvSessions> { JellyfinLiveTvSessions(get()) }
+    single { WatchingNow() }
     // Account
     single {
         liveVaultSignOut(
@@ -64,6 +66,7 @@ val liveAppModule = module {
             get(),
             get<ApiClientController>()::logoutUser,
             forgetCast = get<Casting>()::forgetCast,
+            watchingNow = get(),
         )
     }
     viewModel { AccountViewModel(signOut = { get<SignOut>()() }) }
@@ -77,6 +80,7 @@ val liveAppModule = module {
             get(),
             get(),
             keepAlive = ServiceCastKeepAlive(androidContext()),
+            watchingNow = get(),
         )
     }
 }

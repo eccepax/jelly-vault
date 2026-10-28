@@ -27,6 +27,7 @@ class WatchViewModelTest {
     private val sessions = FakeLiveTvSessions()
     private val memory = FakeViewingMemory()
     private val keepAlive = FakeCastKeepAlive()
+    private val watchingNow = WatchingNow()
     private val bulls = channel("1", "Bulls")
     private val espn = channel("43", "ESPN")
     private val tubi = channel("5001", "FREE| Movies", tags = listOf("Free"))
@@ -55,6 +56,7 @@ class WatchViewModelTest {
             sessions,
             memory,
             keepAlive,
+            watchingNow,
         )
         try {
             block(viewModel)
@@ -113,6 +115,23 @@ class WatchViewModelTest {
         streams.openStreams.shouldBeEmpty()
         ledger.all().shouldBeEmpty()
     }
+
+    @Test
+    fun `signing out stops the channel and closes its stream, once, though the screen lets go of it later`() =
+        watchTest { viewModel ->
+            viewModel.watch(bulls, listOf(bulls))
+            settle()
+
+            watchingNow.stop()
+            settle()
+
+            viewModel.watching.value shouldBe false
+            viewModel.state.value.playback shouldBe PlaybackState.Idle
+            player.playing shouldBe null
+            viewModel.onCleared()
+            settle()
+            log.events.count { it.startsWith("close:") } shouldBe 1
+        }
 
     @Test
     fun `the view model going away closes the stream and frees the player`() = watchTest { viewModel ->

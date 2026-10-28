@@ -138,6 +138,42 @@ class PlayerLiveCastingTest {
     }
 
     @Test
+    fun `a stream with nowhere to go is reported as one that couldn't play, once the app has sent it`() {
+        casting.start(device, connected = false)
+        var errors = 0
+        casting.listenWith(onError = { errors++ })
+
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+
+        errors shouldBe 0
+        settle()
+        errors shouldBe 1
+    }
+
+    @Test
+    fun `a stream sent before the cast framework has started is reported as one that couldn't play`() {
+        var errors = 0
+        casting.listenWith(onError = { errors++ })
+
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        settle()
+
+        errors shouldBe 1
+    }
+
+    @Test
+    fun `a stream with nowhere to go, stopped at once, isn't reported`() {
+        var errors = 0
+        casting.listenWith(onError = { errors++ })
+
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        casting.stop()
+        settle()
+
+        errors shouldBe 0
+    }
+
+    @Test
     fun `a stream the cast device can't play is reported`() {
         connect()
         var errors = 0

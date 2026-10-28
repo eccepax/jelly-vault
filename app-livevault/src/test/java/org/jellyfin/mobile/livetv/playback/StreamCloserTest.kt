@@ -128,16 +128,12 @@ class StreamCloserTest {
     }
 
     @Test
-    fun `a stream already closed is not closed again`() = runTest {
-        // Signing out closes everything, then the screen still holding the stream lets go of it too
+    fun `a stream the ledger doesn't hold as it was is still closed`() = runTest {
+        // The ledger keeps tickets as text, and gives back one with an empty session id without it
         val closer = closer()
         val ticket = stream("a").ticket
-        closer.track(ticket)
-        closer.closeAll()
 
         closer.closeNow(ticket)
-        closer.close(ticket)
-        settle()
 
         log.events shouldContainExactly listOf("close:ls-a-1")
     }

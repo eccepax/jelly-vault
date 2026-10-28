@@ -1,6 +1,8 @@
 package org.jellyfin.mobile.cast
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -28,7 +30,10 @@ interface LiveCasting {
     /** Whether the cast device is playing what it was sent right now: not while it loads or stalls. */
     val started: StateFlow<Boolean>
 
-    /** Sends [stream] to the connected cast device, showing [title], [subtitle] and [artworkUri] there. */
+    /**
+     * Sends [stream] to the connected cast device, showing [title], [subtitle] and [artworkUri] there.
+     * With none to send it to (it went, or casting hasn't started), it's as if it couldn't play it.
+     */
     fun play(stream: CastStream, title: String, subtitle: String?, artworkUri: String?)
 
     fun stop()
@@ -98,6 +103,10 @@ internal class PlayerLiveCasting(
     private var released = false
     private var onError: (() -> Unit)? = null
     private var onStopped: (() -> Unit)? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Bumped by every play and stop, so a play with nowhere to go is only told of while it's the last. */
+    private var plays = 0
 
     /**
      * Whether a stream was sent and hasn't been stopped from here: one that stops is stopped there.
@@ -156,7 +165,14 @@ internal class PlayerLiveCasting(
 
     override fun play(stream: CastStream, title: String, subtitle: String?, artworkUri: String?) {
         _started.value = false
-        val player = player?.takeIf { connected.value } ?: return
+        val play = ++plays
+        val player = player?.takeIf { connected.value }
+        if (player == null) {
+            // Told once the caller has done with sending it, so it hears of it as of what's playing
+            Timber.w("Nowhere to cast to: the cast device went, or casting hasn't started")
+            handler.post { if (play == plays && !released) onError?.invoke() }
+            return
+        }
         val item = MediaItem.Builder()
             .setUri(stream.url)
             .setMimeType(stream.mimeType)
@@ -175,6 +191,7 @@ internal class PlayerLiveCasting(
     }
 
     override fun stop() {
+        plays++
         sent = false
         _started.value = false
         val player = player ?: return
@@ -210,6 +227,7 @@ internal class PlayerLiveCasting(
 
     override fun release() {
         released = true
+        handler.removeCallbacksAndMessages(null)
         waiting?.invoke()
         waiting = null
         forgetting?.invoke()

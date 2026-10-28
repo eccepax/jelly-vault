@@ -3,6 +3,7 @@ package org.jellyfin.mobile.livetv.playback
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.cast.LiveCasting
 import org.jellyfin.mobile.livetv.channels.castTitle
 import org.jellyfin.mobile.livetv.domain.LiveChannel
@@ -34,6 +36,7 @@ class WatchViewModel(
     private val sessions: LiveTvSessions,
     private val memory: ViewingMemory,
     private val keepAlive: CastKeepAlive = CastKeepAlive.None,
+    private val watchingNow: WatchingNow = WatchingNow(),
 ) : ViewModel() {
 
     private val lineup = MutableStateFlow<Map<String, LiveChannel>>(emptyMap())
@@ -51,6 +54,14 @@ class WatchViewModel(
 
     /** Whether the player screen is up. */
     val watching: StateFlow<Boolean> = _watching.asStateFlow()
+
+    /** Signing out: the channel stops, its stream closed while the token works, and the screen goes. */
+    private val stopForSignOut: suspend () -> Unit = {
+        withContext(Dispatchers.Main.immediate) {
+            playback.stopNow()
+            _watching.value = false
+        }
+    }
 
     /**
      * When a channel that needs the provider login fails, the likely reason: the login (one stream
@@ -86,6 +97,7 @@ class WatchViewModel(
     )
 
     init {
+        watchingNow.hold(stopForSignOut)
         viewModelScope.launch {
             combine(playback.state, cast.connected, cast.deviceName, lineup) { state, connected, device, lineup ->
                 val channelId = state.channelId?.takeIf { connected && state !is PlaybackState.Failed }
@@ -143,6 +155,7 @@ class WatchViewModel(
 
     // Public so tests can end the view model's life the way the framework does.
     public override fun onCleared() {
+        watchingNow.letGo(stopForSignOut)
         playback.release()
         player.release()
         keepAlive.release()

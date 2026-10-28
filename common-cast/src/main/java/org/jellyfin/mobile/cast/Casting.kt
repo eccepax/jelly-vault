@@ -133,7 +133,13 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
                 override fun onSessionSuspended(session: CastSession, reason: Int) = Unit
                 override fun onSessionStarting(session: CastSession) = Unit
                 override fun onSessionStartFailed(session: CastSession, error: Int) = Unit
-                override fun onSessionEnding(session: CastSession) = Unit
+
+                // Ended from this phone however it's done (the cast button's dialog, the system's
+                // output switcher, as well as stopCasting), before the cast device stops on the way out
+                override fun onSessionEnding(session: CastSession) {
+                    players.values.toList().forEach { it.endingHere() }
+                }
+
                 override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
                 override fun onSessionResumeFailed(session: CastSession, error: Int) = Unit
             },

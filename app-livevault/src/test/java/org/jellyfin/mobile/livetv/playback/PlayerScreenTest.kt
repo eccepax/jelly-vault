@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
@@ -234,6 +235,37 @@ class PlayerScreenTest {
         composeRule.onNodeWithText("Stop casting").performClick()
 
         castingStopped shouldBe true
+    }
+
+    @Test
+    fun `while casting, tuning and a failure show below where it plays, not over it`() {
+        var playback by mutableStateOf<PlaybackState>(PlaybackState.Tuning(bulls.id))
+        composeRule.setContent {
+            PlayerScreen(
+                state = WatchUiState(
+                    playback,
+                    channel = bulls,
+                    videoStarted = false,
+                    castDevice = "Den TV",
+                    casting = true,
+                ),
+                onZap = {},
+                onRetry = {},
+                onExit = {},
+                onShowFree = {},
+                video = {},
+                onStopCasting = {},
+            )
+        }
+        val label = composeRule.onNodeWithText(
+            "Playing on Den TV",
+            useUnmergedTree = true,
+        ).fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithText("Tuning…", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top shouldBeGreaterThanOrEqual label.bottom
+        playback = PlaybackState.Failed(bulls.id)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Retry", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top shouldBeGreaterThanOrEqual label.bottom
     }
 
     @Test

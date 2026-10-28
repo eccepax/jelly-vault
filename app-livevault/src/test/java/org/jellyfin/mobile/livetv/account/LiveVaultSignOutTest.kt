@@ -10,6 +10,7 @@ import org.jellyfin.mobile.livetv.playback.EventLog
 import org.jellyfin.mobile.livetv.playback.FakeLiveStreams
 import org.jellyfin.mobile.livetv.playback.FakeStreamLedger
 import org.jellyfin.mobile.livetv.playback.StreamCloser
+import org.jellyfin.mobile.livetv.playback.WatchingNow
 import org.jellyfin.mobile.livetv.playback.stream
 import org.jellyfin.mobile.livetv.viewing.FakeViewingMemory
 import org.junit.jupiter.api.Test
@@ -31,6 +32,24 @@ class LiveVaultSignOutTest {
         liveVaultSignOut(closer, memory, session, logout = { log += "logout" }, forgetCast = { log += "forget cast" })()
 
         log.events shouldContainExactly listOf("close:ls-a-1", "forget cast", "end session", "logout")
+    }
+
+    @Test
+    fun `the channel being watched is stopped first, so nothing plays a closed stream or closes it again`() = runTest {
+        val closer = StreamCloser(streams, ledger, scope = backgroundScope)
+        closer.track(stream("a").ticket)
+        val watchingNow = WatchingNow().apply { hold { log += "stop watching" } }
+
+        liveVaultSignOut(
+            closer,
+            memory,
+            session,
+            logout = { log += "logout" },
+            forgetCast = { log += "forget cast" },
+            watchingNow = watchingNow,
+        )()
+
+        log.events shouldContainExactly listOf("stop watching", "close:ls-a-1", "forget cast", "end session", "logout")
     }
 
     @Test

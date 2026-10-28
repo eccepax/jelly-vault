@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -162,11 +163,17 @@ fun PlayerScreen(
         // Always here, in or out of the floating window: moving it would make a new PlayerView,
         // re-attaching the player to a new surface with a black flash on every switch
         video()
-        if (state.casting && !inPictureInPicture) CastingPanel(state.castDevice, onStopCasting)
         if (inPictureInPicture) {
             PictureInPictureContent(state)
         } else {
-            Center(state, onRetry, onExit, onShowFree)
+            // Casting, what's happening goes below where it plays, not over it
+            if (state.casting) {
+                CastingPanel(state.castDevice, onStopCasting) {
+                    if (state.hasStatus) Status(state, onRetry, onExit, onShowFree, Modifier.padding(top = 24.dp))
+                }
+            } else {
+                Center { Status(state, onRetry, onExit, onShowFree) }
+            }
             if (overlayVisible) Overlay(state.channel, onZap, onExit, castButton)
         }
     }
@@ -188,12 +195,33 @@ private fun PictureInPictureContent(state: WatchUiState) {
 }
 
 @Composable
-private fun Center(state: WatchUiState, onRetry: () -> Unit, onExit: () -> Unit, onShowFree: () -> Unit) {
+private fun Center(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+        content = content,
+    )
+}
+
+/** Whether there's anything to say of playback ([Status]): not once it plays, or with nothing on. */
+private val WatchUiState.hasStatus: Boolean
+    get() = when (playback) {
+        is PlaybackState.Playing -> !videoStarted
+        PlaybackState.Idle -> false
+        else -> true
+    }
+
+/** Tuning, buffering, or why it failed and what to do: nothing once it plays. */
+@Composable
+private fun Status(
+    state: WatchUiState,
+    onRetry: () -> Unit,
+    onExit: () -> Unit,
+    onShowFree: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         when (state.playback) {
             is PlaybackState.Tuning -> {
                 CircularProgressIndicator()
@@ -262,7 +290,7 @@ private fun LoginInUseMessage(loginInUse: LoginInUse) {
 
 /** In place of the video while the channel plays on [castDevice]: where it plays, and stopping that. */
 @Composable
-private fun CastingPanel(castDevice: String?, onStopCasting: () -> Unit) {
+private fun CastingPanel(castDevice: String?, onStopCasting: () -> Unit, status: @Composable () -> Unit) {
     Column(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -282,6 +310,7 @@ private fun CastingPanel(castDevice: String?, onStopCasting: () -> Unit) {
             onStopCasting,
             Modifier.padding(top = 8.dp),
         )
+        status()
     }
 }
 

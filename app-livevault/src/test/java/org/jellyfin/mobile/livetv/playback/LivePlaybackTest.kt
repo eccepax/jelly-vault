@@ -582,6 +582,26 @@ class LivePlaybackTest {
     }
 
     @Test
+    fun `a cast connecting in the background doesn't tune a channel freed from here, which waits for the way back`() =
+        runTest {
+            val playback = playback()
+            playback.play("a", lineup)
+            runCurrent()
+            playback.pause()
+            settle()
+
+            player.onCastDevice.value = true
+            settle()
+
+            playback.state.value shouldBe PlaybackState.Idle
+            assertOnlyOpen()
+
+            playback.resume()
+            settle()
+            log.events.last { it.startsWith("open") } shouldBe "open-for-cast:a"
+        }
+
+    @Test
     fun `a cast that ends and comes back while in the background plays the channel there again`() = runTest {
         val playback = playback()
         player.onCastDevice.value = true

@@ -69,7 +69,15 @@ class LivePlayback(
 
     /** The channel the viewer last asked for: where a zap starts from, and what retry tunes. */
     private var lastChannel: String? = null
-    private var resumeChannel: String? = null
+
+    /**
+     * A channel freed in the background, tuned again by [resume]; [castEnded] when that was because
+     * the cast it played on ended, so a cast coming back (the session rejoined) plays it there again.
+     * One freed from here (or failed) waits for the way back: it isn't opened from the background.
+     */
+    private class Freed(val channelId: String, val castEnded: Boolean)
+
+    private var freed: Freed? = null
     private var inBackground = false
     private var tuneJob: Job? = null
     private var progressJob: Job? = null
@@ -118,15 +126,22 @@ class LivePlayback(
 
     fun resume() {
         inBackground = false
-        val channel = resumeChannel ?: return
-        resumeChannel = null
+        val channel = freed?.channelId ?: return
+        freed = null
         request(channel, debounce = false)
+    }
+
+    /** Stops, returning once the stream is closed: for signing out, while the token still works. */
+    suspend fun stopNow() {
+        freed = null
+        stop()
+        tuneJob?.join()
     }
 
     /** For good (the screen is gone): closes through [closer], since [scope] may be ending too. */
     fun release() {
         generation++
-        resumeChannel = null
+        freed = null
         player.listenWith(null)
         stopPlayer()
         tuneJob?.cancel()
@@ -135,26 +150,26 @@ class LivePlayback(
         _state.value = PlaybackState.Idle
     }
 
-    private fun freeForBackground() {
-        resumeChannel = state.value.channelId
-        if (resumeChannel != null) stop()
+    private fun freeForBackground(castEnded: Boolean = false) {
+        freed = state.value.channelId?.let { Freed(it, castEnded) }
+        if (freed != null) stop()
     }
 
     /**
      * The player moved to or from a cast device: what's shown is opened again for where it plays now.
      * In the background, a cast that ends frees the stream, and one that comes back (the session
-     * rejoined) plays the channel freed there again.
+     * rejoined) plays the channel freed there again; not one freed from here.
      */
     private fun onCastDeviceChanged(onCastDevice: Boolean) {
-        val freed = resumeChannel
+        val freed = freed
         val channel = state.value.channelId
         when {
-            onCastDevice && inBackground && channel == null && freed != null -> {
-                resumeChannel = null
-                request(freed, debounce = false)
+            onCastDevice && inBackground && channel == null && freed?.castEnded == true -> {
+                this.freed = null
+                request(freed.channelId, debounce = false)
             }
             channel == null -> Unit
-            !onCastDevice && inBackground -> freeForBackground()
+            !onCastDevice && inBackground -> freeForBackground(castEnded = true)
             else -> request(channel, debounce = false)
         }
     }
@@ -165,13 +180,13 @@ class LivePlayback(
         stop()
         _state.value = PlaybackState.Failed(channel)
         // Failed on the cast device while in the background: tried again on the way back, as ever
-        if (inBackground) resumeChannel = channel
+        if (inBackground) freed = Freed(channel, castEnded = false)
     }
 
     private fun onStoppedThere() {
         if (state.value.channelId == null) return
         Timber.i("The channel was stopped on the cast device")
-        resumeChannel = null
+        freed = null
         stop()
         onStoppedOnCastDevice()
     }
