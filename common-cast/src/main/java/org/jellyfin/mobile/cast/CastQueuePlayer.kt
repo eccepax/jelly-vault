@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.cast
 
+import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.C
@@ -27,6 +28,10 @@ import kotlin.math.abs
  * at a time: whenever it says what it holds or answers a command, [sync] compares the two and sends
  * the next step. The cast device moving on by itself (a song ending, its remote) is followed when no
  * change from here is on its way; meanwhile what it says of the song and the place is set aside.
+ * A step goes once for what's wanted: a setting it took but plays otherwise (a speed it caps) isn't
+ * sent again until another is wanted, and one it turns down that leaves the song playing alone (the
+ * songs after it, repeat, speed) is left for the session, where one that moves the song playing
+ * sends the queue again.
  *
  * Each song's stream comes from its [CastSource], from where it should start: a transcode can't
  * seek, so it's asked for from the place and sent again for a seek, and places are always the
@@ -65,15 +70,27 @@ internal class CastQueuePlayer(
      */
     private class Link {
         var inFlight = false
+
+        /** The commands moving the song playing turned down in a row. */
         var failures = 0
+
+        /** The repeat and speed last sent: not sent again while they're what's wanted. */
+        var repeatSent: CastDevice.Repeat? = null
+        var speedSent: Float? = null
+
+        /** The commands leaving the song playing alone that it turned down: not sent again. */
+        val turnedDown = mutableSetOf<String>()
 
         /** What the cast device last said with nothing from here on its way. */
         var lastKey: String? = null
         var lastPlaying: Boolean? = null
 
-        /** The volume last set from here, read as the cast device's until it says it has got there. */
+        /**
+         * The volume last set from here, read as the cast device's until it says it has got there or
+         * [VOLUME_WAIT_MS] goes by ([volumeUntil]): a set can go nowhere, and say nothing.
+         */
         var volumeWanted: Int? = null
-        var volumeSets = 0
+        var volumeUntil = 0L
     }
 
     private val entries = mutableListOf<Entry>()
@@ -94,6 +111,9 @@ internal class CastQueuePlayer(
      */
     private val held = mutableMapOf<String, CastStream>()
 
+    /** How long each stream the cast device has played lasts, by key, as it said. */
+    private val streamLengths = mutableMapOf<String, Long>()
+
     /** Each entry's source, by key, once found; and the entries whose sources are being looked for. */
     private val found = mutableMapOf<String, CastSource>()
     private val looking = mutableSetOf<String>()
@@ -101,6 +121,8 @@ internal class CastQueuePlayer(
 
     private var link = Link()
     private var released = false
+    private val handler = Handler(looper)
+    private val volumeWaitOver = Runnable(::invalidateState)
 
     private var playlistVersion = 0
     private var playlist: Pair<Triple<Int, Int, Long>, List<MediaItemData>>? = null
@@ -134,20 +156,19 @@ internal class CastQueuePlayer(
         return if (duration != C.TIME_UNSET) positionMs.coerceAtMost(duration) else positionMs
     }
 
-    /** How long the entry at [i] lasts: its metadata's length, else what the cast device says. */
+    /**
+     * How long the entry at [i] lasts: as long as the cast device said its stream is (the file's own
+     * length, which the server's metadata may fall short of), else its metadata's length.
+     */
     private fun durationOf(i: Int): Long {
         val entry = entries.getOrNull(i) ?: return C.TIME_UNSET
-        return entry.item.mediaMetadata.durationMs ?: deviceDurationOf(entry)
-    }
-
-    private fun deviceDurationOf(entry: Entry): Long {
-        val status = device.status?.takeIf { it.currentKey == entry.key } ?: return C.TIME_UNSET
-        if (status.durationMs == C.TIME_UNSET) return C.TIME_UNSET
-        return status.durationMs + (held[entry.key]?.startMs ?: 0L)
+        val played = streamLengths[entry.key]?.let { it + (held[entry.key]?.startMs ?: 0L) }
+        return played ?: entry.item.mediaMetadata.durationMs ?: C.TIME_UNSET
     }
 
     /** The cast device's volume, or the one set from here while it gets there. */
-    private val volumeNow: Int get() = link.volumeWanted ?: device.volume
+    private val volumeNow: Int
+        get() = link.volumeWanted?.takeIf { now() < link.volumeUntil } ?: device.volume
 
     override fun getState(): State {
         val playbackState = playbackState()
@@ -203,6 +224,7 @@ internal class CastQueuePlayer(
         playlistVersion++
         val keys = entries.mapTo(mutableSetOf()) { it.key }
         found.keys.retainAll(keys)
+        streamLengths.keys.retainAll(keys)
     }
 
     // Playback
@@ -227,6 +249,8 @@ internal class CastQueuePlayer(
         prepared = true
         error = null
         link.failures = 0
+        // A stop turned down before is over with: the next is sent
+        link.turnedDown -= STOP
     }
 
     override fun handleStop(): ListenableFuture<*> {
@@ -238,6 +262,7 @@ internal class CastQueuePlayer(
 
     override fun handleRelease(): ListenableFuture<*> {
         released = true
+        handler.removeCallbacks(volumeWaitOver)
         device.listener = null
         device.release()
         return Futures.immediateVoidFuture()
@@ -262,7 +287,9 @@ internal class CastQueuePlayer(
     override fun handleSetDeviceVolume(deviceVolume: Int, flags: Int): ListenableFuture<*> {
         val volume = deviceVolume.coerceIn(0, CastDevice.MAX_VOLUME)
         link.volumeWanted = volume
-        link.volumeSets++
+        link.volumeUntil = now() + VOLUME_WAIT_MS
+        handler.removeCallbacks(volumeWaitOver)
+        handler.postDelayed(volumeWaitOver, VOLUME_WAIT_MS)
         device.setVolume(volume)
         return Futures.immediateVoidFuture()
     }
@@ -387,6 +414,8 @@ internal class CastQueuePlayer(
             return
         }
         takeUp(status)
+        heard(status)
+        invalidateState()
     }
 
     private fun takeUp(status: DeviceStatus) {
@@ -412,8 +441,6 @@ internal class CastQueuePlayer(
         }
         speed = status.speed
         target = null
-        heard(status)
-        invalidateState()
     }
 
     // The cast device
@@ -442,13 +469,9 @@ internal class CastQueuePlayer(
 
     override fun onVolumeChanged() {
         if (released) return
-        val link = link
-        link.volumeSets--
-        // Got there, or nothing more set from here is on its way: the cast device's own is read again
-        if (device.volume == link.volumeWanted || link.volumeSets <= 0) {
-            link.volumeWanted = null
-            link.volumeSets = 0
-        }
+        // Got there: the cast device's own is read again. Anything else (a mute, its remote, a set
+        // still on its way) leaves the one set from here read until it does, or the wait is over.
+        if (device.volume == link.volumeWanted) link.volumeWanted = null
         invalidateState()
     }
 
@@ -461,6 +484,10 @@ internal class CastQueuePlayer(
      */
     private fun heard(status: DeviceStatus) {
         if (settled && status.queueKnown) held.keys.retainAll(status.keys.filterNotNullTo(mutableSetOf()))
+        val key = status.currentKey
+        if (key != null && status.durationMs != C.TIME_UNSET && entries.any { it.key == key }) {
+            streamLengths[key] = status.durationMs
+        }
         followDevice(status)
     }
 
@@ -594,11 +621,7 @@ internal class CastQueuePlayer(
         val status = device.status?.takeIf { it.queueKnown } ?: return
         val playing = current
         if (!prepared || playing == null) {
-            if (status.state != DeviceStatus.State.IDLE && !status.playsOther) {
-                send(
-                    touchesPlayback = true,
-                ) { device.stop(it) }
-            }
+            if (status.state != DeviceStatus.State.IDLE && !status.playsOther) stopDevice()
             return
         }
         if (ended || error != null || status.playsOther) return
@@ -613,14 +636,32 @@ internal class CastQueuePlayer(
         }
     }
 
-    /** It holds the right songs and plays the right one: repeat, play or pause, and speed. */
+    /** Stopped here: so is the cast device. Turned down, it's left playing, with nothing to send again. */
+    private fun stopDevice() {
+        val session = link
+        if (STOP in session.turnedDown) return
+        send({ ok -> if (!ok) session.turnedDown += STOP }, touchesPlayback = true, retry = false) { device.stop(it) }
+    }
+
+    /**
+     * It holds the right songs and plays the right one: repeat, play or pause, and speed. Repeat and
+     * speed go once each for what's wanted: it may take one and play otherwise (it caps speed).
+     */
     private fun syncPlayback(status: DeviceStatus, repeat: CastDevice.Repeat) {
+        val link = link
+        val speed = speed
         when {
-            status.repeat != repeat -> send { device.setRepeat(repeat, it) }
+            status.repeat != repeat && link.repeatSent != repeat -> {
+                link.repeatSent = repeat
+                sendSetting { device.setRepeat(repeat, it) }
+            }
             // Buffering says neither: a paused cast device buffers too, and isn't told to pause again
             status.playsOrPauses.let { it != null && it != playWhenReady } ->
                 send(touchesPlayback = true) { if (playWhenReady) device.play(it) else device.pause(it) }
-            abs(status.speed - speed) > SPEED_TOLERANCE -> send { device.setSpeed(speed, it) }
+            abs(status.speed - speed) > SPEED_TOLERANCE && link.speedSent != speed -> {
+                link.speedSent = speed
+                sendSetting { device.setSpeed(speed, it) }
+            }
         }
     }
 
@@ -671,6 +712,8 @@ internal class CastQueuePlayer(
         val items = ready.mapIndexed { i, entry -> sentItem(entry, if (i == 0) fromMs else 0L) }
         // As it will hold them once it takes them; until then, what it holds stays as it was
         val repeat = deviceRepeat(items.map { it.stream }, ready.size == entries.size)
+        link.repeatSent = repeat
+        link.speedSent = speed
         val taken = { ok: Boolean ->
             if (ok) {
                 held.clear()
@@ -690,18 +733,40 @@ internal class CastQueuePlayer(
     private fun fixTail(status: DeviceStatus, wanted: List<Entry>): Boolean {
         val wantedKeys = wanted.map { it.key }
         val onDevice = status.keys
-        when {
-            onDevice.any { it == null || it !in wantedKeys } -> send { device.keepOnly(wantedKeys.toSet(), it) }
+        return when {
+            onDevice.any { it == null || it !in wantedKeys } -> keepOnly(wantedKeys.toSet())
             onDevice == wantedKeys.take(onDevice.size) -> {
-                val more = withSources(wanted.drop(onDevice.size)).map { sentItem(it, 0L) }
-                if (more.isEmpty()) return false
-                send({ ok -> if (ok) more.forEach { held[it.key] = it.stream } }) { device.append(more, it) }
+                val add = wanted.drop(onDevice.size)
+                if (appendStep(add.map { it.key }) in link.turnedDown) return false
+                val more = withSources(add).map { sentItem(it, 0L) }
+                more.isNotEmpty() &&
+                    sendTail(appendStep(more.map { it.key }), { more.forEach { held[it.key] = it.stream } }) {
+                        device.append(more, it)
+                    }
             }
             // In another order: all but the song playing go, and come back in order
-            else -> send { device.keepOnly(setOf(wantedKeys.first()), it) }
+            else -> keepOnly(setOf(wantedKeys.first()))
         }
+    }
+
+    private fun keepOnly(keys: Set<String>) = sendTail("keepOnly $keys") { device.keepOnly(keys, it) }
+
+    private fun appendStep(keys: List<String>) = "append $keys"
+
+    /**
+     * Sends [command], which changes only the songs after the one playing, unless the cast device
+     * turned [step] down already this session: then it's left as it is (false). The song playing
+     * plays on, and the cast device goes on to the next one as it ends (see [followIdle]).
+     */
+    private fun sendTail(step: String, taken: () -> Unit = {}, command: ((Boolean) -> Unit) -> Unit): Boolean {
+        val session = link
+        if (step in session.turnedDown) return false
+        send({ ok -> if (ok) taken() else session.turnedDown += step }, retry = false, command = command)
         return true
     }
+
+    /** Sends a setting (repeat, speed): turned down, it's left as it is, sent once for what's wanted. */
+    private fun sendSetting(command: ((Boolean) -> Unit) -> Unit) = send(retry = false, command = command)
 
     private fun sentItem(entry: Entry, fromMs: Long) =
         SentItem(entry.key, entry.item, found.getValue(entry.key).streamFrom(fromMs))
@@ -734,10 +799,13 @@ internal class CastQueuePlayer(
     /**
      * Sends a command, and when it's answered looks at what's next. One that [touchesPlayback] (may
      * change play or pause) leaves what the cast device says of that as its doing, not its remote's.
+     * One it turns down sends the queue again from where it is if it would [retry] (it moves the
+     * song playing); one that wouldn't (see [sendTail]) is left as it is.
      */
     private fun send(
         onDone: (Boolean) -> Unit = {},
         touchesPlayback: Boolean = false,
+        retry: Boolean = true,
         command: ((Boolean) -> Unit) -> Unit,
     ) {
         val session = link
@@ -750,7 +818,9 @@ internal class CastQueuePlayer(
             if (!ok && !device.isConnected) return@command
             if (touchesPlayback) session.lastPlaying = null
             onDone(ok)
-            if (ok) session.failures = 0 else failed()
+            if (retry) {
+                if (ok) session.failures = 0 else failed()
+            }
             // What it said while this was on its way (set aside then) is heard now. What it said
             // before this went is no news of it: its report of this comes later.
             device.status?.takeIf { it !== before }?.let(::heard)
@@ -773,8 +843,12 @@ internal class CastQueuePlayer(
     companion object {
         /** The song playing and the two after it: enough to go on to the next song without a gap. */
         const val WINDOW = 3
+
+        /** How long a volume set from here reads as the cast device's while it gets there. */
+        internal const val VOLUME_WAIT_MS = 2_000L
         private const val MAX_FAILURES = 2
         private const val SPEED_TOLERANCE = 0.01f
+        private const val STOP = "stop"
         private const val US_PER_MS = 1_000L
 
         private val COMMANDS = Player.Commands.Builder()

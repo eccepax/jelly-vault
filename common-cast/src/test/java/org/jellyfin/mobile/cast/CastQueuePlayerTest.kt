@@ -286,6 +286,57 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
     }
 
     @Test
+    fun `repeat the cast device keeps turning down is left as it is, and the song playing isn't sent again`() {
+        playing("a", "b")
+        device.turnsDown = { it.startsWith("repeat") }
+
+        player.repeatMode = Player.REPEAT_MODE_ALL
+        settle(SETTLE_MS * 5)
+
+        device.commands.count { it.startsWith("repeat") } shouldBe 1
+        device.commands.count { it.startsWith("load") } shouldBe 1
+        player.playerError.shouldBeNull()
+        device.isPlaying shouldBe true
+    }
+
+    @Test
+    fun `songs the cast device won't add to its queue don't start the song playing again`() {
+        playing("a", "b", "c", "d")
+        device.turnsDown = { it.startsWith("append") }
+
+        device.skipOnRemote()
+        settle(SETTLE_MS * 5)
+
+        player.currentMediaItemIndex shouldBe 1
+        device.commands.count { it.startsWith("append") } shouldBe 1
+        device.commands.count { it.startsWith("load") } shouldBe 1
+        player.playerError.shouldBeNull()
+    }
+
+    @Test
+    fun `a stop the cast device turns down isn't sent again and again`() {
+        playing("a")
+        device.turnsDown = { it == "stop" }
+
+        player.stop()
+        settle(SETTLE_MS * 5)
+
+        device.commands.count { it == "stop" } shouldBe 1
+    }
+
+    @Test
+    fun `a speed the cast device caps is sent to it once`() {
+        playing("a")
+        device.maxSpeed = 2f
+
+        player.playbackParameters = PlaybackParameters(3f)
+        settle(SETTLE_MS * 5)
+
+        device.commands.count { it.startsWith("speed") } shouldBe 1
+        device.speed shouldBe 2f
+    }
+
+    @Test
     fun `a cast device that can't play the song is an error`() {
         playing("a")
 
@@ -449,6 +500,48 @@ internal class CastQueuePlayerTest : CastQueuePlayerFixture() {
 
         device.volume shouldBe 17
         player.deviceVolume shouldBe 17
+    }
+
+    @Test
+    fun `muting while a volume set gets there still reads the volume set`() {
+        playing("a")
+
+        player.setDeviceVolume(15, 0)
+        player.setDeviceMuted(true, 0)
+
+        player.deviceVolume shouldBe 15
+        settle()
+        player.deviceVolume shouldBe 15
+    }
+
+    @Test
+    fun `a volume set the cast device never gets reads as its own again`() {
+        playing("a")
+        device.dropsVolume = true
+
+        player.setDeviceVolume(15, 0)
+        player.deviceVolume shouldBe 15
+        settle(CastQueuePlayer.VOLUME_WAIT_MS + SETTLE_MS)
+
+        player.deviceVolume shouldBe 10
+    }
+
+    @Test
+    fun `a stream longer than its metadata says plays to its own end, here too once the cast ends`() {
+        device.lengths["a"] = 95_000L
+        player.setMediaItems(listOf(item("a", durationMs = 90_000L), item("b")), 0, 85_000L)
+        player.playWhenReady = true
+        player.prepare()
+        settle(7_000L)
+
+        player.currentMediaItemIndex shouldBe 0
+        player.duration shouldBe 95_000L
+        player.currentPosition.near(92_000L)
+
+        device.drop()
+
+        player.currentMediaItemIndex shouldBe 0
+        player.currentPosition.near(92_000L)
     }
 
     @Test

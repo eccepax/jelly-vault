@@ -41,6 +41,16 @@ class CastUrlTest {
     }
 
     @Test
+    fun `a server named as Docker and LAN names often are, with an underscore, still gets the token`() {
+        castUrl("http://jellyfin_server:8096/Audio/a", "http://jellyfin_server:8096", "t") shouldBe
+            "http://jellyfin_server:8096/Audio/a?ApiKey=t"
+        castUrl("http://Jellyfin_Server/Audio/a", "http://jellyfin_server:80", "t") shouldBe
+            "http://Jellyfin_Server/Audio/a?ApiKey=t"
+        castUrl("http://other_host:8096/Audio/a", "http://jellyfin_server:8096", "t") shouldBe
+            "http://other_host:8096/Audio/a"
+    }
+
+    @Test
     fun `signed out, there's no token to add`() {
         castUrl("https://vault.test/Audio/a/universal", null, null) shouldBe "https://vault.test/Audio/a/universal"
     }

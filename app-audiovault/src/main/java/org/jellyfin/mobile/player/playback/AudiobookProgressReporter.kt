@@ -48,6 +48,9 @@ class AudiobookProgressReporter(
         var sinceProgressMs = 0L
         var playWhenReady = false
 
+        /** Whether it plays on a cast device: a move between that and here may not have reached the place yet. */
+        var remote = false
+
         /** Ended (played out, or failed) and reported as such: nothing more until it starts again. */
         var over = false
 
@@ -141,18 +144,38 @@ class AudiobookProgressReporter(
                 end(current)
                 listen = begin(state.currentIndex, track, state, positionMs = current.lastPositionMs)
             }
-            state.playWhenReady != current.playWhenReady -> {
-                current.playWhenReady = state.playWhenReady
-                current.lastPositionMs = controller.positionMs
-                val positionMs = current.lastPositionMs
-                current.report { progress(track, positionMs, isPaused = !state.playWhenReady) }
+            // Moved onto a cast device or back, reporting where it did (a streamed track): a pause
+            // in the same change is where it was last heard to be, for the same reason
+            state.isRemote != current.remote -> {
+                current.remote = state.isRemote
+                if (state.playWhenReady != current.playWhenReady) {
+                    playWhenReadyChanged(
+                        current,
+                        track,
+                        state,
+                        current.lastPositionMs,
+                    )
+                }
             }
+            state.playWhenReady != current.playWhenReady ->
+                playWhenReadyChanged(current, track, state, controller.positionMs)
         }
     }
 
-    /** An ended listen's track plays again: not ended or failed, and, if it finished, moved off its end. */
+    private fun playWhenReadyChanged(current: Listen, track: AudiobookTrack, state: AudiobookPlaybackState, positionMs: Long) {
+        current.playWhenReady = state.playWhenReady
+        current.lastPositionMs = positionMs
+        current.report { progress(track, positionMs, isPaused = !state.playWhenReady) }
+    }
+
+    /**
+     * An ended listen's track plays again: not ended or failed, and, if it finished, moved off its end
+     * or set playing (its last moments again). Paused at its end is still finished (back from a cast
+     * device that finished it, say).
+     */
     private fun startsAgain(over: Listen, track: AudiobookTrack, state: AudiobookPlaybackState): Boolean =
-        !state.isEnded && state.error == null && !(over.finished && isAtEnd(track, controller.positionMs))
+        !state.isEnded && state.error == null &&
+            !(over.finished && !state.playWhenReady && isAtEnd(track, controller.positionMs))
 
     private fun isAtEnd(track: AudiobookTrack, positionMs: Long) =
         track.durationMs > 0 && positionMs >= track.durationMs - END_WINDOW_MS
@@ -165,6 +188,7 @@ class AudiobookProgressReporter(
     ): Listen {
         return Listen(index, track, positionMs, sinkFor(track, state)).apply {
             playWhenReady = state.playWhenReady
+            remote = state.isRemote
             report { started(track, positionMs) }
         }
     }

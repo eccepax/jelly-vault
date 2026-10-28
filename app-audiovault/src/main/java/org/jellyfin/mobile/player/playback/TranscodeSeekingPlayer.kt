@@ -16,8 +16,9 @@ import androidx.media3.common.Timeline
  * Whether a stream is a transcode is only known once it's open: a place asked for before then (a
  * queue set from part way, a seek while it loads) is where a transcode starts once it turns out to
  * be one. That place is kept with its track, not its index, so tracks added or moved meanwhile
- * don't lose it. A queue set or added to, however it's done, starts its streams from their
- * beginnings, whatever their uris said.
+ * don't lose it. A queue set, added to or replaced in, however it's done, starts its streams from
+ * their beginnings, whatever their uris said; the track playing, replaced with itself (new details),
+ * keeps the stream it plays from.
  *
  * Seeking is offered whenever something is loaded, as the player's own commands don't once a
  * transcode has opened.
@@ -139,7 +140,7 @@ class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
         seekTo(duration.takeIf { it != C.TIME_UNSET }?.let(target::coerceAtMost) ?: target)
     }
 
-    // Every way of setting or adding to the queue, since ForwardingPlayer sends each straight on
+    // Every way of setting, adding to or replacing in the queue, since ForwardingPlayer sends each straight on
 
     override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) {
         // Before the player has them: it tells its listeners of the new queue while they're being set
@@ -175,6 +176,23 @@ class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
 
     override fun addMediaItem(index: Int, mediaItem: MediaItem) = addMediaItems(index, listOf(mediaItem))
 
+    override fun replaceMediaItem(index: Int, mediaItem: MediaItem) = replaceMediaItems(
+        index,
+        index + 1,
+        listOf(mediaItem),
+    )
+
+    override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: List<MediaItem>) {
+        val playing = currentMediaItem
+        val playingIndex = currentMediaItemIndex
+        val startMs = streamStartMs
+        val items = mediaItems.mapIndexed { i, item ->
+            val samePlaying = fromIndex + i == playingIndex && fromIndex + i < toIndex && item.mediaId == playing?.mediaId
+            if (samePlaying && startMs > 0) item.startingAt(startMs) else item.fromItsStart()
+        }
+        super.replaceMediaItems(fromIndex, toIndex, items)
+    }
+
     /**
      * The stream asked for part way is open: a transcode, which played from its start, starts there
      * instead; unless that's its start anyway (a seek back to it), which would only start the
@@ -197,7 +215,7 @@ class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
             if (index == currentMediaItemIndex) continue
             val item = getMediaItemAt(index)
             val fromStart = item.fromItsStart()
-            if (fromStart !== item) replaceMediaItem(index, fromStart)
+            if (fromStart !== item) super.replaceMediaItem(index, fromStart)
         }
     }
 
@@ -206,7 +224,7 @@ class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
         val item = currentMediaItem ?: return
         val uri = item.localConfiguration?.uri ?: return
         val restarted = item.buildUpon().setUri(uri.withStart(positionMs)).build()
-        replaceMediaItem(currentMediaItemIndex, restarted)
+        super.replaceMediaItem(currentMediaItemIndex, restarted)
     }
 
     companion object {
@@ -238,6 +256,12 @@ class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
             val uri = localConfiguration?.uri ?: return this
             if (uri.getQueryParameter(START_PARAM) == null) return this
             return buildUpon().setUri(uri.withStart(null)).build()
+        }
+
+        /** This item, its stream starting [positionMs] into its track. */
+        private fun MediaItem.startingAt(positionMs: Long): MediaItem {
+            val uri = localConfiguration?.uri ?: return this
+            return buildUpon().setUri(uri.withStart(positionMs)).build()
         }
 
         /** This stream, starting from [positionMs]; from the beginning when that's null. */
