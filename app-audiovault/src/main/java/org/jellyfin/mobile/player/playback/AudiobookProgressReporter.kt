@@ -50,6 +50,9 @@ class AudiobookProgressReporter(
 
         /** Ended (played out, or failed) and reported as such: nothing more until it starts again. */
         var over = false
+
+        /** Over because it played to the end: still at the end (back from a cast device, say) isn't starting again. */
+        var finished = false
     }
 
     private val reports = Channel<suspend () -> Unit>(Channel.UNLIMITED)
@@ -115,23 +118,27 @@ class AudiobookProgressReporter(
         }
     }
 
-    /** What changed of the track [current] listens to. */
+    /**
+     * What changed of the track [current] listens to. An end or an error is the listen's where it
+     * played, before any move to where it plays from now (they can come in the same change).
+     */
     private fun onSameTrack(current: Listen, track: AudiobookTrack, state: AudiobookPlaybackState) {
         when {
-            !current.over && current.sink !== sinkFor(track, state) -> {
-                // Where it plays from changed: the listen ends where it got to, and goes on from there
-                current.lastPositionMs = controller.positionMs
-                end(current)
-                listen = begin(state.currentIndex, track, state)
-            }
-            current.over -> if (!state.isEnded && state.error == null) listen = begin(state.currentIndex, track, state)
+            current.over -> if (startsAgain(current, track, state)) listen = begin(state.currentIndex, track, state)
             state.isEnded -> {
                 current.over = true
+                current.finished = true
                 current.report { finished(track) }
             }
             state.error != null -> {
                 current.over = true
                 current.report { stopped(track, current.lastPositionMs) }
+            }
+            current.sink !== sinkFor(track, state) -> {
+                // Where it plays from changed: the listen ends where it got to, and goes on from there
+                current.lastPositionMs = controller.positionMs
+                end(current)
+                listen = begin(state.currentIndex, track, state)
             }
             state.playWhenReady != current.playWhenReady -> {
                 current.playWhenReady = state.playWhenReady
@@ -141,6 +148,13 @@ class AudiobookProgressReporter(
             }
         }
     }
+
+    /** An ended listen's track plays again: not ended or failed, and, if it finished, moved off its end. */
+    private fun startsAgain(over: Listen, track: AudiobookTrack, state: AudiobookPlaybackState): Boolean =
+        !state.isEnded && state.error == null && !(over.finished && isAtEnd(track, controller.positionMs))
+
+    private fun isAtEnd(track: AudiobookTrack, positionMs: Long) =
+        track.durationMs > 0 && positionMs >= track.durationMs - END_WINDOW_MS
 
     private fun begin(index: Int, track: AudiobookTrack, state: AudiobookPlaybackState): Listen {
         val positionMs = controller.positionMs
@@ -159,13 +173,21 @@ class AudiobookProgressReporter(
         if (ended.over) return
         val track = ended.track
         val positionMs = ended.lastPositionMs
-        val finished = track.durationMs > 0 && positionMs >= track.durationMs - END_WINDOW_MS
+        val finished = isAtEnd(track, positionMs)
         ended.report { if (finished) finished(track) else stopped(track, positionMs) }
     }
 
     private fun onSample() {
         val current = listen ?: return
-        if (current.over) return
+        if (current.over) {
+            // A seek off a finished track's end changes nothing else, so it's only seen here
+            val state = controller.state.value
+            val track = state.currentTrack
+            if (track != null && track.id == current.track.id && startsAgain(current, track, state)) {
+                listen = begin(state.currentIndex, track, state)
+            }
+            return
+        }
         current.lastPositionMs = controller.positionMs
         if (!controller.state.value.isPlaying) return
         current.sinceProgressMs += SAMPLE_INTERVAL_MS
@@ -177,7 +199,6 @@ class AudiobookProgressReporter(
     }
 
     private fun Listen.report(send: suspend AudiobookProgressSink.() -> Unit) {
-        val sink = sink
         reports.trySend { sink.send() }
     }
 

@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import android.app.Application
 import android.os.Looper
+import androidx.core.net.toUri
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -288,6 +289,55 @@ class TranscodedAudiobookPlayerTest {
 
         onCast.getMediaItemAt(0).localConfiguration!!.uri.toString() shouldContain "StartTimeTicks=600000000"
         castPlayer.release()
+    }
+
+    @Test
+    fun `a place asked for still gets there when tracks are added before its stream opens`() {
+        player.setMediaItems(listOf(item("a"), item("b"), item("c")), 2, 90_000L)
+        player.addMediaItem(0, item("z"))
+        player.prepare()
+        settle()
+
+        player.currentMediaItemIndex shouldBe 3
+        lastStreamUrl shouldContain "/c/"
+        lastStreamUrl shouldContain "StartTimeTicks=900000000"
+        player.currentPosition shouldBe 90_000L
+    }
+
+    @Test
+    fun `a seek into another track that's a transcode starts its stream there`() {
+        load(track("a"), track("b"))
+
+        player.seekTo(1, 250_000L)
+        settle()
+
+        player.currentMediaItemIndex shouldBe 1
+        lastStreamUrl shouldContain "/b/"
+        lastStreamUrl shouldContain "StartTimeTicks=2500000000"
+        player.currentPosition shouldBe 250_000L
+    }
+
+    @Test
+    fun `a queue set again keeping the place keeps the track's place, not the restarted stream's`() {
+        load(track("a"))
+        player.seekTo(1_200_000L)
+        settle()
+
+        player.setMediaItems(listOf(item("a")), false)
+        settle()
+
+        player.currentPosition shouldBe 1_200_000L
+        lastStreamUrl shouldContain "StartTimeTicks=12000000000"
+    }
+
+    @Test
+    fun `a stream for a cast device counts from the track's start, whatever this device's stream started from`() {
+        val restarted = "https://vault.test/Audio/a/universal?api_key=x&StartTimeTicks=600000000".toUri()
+
+        val forCast = TranscodeSeekingPlayer.fromTrackStart(restarted).toString()
+
+        forCast shouldNotContain TranscodeSeekingPlayer.START_PARAM
+        forCast shouldContain "api_key=x"
     }
 
     private fun item(id: String, query: String = "") =
