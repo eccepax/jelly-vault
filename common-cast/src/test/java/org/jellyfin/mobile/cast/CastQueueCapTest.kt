@@ -35,7 +35,11 @@ class CastQueueCapTest {
     }
     private val cap = CastQueueCap(castDevice)
 
-    private fun songs(range: IntRange) = range.map { MediaItem.Builder().setMediaId("s$it").setUri("https://vault.test/s$it").build() }
+    private fun songs(range: IntRange) = range.map {
+        MediaItem.Builder().setMediaId(
+            "s$it",
+        ).setUri("https://vault.test/s$it").build()
+    }
 
     private fun held() = (0 until exo.mediaItemCount).map { exo.getMediaItemAt(it).mediaId }
 

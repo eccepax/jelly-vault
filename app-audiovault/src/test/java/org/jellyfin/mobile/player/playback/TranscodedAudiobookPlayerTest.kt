@@ -57,7 +57,7 @@ class TranscodedAudiobookPlayerTest {
 
     @Test
     fun `wrapping a cast player, where a stream starts and how it seeks are the cast player's`() {
-        // CastQueuePlayer asks for each stream from where it should start, and counts from the track's start
+        // A stream asked for part way through, as a cast player's may be: it counts from the track's start
         val onCast = AudiobookPlayer(exoPlayer)
         val partWay = track("a").toMediaItem { "https://vault.test/Audio/$it/universal?StartTimeTicks=600000000" }
         onCast.setMediaItems(listOf(partWay))

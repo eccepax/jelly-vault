@@ -23,8 +23,8 @@ import androidx.media3.common.Timeline
  * Seeking is offered whenever something is loaded, as the player's own commands don't once a
  * transcode has opened.
  *
- * Only for this device's player: a cast player starts and seeks its own streams and counts from the
- * track's start (see common-cast's CastQueuePlayer). [AudiobookPlayer] goes on top for the chapters.
+ * Only for this device's player: a cast device is sent each stream whole, from its start (see
+ * common-cast's serverCastStreamNow), and seeks in it itself. [AudiobookPlayer] goes on top for the chapters.
  */
 class TranscodeSeekingPlayer(player: Player) : OwnCommandsPlayer(player) {
 

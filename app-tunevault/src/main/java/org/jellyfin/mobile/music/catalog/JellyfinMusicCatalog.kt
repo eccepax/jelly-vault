@@ -126,7 +126,7 @@ class JellyfinMusicCatalog(
         withAccessToken(downloadUri(trackId, streamingQuality()), apiClient.accessToken)
 
     /**
-     * Where a cast device gets the song from (see [serverCastSource]): from the server, even when it
+     * Where a cast device gets the song from (see [serverCastStreamNow]): from the server, even when it
      * plays from a download here. At the original quality, in its own format where a cast device
      * plays that; at a lower quality (which the server transcodes down to anyway), as MP3. The
      * quality is the one set when each stream is asked for.

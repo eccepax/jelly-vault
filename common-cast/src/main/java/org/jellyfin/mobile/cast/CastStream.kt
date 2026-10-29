@@ -1,19 +1,10 @@
 package org.jellyfin.mobile.cast
 
 /**
- * What a cast device is sent for a song: where it fetches it, and the type that url serves. A
- * transcode started part way starts [startMs] into the song, and can't be [seekable]: a seek in it
- * asks for the stream again from there.
+ * What a cast device is sent for a song: where it fetches it (whole, from its start: the cast
+ * device seeks in it itself), and the type it's told that url serves.
  */
-data class CastStream(val url: String, val mimeType: String, val startMs: Long = 0L, val seekable: Boolean = true)
-
-/**
- * Where a cast device fetches a song from, found once for each song in the queue (what its file is
- * may take asking the server): its stream from any place in it.
- */
-fun interface CastSource {
-    fun streamFrom(fromMs: Long): CastStream
-}
+data class CastStream(val url: String, val mimeType: String)
 
 /**
  * The most songs a cast device is sent at once: the Cast framework refuses a message over 512 KB,
@@ -28,4 +19,7 @@ const val CAST_QUEUE_LIMIT = 200
  * [limit] in all. Playback moving to a cast device takes this much of what was held here (see
  * PausedComingBack), so an app holding a long queue a window at a time knows what went.
  */
-fun <T> List<T>.castWindowFrom(from: Int, limit: Int = CAST_QUEUE_LIMIT): List<T> = subList(from, minOf(size, from + limit))
+fun <T> List<T>.castWindowFrom(from: Int, limit: Int = CAST_QUEUE_LIMIT): List<T> = subList(
+    from,
+    minOf(size, from + limit),
+)

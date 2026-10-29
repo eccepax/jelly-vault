@@ -26,9 +26,9 @@ fun levelFor(gainDb: Float?): Float =
  * The player's volume, made of two parts that multiply: volume levelling and the sleep timer's
  * fade. Each sets its own part, so neither overwrites the other.
  *
- * Sent while casting too: the cast player leaves the cast device's own volume alone, and keeps it
- * for this device's player once playback is back (common-cast's CastQueuePlayer and
- * SessionPlayerSwitcher).
+ * Sent while casting too, where it's the cast device's own volume: Media3's cast player sets the
+ * stream's volume there (RemoteMediaClient.setStreamVolume), so levelling and the fade reach the
+ * TV or speaker.
  */
 class PlaybackVolume(private val playback: PlaybackController) {
     private var level = 1f

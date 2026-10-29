@@ -34,7 +34,8 @@ internal class CastQueueCap(player: Player) : ForwardingPlayer(player) {
                 startPositionMs,
             )
         }
-        val (from, positionMs) = if (startIndex == C.INDEX_UNSET) carryingOn(mediaItems) else startIndex to startPositionMs
+        val carryOn = startIndex == C.INDEX_UNSET
+        val (from, positionMs) = if (carryOn) carryingOn(mediaItems) else startIndex to startPositionMs
         super.setMediaItems(mediaItems.castWindowFrom(from.coerceIn(0, mediaItems.size - 1)), 0, positionMs)
     }
 
