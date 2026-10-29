@@ -22,3 +22,10 @@ fun interface CastSource {
  * longer queues holds them a window at a time while cast.
  */
 const val CAST_QUEUE_LIMIT = 200
+
+/**
+ * What a cast device is sent of a queue longer than [limit]: the song at [from] and those after it,
+ * [limit] in all. Playback moving to a cast device takes this much of what was held here (see
+ * PausedComingBack), so an app holding a long queue a window at a time knows what went.
+ */
+fun <T> List<T>.castWindowFrom(from: Int, limit: Int = CAST_QUEUE_LIMIT): List<T> = subList(from, minOf(size, from + limit))

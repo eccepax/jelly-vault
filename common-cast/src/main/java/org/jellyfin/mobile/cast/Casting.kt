@@ -304,7 +304,7 @@ private class PausedComingBack(
             // More than the cast device takes in one message: the playing song and those after it,
             // which the app tops up as it plays (see CAST_QUEUE_LIMIT)
             state.buildUpon()
-                .setMediaItems(items.subList(from, minOf(items.size, from + CAST_QUEUE_LIMIT)))
+                .setMediaItems(items.castWindowFrom(from))
                 .setCurrentMediaItemIndex(0)
                 .build()
                 .setToPlayer(targetPlayer)

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.jellyfin.mobile.cast.CAST_QUEUE_LIMIT
+import org.jellyfin.mobile.cast.castWindowFrom
 import org.jellyfin.mobile.music.domain.PlayQueue
 import org.jellyfin.mobile.music.domain.QueueEntry
 import org.jellyfin.mobile.music.domain.RepeatMode
@@ -45,6 +46,12 @@ class PlayerPlaybackController(
      * taking in its queue says it holds fewer, so this, not the player, says which song ends it.
      */
     private var sentWindow: List<Long> = emptyList()
+
+    /**
+     * Whether [sentWindow] was given the player while cast. Not when playback moved to the cast
+     * device with the whole queue held here: Media3's transfer cut it down as it went.
+     */
+    private var sentWhileCast = false
 
     init {
         player.addListener(
@@ -135,6 +142,7 @@ class PlayerPlaybackController(
         player.repeatMode = newQueue.repeatMode.toPlayerRepeatMode()
         val (entries, at) = held(newQueue)
         sentWindow = entries.map { it.uid }
+        sentWhileCast = castWindowed(newQueue)
         player.setMediaItems(entries.map { it.toMediaItem(streamUrl) }, at, 0L)
         player.prepare()
         if (autoPlay) player.play()
@@ -180,15 +188,26 @@ class PlayerPlaybackController(
      * cast player can't take a change to its queue while a skip is on its way to the cast device
      * (it looks the skip's song up in a queue that no longer has it, and throws). Once its last song
      * plays with more to come, the next window is loaded from there in one go. One more than a window
-     * (a queue moved to the cast device whole, say) is cut down to it.
+     * (a queue moved to the cast device whole, say) is cut down to it; one cut to a window as it moved
+     * there is taken as sent. Played here, the player holds the whole queue: put back only when it
+     * doesn't (back from a cast device with a window), not rebuilt on every event.
      */
     private fun keepHeld() {
         val current = queue.entries.getOrNull(queue.currentIndex) ?: return
         if (player.currentMediaItem?.queueUid != current.uid) return
-        if (!castWindowed(queue) || player.mediaItemCount > castWindow) return reshape(queue)
+        if (!castWindowed(queue)) {
+            if (!holdsWhole(queue)) reshape(queue)
+            return
+        }
+        if (player.mediaItemCount > castWindow) return reshape(queue)
+        if (!sentWhileCast) {
+            sentWindow = queue.entries.castWindowFrom(queue.currentIndex, castWindow).map { it.uid }
+            sentWhileCast = true
+        }
         val (entries, _) = held(queue)
         if (sentWindow.lastOrNull() == current.uid && entries.size > 1) {
             sentWindow = entries.map { it.uid }
+            sentWhileCast = true
             player.setMediaItems(entries.map { it.toMediaItem(streamUrl) }, 0, player.currentPosition)
         }
     }
@@ -201,6 +220,7 @@ class PlayerPlaybackController(
     private fun reshape(queue: PlayQueue) {
         val (entries, at) = held(queue)
         sentWindow = entries.map { it.uid }
+        sentWhileCast = castWindowed(queue)
         val holding = List(player.mediaItemCount) { player.getMediaItemAt(it).queueUid }
         val playingIndex = player.currentMediaItemIndex
         val after = entries.subList(at + 1, entries.size)
@@ -213,6 +233,14 @@ class PlayerPlaybackController(
             player.removeMediaItems(0, playingIndex)
             player.addMediaItems(0, before.map { it.toMediaItem(streamUrl) })
         }
+    }
+
+    /** Whether the player holds all of [queue], by its length and the songs at each end. */
+    private fun holdsWhole(queue: PlayQueue): Boolean {
+        val count = player.mediaItemCount
+        return count == queue.entries.size &&
+            player.getMediaItemAt(0).queueUid == queue.entries.first().uid &&
+            player.getMediaItemAt(count - 1).queueUid == queue.entries.last().uid
     }
 
     /** Where the player holds [target]'s current entry; null if it doesn't. */

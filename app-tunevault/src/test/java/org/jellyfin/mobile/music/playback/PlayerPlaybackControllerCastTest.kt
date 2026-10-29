@@ -39,12 +39,24 @@ class PlayerPlaybackControllerCastTest {
         var remote = false
             set(value) {
                 field = value
+                if (silently) return
                 val events = Player.Events(FlagSet.Builder().add(Player.EVENT_DEVICE_INFO_CHANGED).build())
                 listeners.toList().forEach {
                     it.onDeviceInfoChanged(deviceInfo)
                     it.onEvents(this, events)
                 }
             }
+
+        /** Says it's the cast device's, with [moveQueue] run first, as Media3's player does it. */
+        fun castWithQueue(moveQueue: () -> Unit) {
+            silently = true
+            remote = true
+            silently = false
+            moveQueue()
+            remote = true
+        }
+
+        private var silently = false
 
         /** How many songs it says it holds, if not all: a cast device still sending its queue says fewer. */
         var countShown: Int? = null
@@ -236,6 +248,24 @@ class PlayerPlaybackControllerCastTest {
         held() shouldBe listOf("t4", "t5", "t6", "t7")
         playing shouldBe "t4"
         (player.currentPosition >= 2_000L) shouldBe true
+    }
+
+    @Test
+    fun `a long queue moved to the cast device trimmed to the window still moves on when its last song plays`() {
+        controller.play(twelve, startIndex = 3)
+        settle()
+
+        // Casting moves it as Media3's transfer does (see PausedComingBack): in one go, cut to
+        // exactly a window from the playing song
+        player.castWithQueue { exo.setMediaItems((3 until 3 + WINDOW).map(exo::getMediaItemAt), 0, 0L) }
+        settle()
+        held() shouldBe listOf("t4", "t5", "t6", "t7")
+
+        run(exo).untilMediaItemIndex(WINDOW - 1)
+        settle()
+
+        playing shouldBe "t7"
+        held() shouldBe listOf("t7", "t8", "t9", "t10")
     }
 
     @Test
