@@ -11,7 +11,8 @@ import androidx.media3.common.util.UnstableApi
 /**
  * A session's player that never sends a cast device more than [CAST_QUEUE_LIMIT] songs, whoever sets
  * them (another controller, say): the Cast framework would throw on the message, and the app with it.
- * A longer queue set while cast goes from its starting song; songs added past the limit are dropped.
+ * A longer queue set while cast goes from its starting song (the one playing, set to carry on from
+ * where it is); songs added past the limit are dropped.
  * The app's own controller keeps to it anyway, holding a long queue a window at a time.
  */
 @OptIn(UnstableApi::class)
@@ -33,12 +34,20 @@ internal class CastQueueCap(player: Player) : ForwardingPlayer(player) {
                 startPositionMs,
             )
         }
-        val from = startIndex.coerceIn(0, mediaItems.size - 1)
-        super.setMediaItems(
-            mediaItems.subList(from, minOf(mediaItems.size, from + CAST_QUEUE_LIMIT)),
-            0,
-            startPositionMs,
-        )
+        val (from, positionMs) = if (startIndex == C.INDEX_UNSET) carryingOn(mediaItems) else startIndex to startPositionMs
+        super.setMediaItems(mediaItems.castWindowFrom(from.coerceIn(0, mediaItems.size - 1)), 0, positionMs)
+    }
+
+    /**
+     * Where a queue set to carry on from where playback is (no start given) starts: from the song
+     * playing, where it's in [mediaItems], at its position. The cast device holds only a window, so
+     * its index says nothing of where that is in a queue set whole; one without it goes from that
+     * index, as Media3 does.
+     */
+    private fun carryingOn(mediaItems: List<MediaItem>): Pair<Int, Long> {
+        val playingId = currentMediaItem?.mediaId
+        val at = mediaItems.indexOfFirst { it.mediaId == playingId }.takeIf { playingId != null && it >= 0 }
+        return (at ?: currentMediaItemIndex) to currentPosition
     }
 
     override fun addMediaItems(mediaItems: List<MediaItem>) = addMediaItems(mediaItemCount, mediaItems)
