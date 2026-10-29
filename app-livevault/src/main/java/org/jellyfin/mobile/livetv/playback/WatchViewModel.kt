@@ -50,6 +50,8 @@ class WatchViewModel(
         closer,
         viewModelScope,
         onStoppedOnCastDevice = { _watching.value = false },
+        // Left on the cast device from the channel list, a channel isn't brought back here unseen
+        playsHereWhenCastEnds = { _watching.value },
     )
 
     /** Whether the player screen is up. */
@@ -125,8 +127,24 @@ class WatchViewModel(
 
     fun retry() = playback.retry()
 
-    /** Back to the channel list. */
+    /**
+     * Back to the channel list. A channel playing on a cast device plays on there (the list shows it,
+     * to come back to or stop); one playing here stops.
+     */
     fun exit() {
+        val playback = playback.state.value
+        val playsOnThere = cast.connected.value && playback.channelId != null && playback !is PlaybackState.Failed
+        if (!playsOnThere) this.playback.stop()
+        _watching.value = false
+    }
+
+    /** Back to the player, from the channel list, for the channel playing on the cast device. */
+    fun reopen() {
+        _watching.value = true
+    }
+
+    /** Stops the channel, wherever it plays: from the channel list, the one left on the cast device. */
+    fun stopChannel() {
         playback.stop()
         _watching.value = false
     }

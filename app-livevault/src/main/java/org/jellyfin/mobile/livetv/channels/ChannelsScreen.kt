@@ -100,6 +100,8 @@ fun ChannelsScreen(
     app: ClientInfo,
     actions: ChannelsActions,
     castButton: @Composable () -> Unit = {},
+    /** Along the bottom, below the channels however many there are (the channel left on a cast device). */
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val startFocus = remember { FocusRequester() }
     val loaded = state is ChannelsUiState.Loaded && state.channels.isNotEmpty()
@@ -115,33 +117,41 @@ fun ChannelsScreen(
                 app = app,
                 castButton = castButton,
             )
-            when (state) {
-                ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
-                ChannelsUiState.Error -> ErrorState(stringResource(R.string.channels_error), onRetry = actions.onRetry)
-                is ChannelsUiState.Loaded -> {
-                    state.lastChannel?.let { channel ->
-                        ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
-                    }
-                    FilterChips(
-                        tags = state.tags,
-                        filter = state.filter,
-                        onTagSelect = actions.onTagSelect,
-                        onFavoritesSelect = actions.onFavoritesSelect,
-                    )
-                    if (state.channels.isEmpty()) {
-                        EmptyState(emptyMessage(state.filter))
-                    } else {
-                        ChannelGrid(
-                            channels = state.channels,
-                            now = now,
-                            onFavoriteToggle = actions.onFavoriteToggle,
-                            onChannelClick = actions.onChannelClick,
-                            firstFocus = startFocus.takeIf { state.lastChannel == null },
-                            // Another tag, or favorites, is another list: start it at its top
-                            scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
-                        )
-                    }
-                }
+            Column(Modifier.weight(1f)) {
+                Channels(state, now, actions, startFocus)
+            }
+            bottomBar()
+        }
+    }
+}
+
+@Composable
+private fun Channels(state: ChannelsUiState, now: Instant, actions: ChannelsActions, startFocus: FocusRequester) {
+    when (state) {
+        ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
+        ChannelsUiState.Error -> ErrorState(stringResource(R.string.channels_error), onRetry = actions.onRetry)
+        is ChannelsUiState.Loaded -> {
+            state.lastChannel?.let { channel ->
+                ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
+            }
+            FilterChips(
+                tags = state.tags,
+                filter = state.filter,
+                onTagSelect = actions.onTagSelect,
+                onFavoritesSelect = actions.onFavoritesSelect,
+            )
+            if (state.channels.isEmpty()) {
+                EmptyState(emptyMessage(state.filter))
+            } else {
+                ChannelGrid(
+                    channels = state.channels,
+                    now = now,
+                    onFavoriteToggle = actions.onFavoriteToggle,
+                    onChannelClick = actions.onChannelClick,
+                    firstFocus = startFocus.takeIf { state.lastChannel == null },
+                    // Another tag, or favorites, is another list: start it at its top
+                    scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
+                )
             }
         }
     }
@@ -405,7 +415,7 @@ private fun NowPlaying(channel: LiveChannel, now: Instant) {
 }
 
 @Composable
-private fun ChannelLogo(logoUrl: String?) {
+internal fun ChannelLogo(logoUrl: String?) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -471,6 +481,7 @@ fun ChannelsRoute(
     // The app's name as the server knows it and the bug form lists it
     app: ClientInfo = koinInject(),
     casting: Casting = koinInject(),
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
@@ -506,6 +517,7 @@ fun ChannelsRoute(
             onSignOut = onSignOut,
         ),
         castButton = { CastButton(casting) },
+        bottomBar = bottomBar,
     )
 }
 

@@ -42,7 +42,8 @@ fun MiniPlayerBar(
     subtitle: String?,
     cover: @Composable () -> Unit,
     isPlaying: Boolean,
-    onTogglePlayPause: () -> Unit,
+    /** No play button when null: for what can't pause (a live channel). */
+    onTogglePlayPause: (() -> Unit)?,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     /** How far through it is, from 0 to 1; no bar when null. */
@@ -83,7 +84,9 @@ fun MiniPlayerBar(
                         )
                     }
                 }
-                PlayPauseButton(isPlaying = isPlaying, onClick = onTogglePlayPause, isLoading = isLoading)
+                if (onTogglePlayPause != null) {
+                    PlayPauseButton(isPlaying = isPlaying, onClick = onTogglePlayPause, isLoading = isLoading)
+                }
                 actions()
             }
         }

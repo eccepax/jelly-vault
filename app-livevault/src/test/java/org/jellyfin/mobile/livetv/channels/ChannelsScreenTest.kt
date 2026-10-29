@@ -113,10 +113,18 @@ class ChannelsScreenTest {
                             onRetry = { retried = true },
                         ),
                         castButton = { Text("cast", Modifier.testTag(CAST_BUTTON)) },
+                        bottomBar = { Text("strip", Modifier.testTag(BOTTOM_BAR)) },
                     )
                 }
             }
         }
+    }
+
+    @Test
+    fun `the bottom bar stays on screen below a list longer than the screen`() {
+        show(loaded(channels = (1..60).map { channel("$it", "Channel $it") }))
+
+        composeRule.onNodeWithTag(BOTTOM_BAR).assertIsDisplayed()
     }
 
     @Test
@@ -384,3 +392,4 @@ class ChannelsScreenTest {
 }
 
 private const val CAST_BUTTON = "cast_button"
+private const val BOTTOM_BAR = "bottom_bar"

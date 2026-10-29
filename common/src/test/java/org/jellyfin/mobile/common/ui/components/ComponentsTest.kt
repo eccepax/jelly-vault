@@ -343,6 +343,23 @@ class ComponentsTest {
     }
 
     @Test
+    fun `a mini player for something that can't pause has no play button`() {
+        show {
+            MiniPlayerBar(
+                title = "4.1 Devils",
+                subtitle = "Playing on Main Bedroom TV",
+                cover = {},
+                isPlaying = true,
+                onTogglePlayPause = null,
+                onExpand = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Pause").assertDoesNotExist()
+        composeRule.onNodeWithText("4.1 Devils").assertExists()
+    }
+
+    @Test
     fun `a list row can show how far through the item is`() {
         show { MediaListRow(title = "Dune", progress = 0.4f) }
 

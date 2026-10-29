@@ -45,6 +45,8 @@ val PlaybackState.channelId: String?
  *   player is on one. When the player moves to or from a cast device, the channel is opened again
  *   for where it now plays (closing the old stream first, as ever). In the background the channel
  *   carries on on the cast device; if the cast ends there, the stream is freed as for any background.
+ *   Left on the cast device from the channel list ([playsHereWhenCastEnds] false), a channel whose
+ *   cast ends stops rather than coming back here unseen.
  *   Stopped on the cast device itself (its remote, another app casting), the stream is closed and
  *   [onStoppedOnCastDevice] told: the viewer stopped watching, wherever they did it.
  *
@@ -56,6 +58,8 @@ class LivePlayback(
     private val closer: StreamCloser,
     private val scope: CoroutineScope,
     private val onStoppedOnCastDevice: () -> Unit = {},
+    /** Whether a channel comes back here when the cast it played on ends; else it stops. */
+    private val playsHereWhenCastEnds: () -> Boolean = { true },
 ) {
     private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -170,6 +174,7 @@ class LivePlayback(
             }
             channel == null -> Unit
             !onCastDevice && inBackground -> freeForBackground(castEnded = true)
+            !onCastDevice && !playsHereWhenCastEnds() -> stop()
             else -> request(channel, debounce = false)
         }
     }
