@@ -17,6 +17,7 @@ import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.framework.media.RemoteMediaClient
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,12 @@ internal interface CastPlayers {
      * told whenever the cast is ended from here; [forgotten] when it's forgotten, once emptied.
      */
     fun forgetsWithCast(player: Player, endingHere: () -> Unit = {}, forgotten: () -> Unit = {}): () -> Unit
+
+    /**
+     * [onFailure] is told whenever the cast device stops because it couldn't play what it was sent
+     * (see [CastFailureWatch]), until the answer is called.
+     */
+    fun onCastFailure(onFailure: () -> Unit): () -> Unit
 }
 
 /**
@@ -111,6 +118,18 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     private class Told(val endingHere: () -> Unit, val forgotten: () -> Unit)
 
     private val players = mutableMapOf<Player, Told>()
+
+    private val failureListeners = mutableListOf<() -> Unit>()
+    private val failures = CastFailureWatch { failureListeners.toList().forEach { it() } }
+
+    /** The cast device's media channel while one is connected, whose statuses tell of failures. */
+    private var watched: RemoteMediaClient? = null
+    private val statuses = object : RemoteMediaClient.Callback() {
+        override fun onStatusUpdated() {
+            val status = watched?.mediaStatus ?: return
+            failures.onStatus(status.playerState, status.idleReason)
+        }
+    }
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -144,6 +163,7 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     private fun started(castContext: CastContext) {
         this.castContext = castContext
         device.value = castContext.sessionManager.currentCastSession?.deviceName
+        watch(castContext.sessionManager.currentCastSession)
         castContext.sessionManager.addSessionManagerListener(
             object : SessionManagerListener<CastSession> {
                 override fun onSessionStarting(session: CastSession) {
@@ -153,6 +173,7 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
                 override fun onSessionStarted(session: CastSession, sessionId: String) {
                     connecting.value = null
                     device.value = session.deviceName
+                    watch(session)
                 }
 
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
@@ -161,11 +182,13 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
 
                 override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
                     device.value = session.deviceName
+                    watch(session)
                 }
 
                 override fun onSessionEnded(session: CastSession, error: Int) {
                     connecting.value = null
                     device.value = null
+                    watch(null)
                 }
 
                 // A moment without the network: playback stays on the cast device (see
@@ -190,6 +213,15 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
         )
         available.value = true
         gate.started()
+    }
+
+    private fun watch(session: CastSession?) {
+        val client = session?.remoteMediaClient
+        if (client === watched) return
+        watched?.unregisterCallback(statuses)
+        failures.reset()
+        watched = client
+        client?.registerCallback(statuses)
     }
 
     override fun stopCasting() {
@@ -219,7 +251,10 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
             .setRemotePlayer(remote)
             .setTransferCallback(PausedComingBack())
             .build()
-        return CastSeekGuard(player) { remote.currentTimeline.isEmpty }
+        // Media3's cast player never has an error of its own: one the cast device has is given it here
+        val reporting = CastFailureReporting(player)
+        reporting.onRelease = onCastFailure(reporting::failedThere)
+        return CastSeekGuard(reporting) { remote.currentTimeline.isEmpty }
     }
 
     override fun remoteCastPlayer(converter: MediaItemConverter, onConnectionChanged: (Boolean) -> Unit): RemotePlayer {
@@ -237,6 +272,11 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     override fun forgetsWithCast(player: Player, endingHere: () -> Unit, forgotten: () -> Unit): () -> Unit {
         players[player] = Told(endingHere, forgotten)
         return { players -= player }
+    }
+
+    override fun onCastFailure(onFailure: () -> Unit): () -> Unit {
+        failureListeners += onFailure
+        return { failureListeners -= onFailure }
     }
 
     private val CastSession.deviceName: String? get() = castDevice?.friendlyName

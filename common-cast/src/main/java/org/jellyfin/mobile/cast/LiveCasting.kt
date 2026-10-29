@@ -74,6 +74,7 @@ fun liveCasting(casting: Casting): LiveCasting {
                 endingHere = live::endingHere,
                 forgotten = live::forgotten,
             )
+            live.unwatching = castPlayers.onCastFailure(live::failedThere)
         } else {
             castPlayer.release()
         }
@@ -126,6 +127,9 @@ internal class PlayerLiveCasting(
 
     /** Takes the cast player off what [Casting.forgetCast] empties. */
     internal var forgetting: (() -> Unit)? = null
+
+    /** Stops hearing of the cast device's failures. */
+    internal var unwatching: (() -> Unit)? = null
 
     private val _connected = MutableStateFlow(false)
     override val connected: StateFlow<Boolean> = _connected.asStateFlow()
@@ -230,6 +234,18 @@ internal class PlayerLiveCasting(
         this.onStopped = onStopped
     }
 
+    /**
+     * The cast device stopped because it couldn't play what it was sent, heard from the Cast framework
+     * (see [CastFailureWatch]): Media3's cast player never says, and only goes idle, as if stopped there.
+     */
+    fun failedThere() {
+        if (!sent) return
+        Timber.e("Live playback failed on the cast device")
+        sent = false
+        _started.value = false
+        onError?.invoke()
+    }
+
     /** The cast is being ended from here: the cast device stopping on the way out isn't the viewer's doing. */
     fun endingHere() {
         sent = false
@@ -258,6 +274,8 @@ internal class PlayerLiveCasting(
         waiting = null
         forgetting?.invoke()
         forgetting = null
+        unwatching?.invoke()
+        unwatching = null
         if (connected.value) endCast()
         _connected.value = false
         player?.removeListener(listener)

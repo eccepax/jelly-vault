@@ -352,6 +352,53 @@ class PlayerLiveCastingTest {
     }
 
     @Test
+    fun `a stream that fails there as the real cast player does (idle, with no error) is reported as that, not as stopped`() {
+        connect()
+        var errors = 0
+        var stopped = 0
+        casting.listenWith(onError = { errors++ }, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        // Media3's cast player only goes idle; the Cast framework's status says it was an error
+        device.stop()
+        settle()
+        casting.failedThere()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(PlayerLiveCasting.STOPPED_THERE_AFTER_MS))
+
+        errors shouldBe 1
+        stopped shouldBe 0
+        casting.started.value shouldBe false
+    }
+
+    @Test
+    fun `a failure there with nothing sent from here isn't reported`() {
+        connect()
+        var errors = 0
+        casting.listenWith(onError = { errors++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+        casting.stop()
+        settle()
+
+        casting.failedThere()
+
+        errors shouldBe 0
+    }
+
+    @Test
+    fun `the live cast player hears of the cast device's failures until it's released`() {
+        val framework = WaitingCastPlayers()
+        val live = liveCasting(framework)
+        framework.start()
+        framework.failureListeners.size shouldBe 1
+
+        live.release()
+
+        framework.failureListeners.size shouldBe 0
+    }
+
+    @Test
     fun `the stream shows as not started again while the cast device stops playing it (a stall)`() {
         connect()
         casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
@@ -459,6 +506,7 @@ class PlayerLiveCastingTest {
         val forgotten = mutableListOf<Player>()
         val endings = mutableListOf<() -> Unit>()
         val forgettings = mutableListOf<() -> Unit>()
+        val failureListeners = mutableListOf<() -> Unit>()
 
         override val isAvailable = MutableStateFlow(false)
         override val castDevice = MutableStateFlow<String?>(null)
@@ -488,6 +536,11 @@ class PlayerLiveCastingTest {
             endings += endingHere
             forgettings += forgotten
             return { this.forgotten -= player }
+        }
+
+        override fun onCastFailure(onFailure: () -> Unit): () -> Unit {
+            failureListeners += onFailure
+            return { failureListeners -= onFailure }
         }
     }
 
