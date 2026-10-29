@@ -17,7 +17,11 @@ import com.google.android.gms.cast.MediaQueueItem
  * sender's) comes back from what the cast device has of it.
  */
 @OptIn(UnstableApi::class)
-internal class VaultMediaItemConverter(private val castStream: (MediaItem) -> CastStream) : MediaItemConverter {
+internal class VaultMediaItemConverter(
+    private val castStream: (MediaItem) -> CastStream,
+    /** Items go as live streams (LiveVault's channels): no end, no seeking. */
+    private val live: Boolean = false,
+) : MediaItemConverter {
     private val default = DefaultMediaItemConverter()
 
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
@@ -36,7 +40,7 @@ internal class VaultMediaItemConverter(private val castStream: (MediaItem) -> Ca
         val info = MediaInfo.Builder(mediaItem.mediaId.ifEmpty { stream.url })
             .setContentUrl(stream.url)
             .setContentType(stream.mimeType)
-            .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+            .setStreamType(if (live) MediaInfo.STREAM_TYPE_LIVE else MediaInfo.STREAM_TYPE_BUFFERED)
             .setMetadata(sent.metadata)
             .build()
         return MediaQueueItem.Builder(info).build()

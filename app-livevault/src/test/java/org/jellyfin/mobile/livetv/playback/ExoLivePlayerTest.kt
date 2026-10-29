@@ -31,21 +31,21 @@ class ExoLivePlayerTest {
 
     @Test
     fun `an HLS playlist is played as HLS`() {
-        player.play("$missingStream/master.m3u8?api_key=x")
+        player.play("$missingStream/master.m3u8?api_key=x", channelId = "a")
 
         player.exoPlayer.currentMediaItem?.localConfiguration?.mimeType shouldBe MimeTypes.APPLICATION_M3U8
     }
 
     @Test
     fun `a raw transport stream is left for the player to recognise`() {
-        player.play("$missingStream/stream.ts")
+        player.play("$missingStream/stream.ts", channelId = "a")
 
         player.exoPlayer.currentMediaItem?.localConfiguration?.mimeType shouldBe null
     }
 
     @Test
     fun `playing starts as soon as the stream is ready`() {
-        player.play("$missingStream/stream.ts")
+        player.play("$missingStream/stream.ts", channelId = "a")
 
         player.exoPlayer.playWhenReady shouldBe true
         player.exoPlayer.playbackState shouldBe Player.STATE_BUFFERING
@@ -53,7 +53,7 @@ class ExoLivePlayerTest {
 
     @Test
     fun `stopping drops the stream and the video`() {
-        player.play("$missingStream/stream.ts")
+        player.play("$missingStream/stream.ts", channelId = "a")
 
         player.stop()
 

@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.floats.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.livetv.catalog.channel
 import org.jellyfin.mobile.livetv.catalog.program
@@ -41,12 +42,15 @@ class PlayerScreenTest {
     private var retried = false
     private var exited = false
     private var showedFree = false
+    private var castingStopped = false
 
     private fun show(
         playback: PlaybackState,
         videoStarted: Boolean = false,
         loginInUse: LoginInUse? = null,
         inPictureInPicture: Boolean = false,
+        castDevice: String? = null,
+        casting: Boolean = castDevice != null,
     ) {
         composeRule.setContent {
             PlayerScreen(
@@ -55,6 +59,8 @@ class PlayerScreenTest {
                     channel = bulls,
                     videoStarted = videoStarted,
                     loginInUse = loginInUse,
+                    castDevice = castDevice,
+                    casting = casting,
                 ),
                 onZap = { zaps += it },
                 onRetry = { retried = true },
@@ -62,6 +68,8 @@ class PlayerScreenTest {
                 onShowFree = { showedFree = true },
                 video = { Text("video", Modifier.testTag(VIDEO)) },
                 inPictureInPicture = inPictureInPicture,
+                onStopCasting = { castingStopped = true },
+                castButton = { Text("cast", Modifier.testTag(CAST_BUTTON)) },
             )
         }
     }
@@ -188,6 +196,86 @@ class PlayerScreenTest {
     }
 
     @Test
+    fun `the cast button is in the top bar`() {
+        show(PlaybackState.Tuning(bulls.id))
+
+        composeRule.onNodeWithTag(CAST_BUTTON, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `while casting it says where the channel plays`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.onNodeWithText("Playing on Main Bedroom TV").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `casting to a device that hasn't said its name yet still shows the channel plays there`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, casting = true)
+
+        composeRule.onNodeWithText("Playing on your cast device").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `while casting the channel's details stay up, with no video here to look at`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.mainClock.advanceTimeBy(OVERLAY_GONE_MS)
+
+        composeRule.onNodeWithText("Bulls at Pacers").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping where it plays offers to stop casting`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true, castDevice = "Main Bedroom TV")
+
+        composeRule.onNodeWithText("Playing on Main Bedroom TV").performClick()
+        composeRule.onNodeWithText("Stop casting").performClick()
+
+        castingStopped shouldBe true
+    }
+
+    @Test
+    fun `while casting, tuning and a failure show below where it plays, not over it`() {
+        var playback by mutableStateOf<PlaybackState>(PlaybackState.Tuning(bulls.id))
+        composeRule.setContent {
+            PlayerScreen(
+                state = WatchUiState(
+                    playback,
+                    channel = bulls,
+                    videoStarted = false,
+                    castDevice = "Den TV",
+                    casting = true,
+                ),
+                onZap = {},
+                onRetry = {},
+                onExit = {},
+                onShowFree = {},
+                video = {},
+                onStopCasting = {},
+            )
+        }
+        val label = composeRule.onNodeWithText(
+            "Playing on Den TV",
+            useUnmergedTree = true,
+        ).fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithText("Tuning…", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top shouldBeGreaterThanOrEqual label.bottom
+        playback = PlaybackState.Failed(bulls.id)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Retry", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top shouldBeGreaterThanOrEqual label.bottom
+    }
+
+    @Test
+    fun `not casting, nothing says it is`() {
+        show(PlaybackState.Playing(bulls.id), videoStarted = true)
+
+        composeRule.onNodeWithTag(PlayerScreenTags.CASTING).assertDoesNotExist()
+    }
+
+    @Test
     fun `in the floating window there's only the video`() {
         show(PlaybackState.Playing(bulls.id), videoStarted = true, inPictureInPicture = true)
 
@@ -235,3 +323,4 @@ class PlayerScreenTest {
 
 private const val OVERLAY_GONE_MS = 5_000L
 private const val VIDEO = "video"
+private const val CAST_BUTTON = "cast_button"

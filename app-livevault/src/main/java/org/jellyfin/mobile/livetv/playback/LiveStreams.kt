@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.livetv.playback
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 data class StreamTicket(val channelId: String, val liveStreamId: String, val playSessionId: String?, val mediaSourceId: String)
@@ -9,18 +10,32 @@ data class OpenedStream(val channelId: String, val liveStreamId: String, val pla
 }
 
 interface LiveStreams {
-    suspend fun open(channelId: String): OpenedStream
+    /** Opens [channelId]: [forCast], as a stream a cast device plays (HLS, with the token in its url). */
+    suspend fun open(channelId: String, forCast: Boolean = false): OpenedStream
     suspend fun reportPlaying(stream: OpenedStream)
     suspend fun close(stream: StreamTicket)
 }
 
 interface LivePlayer {
-    fun interface Listener { fun onError() }
+    fun interface Listener {
+        fun onError()
+
+        /** The cast device stopped playing the channel by itself (its remote, another app) while still connected. */
+        fun onStoppedElsewhere() = Unit
+    }
 
     /** Whether the video is actually rendering (not just the stream opened); reset by [play] and [stop]. */
-    val videoStarted: StateFlow<Boolean>
+    val videoStarted: Flow<Boolean>
 
-    fun play(url: String)
+    /** Whether [play] goes to a cast device, which needs a stream opened for it (see [LiveStreams.open]). */
+    val onCastDevice: StateFlow<Boolean>
+
+    /**
+     * Plays [url], the stream of [channelId], where it was opened for: the cast device when
+     * [forCast], else here. That's where it was opened for, not where [onCastDevice] says now: a cast
+     * that came or went while it opened is followed by opening it again (see [LivePlayback]).
+     */
+    fun play(url: String, channelId: String, forCast: Boolean = onCastDevice.value)
     fun stop()
     fun listenWith(listener: Listener?)
     fun release()

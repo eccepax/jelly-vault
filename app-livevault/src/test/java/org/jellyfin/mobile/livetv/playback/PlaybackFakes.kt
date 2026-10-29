@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
+import org.jellyfin.mobile.cast.CastStream
+import org.jellyfin.mobile.cast.LiveCasting
 
 /** Everything the fakes did, in order, so tests can check that a stream closes before the next opens. */
 class EventLog {
@@ -40,8 +42,8 @@ class FakeLiveStreams(private val log: EventLog) : LiveStreams {
 
     val openStreams = mutableSetOf<String>()
 
-    override suspend fun open(channelId: String): OpenedStream {
-        log += "open:$channelId"
+    override suspend fun open(channelId: String, forCast: Boolean): OpenedStream {
+        log += if (forCast) "open-for-cast:$channelId" else "open:$channelId"
         gates[channelId]?.await()
         if (channelId in failing) throw java.io.IOException("tuner busy")
         val n = (opens[channelId] ?: 0) + 1
@@ -69,13 +71,22 @@ class FakeLivePlayer(private val log: EventLog) : LivePlayer {
     var listener: LivePlayer.Listener? = null
         private set
     var playing: String? = null
+
+    /** The channel [playing] is. */
+    var channel: String? = null
+
+    /** Where [playing] was opened for: the cast device, or here. */
+    var playedOnCastDevice: Boolean? = null
     var released = false
         private set
     override val videoStarted = MutableStateFlow(false)
+    override val onCastDevice = MutableStateFlow(false)
 
-    override fun play(url: String) {
+    override fun play(url: String, channelId: String, forCast: Boolean) {
         log += "player.play:$url"
         playing = url
+        channel = channelId
+        playedOnCastDevice = forCast
     }
 
     override fun stop() {
@@ -124,5 +135,68 @@ class FakeLiveTvSessions : LiveTvSessions {
     override suspend fun othersWatching(): List<ChannelSession> {
         failure?.let { throw it }
         return watching
+    }
+}
+
+class FakeLiveCasting(private val log: EventLog) : LiveCasting {
+    override val connected = MutableStateFlow(false)
+    override val started = MutableStateFlow(false)
+    override val deviceName = MutableStateFlow<String?>(null)
+    var onError: (() -> Unit)? = null
+        private set
+    var onStopped: (() -> Unit)? = null
+        private set
+
+    /** What the cast device was last sent: stream, title, subtitle, artwork. */
+    var sent: List<String?>? = null
+        private set
+    var released = false
+        private set
+    var castsStopped = 0
+        private set
+
+    override fun play(stream: CastStream, title: String, subtitle: String?, artworkUri: String?) {
+        log += "cast.play:${stream.url}"
+        sent = listOf(stream.url, stream.mimeType, title, subtitle, artworkUri)
+    }
+
+    override fun stop() {
+        log += "cast.stop"
+    }
+
+    override fun listenWith(onError: (() -> Unit)?, onStopped: (() -> Unit)?) {
+        this.onError = onError
+        this.onStopped = onStopped
+    }
+
+    override fun stopCasting() {
+        castsStopped++
+    }
+
+    override fun release() {
+        released = true
+    }
+}
+
+/** What the app is kept alive for while a channel plays on a cast device: null while it isn't. */
+class FakeCastKeepAlive : CastKeepAlive {
+    var holding: Pair<String, String?>? = null
+        private set
+
+    /** How many times it was asked to hold. */
+    var holds = 0
+        private set
+
+    override fun hold(channel: String, device: String?) {
+        holding = channel to device
+        holds++
+    }
+
+    override fun release() {
+        holding = null
+    }
+
+    override fun holdAgain() {
+        holding?.let { (channel, device) -> hold(channel, device) }
     }
 }

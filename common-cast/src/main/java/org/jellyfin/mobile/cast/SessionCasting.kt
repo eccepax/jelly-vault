@@ -59,9 +59,9 @@ class SessionCasting private constructor(private val casting: Casting) {
             attached.waiting = castPlayers.whenReady {
                 attached.waiting = null
                 if (attached.released) return@whenReady
-                val converter = VaultMediaItemConverter { item ->
-                    castStream?.invoke(item) ?: defaultCastStream(item, castUri, fallbackMimeType)
-                }
+                val converter = VaultMediaItemConverter(
+                    castStream = { item -> castStream?.invoke(item) ?: defaultCastStream(item, castUri, fallbackMimeType) },
+                )
                 val player = castPlayers.castPlayer(local, converter)
                 attached.player = player
                 attached.forgetting = castPlayers.forgetsWithCast(player)

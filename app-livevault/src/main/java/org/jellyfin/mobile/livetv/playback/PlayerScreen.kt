@@ -10,11 +10,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.Button
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
@@ -23,6 +25,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Warning
@@ -58,21 +61,29 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.PlayingOnLabel
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.channels.channelDisplayName
 import org.jellyfin.mobile.livetv.channels.displayName
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.koin.compose.koinInject
+import org.jellyfin.mobile.cast.R as CastR
 
 /**
  * What the player shows: [videoStarted] is the player actually rendering, not just the stream being
- * open. [loginInUse] explains a failure on a channel that needs the provider login.
+ * open. [loginInUse] explains a failure on a channel that needs the provider login. [casting] is
+ * the channel playing on a cast device, [castDevice] that device's name, once it has said it.
  */
 data class WatchUiState(
     val playback: PlaybackState,
     val channel: LiveChannel?,
     val videoStarted: Boolean,
     val loginInUse: LoginInUse? = null,
+    val castDevice: String? = null,
+    val casting: Boolean = castDevice != null,
 )
 
 /** The provider login is probably taken; [holders] are the server's viewers known to have it. */
@@ -82,6 +93,7 @@ object PlayerScreenTags {
     const val BUFFERING = "player_buffering"
     const val VIDEO_PLAYING = "player_video_playing"
     const val FAILED_SMALL = "player_failed_small"
+    const val CASTING = "player_casting"
 }
 
 /**
@@ -89,6 +101,8 @@ object PlayerScreenTags {
  * tuning or on a failure, and otherwise hides a few seconds after the last change or tap. The
  * remote's up/down (and channel keys) zap; on touch screens the overlay has buttons. In the
  * picture-in-picture window, [inPictureInPicture], there's only the video (or a sign it failed).
+ * While casting the overlay stays, over a panel naming the cast device ([onStopCasting] from there);
+ * [castButton] is the app's cast button, in the overlay's bar.
  */
 @Composable
 fun PlayerScreen(
@@ -99,6 +113,8 @@ fun PlayerScreen(
     onShowFree: () -> Unit,
     video: @Composable () -> Unit,
     inPictureInPicture: Boolean = false,
+    onStopCasting: () -> Unit = {},
+    castButton: @Composable () -> Unit = {},
 ) {
     val focus = remember { FocusRequester() }
     var overlayRequests by remember { mutableIntStateOf(0) }
@@ -110,7 +126,8 @@ fun PlayerScreen(
             overlayHidden = overlayRequests
         }
     }
-    val overlayVisible = !playing || overlayHidden != overlayRequests
+    val casting = state.casting
+    val overlayVisible = !playing || casting || overlayHidden != overlayRequests
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Box(
@@ -149,8 +166,15 @@ fun PlayerScreen(
         if (inPictureInPicture) {
             PictureInPictureContent(state)
         } else {
-            Center(state, onRetry, onExit, onShowFree)
-            if (overlayVisible) Overlay(state.channel, onZap, onExit)
+            // Casting, what's happening goes below where it plays, not over it
+            if (state.casting) {
+                CastingPanel(state.castDevice, onStopCasting) {
+                    if (state.hasStatus) Status(state, onRetry, onExit, onShowFree, Modifier.padding(top = 24.dp))
+                }
+            } else {
+                Center { Status(state, onRetry, onExit, onShowFree) }
+            }
+            if (overlayVisible) Overlay(state.channel, onZap, onExit, castButton)
         }
     }
 }
@@ -171,12 +195,33 @@ private fun PictureInPictureContent(state: WatchUiState) {
 }
 
 @Composable
-private fun Center(state: WatchUiState, onRetry: () -> Unit, onExit: () -> Unit, onShowFree: () -> Unit) {
+private fun Center(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+        content = content,
+    )
+}
+
+/** Whether there's anything to say of playback ([Status]): not once it plays, or with nothing on. */
+private val WatchUiState.hasStatus: Boolean
+    get() = when (playback) {
+        is PlaybackState.Playing -> !videoStarted
+        PlaybackState.Idle -> false
+        else -> true
+    }
+
+/** Tuning, buffering, or why it failed and what to do: nothing once it plays. */
+@Composable
+private fun Status(
+    state: WatchUiState,
+    onRetry: () -> Unit,
+    onExit: () -> Unit,
+    onShowFree: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         when (state.playback) {
             is PlaybackState.Tuning -> {
                 CircularProgressIndicator()
@@ -243,8 +288,39 @@ private fun LoginInUseMessage(loginInUse: LoginInUse) {
     }
 }
 
+/** In place of the video while the channel plays on [castDevice]: where it plays, and stopping that. */
 @Composable
-private fun Overlay(channel: LiveChannel?, onZap: (Int) -> Unit, onExit: () -> Unit) {
+private fun CastingPanel(castDevice: String?, onStopCasting: () -> Unit, status: @Composable () -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag(PlayerScreenTags.CASTING),
+    ) {
+        Icon(
+            Icons.Filled.CastConnected,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = VaultAlpha.SECONDARY),
+            modifier = Modifier.size(CAST_ICON_SIZE),
+        )
+        PlayingOnLabel(
+            castDevice ?: stringResource(CastR.string.unnamed_cast_device),
+            onStopCasting,
+            Modifier.padding(top = 8.dp),
+        )
+        status()
+    }
+}
+
+@Composable
+private fun Overlay(
+    channel: LiveChannel?,
+    onZap: (Int) -> Unit,
+    onExit: () -> Unit,
+    castButton: @Composable () -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -274,6 +350,7 @@ private fun Overlay(channel: LiveChannel?, onZap: (Int) -> Unit, onExit: () -> U
             IconButton(onClick = { onZap(+1) }) {
                 Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.player_next_channel), tint = Color.White)
             }
+            castButton()
         }
     }
 }
@@ -309,13 +386,14 @@ private fun ChannelInfo(channel: LiveChannel, modifier: Modifier) {
 }
 
 private const val OVERLAY_TIMEOUT_MS = 4_000L
+private val CAST_ICON_SIZE = 64.dp
 
 /**
  * The player for [viewModel]'s channel: full screen, back returns to the channels. Leaving the app
  * frees the provider connection (and comes back to the channel on return); a rotation doesn't.
  */
 @Composable
-fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
+fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit, casting: Casting = koinInject()) {
     val state by viewModel.state.collectAsState()
     val activity = LocalActivity.current
     BackHandler(onBack = viewModel::exit)
@@ -326,8 +404,10 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
         }
     }
     FullScreen()
-    // Leaving the app while a channel plays carries on in a floating window
-    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing)
+    AskForNotificationsWhenCasting(state.casting)
+    // Leaving the app while a channel plays carries on in a floating window; on a cast device it
+    // plays on regardless
+    PictureInPictureOnLeave(enabled = state.playback is PlaybackState.Playing && !state.casting)
     val inPictureInPicture = rememberInPictureInPicture()
     PlayerScreen(
         state = state,
@@ -336,16 +416,20 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit) {
         onExit = viewModel::exit,
         onShowFree = onShowFree,
         inPictureInPicture = inPictureInPicture,
+        onStopCasting = viewModel::stopCasting,
+        castButton = { CastButton(casting) },
         video = {
-            val exoPlayer = (viewModel.player as? ExoLivePlayer)?.exoPlayer
+            val exoPlayer = (viewModel.localPlayer as? ExoLivePlayer)?.exoPlayer
+            // On only while the channel plays here: a cast plays on the TV, and the phone can sleep
+            val playsHere = !state.casting
             AndroidView(
                 factory = { context ->
                     PlayerView(context).apply {
                         useController = false
-                        keepScreenOn = true
                         player = exoPlayer
                     }
                 },
+                update = { it.keepScreenOn = playsHere },
                 onRelease = { it.player = null },
                 modifier = Modifier.fillMaxSize(),
             )

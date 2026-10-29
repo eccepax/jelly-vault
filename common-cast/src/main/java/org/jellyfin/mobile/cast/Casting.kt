@@ -8,6 +8,7 @@ import androidx.media3.cast.CastParams
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.cast.RemoteCastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.Player
 import androidx.media3.common.PlayerTransferState
@@ -50,6 +51,9 @@ interface Casting {
     fun forgetCast()
 }
 
+/** A cast device's own player, and whether one is [connected] as it's made. */
+internal class RemotePlayer(val player: Player, val connected: Boolean)
+
 /** The cast device for playback services (see [SessionCasting]). */
 @UnstableApi
 internal interface CastPlayers {
@@ -65,8 +69,17 @@ internal interface CastPlayers {
      */
     fun castPlayer(local: Player, converter: MediaItemConverter): Player
 
-    /** [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. */
-    fun forgetsWithCast(player: Player): () -> Unit
+    /**
+     * The cast device's own player, with no player here to move to: for an app that plays without a
+     * media session (LiveVault). [onConnectionChanged] hears whenever a cast device connects or goes.
+     */
+    fun remoteCastPlayer(converter: MediaItemConverter, onConnectionChanged: (Boolean) -> Unit): RemotePlayer
+
+    /**
+     * [player]'s queue is emptied by [Casting.forgetCast] until the answer is called. [endingHere] is
+     * told whenever the cast is ended from here; [forgotten] when it's forgotten, once emptied.
+     */
+    fun forgetsWithCast(player: Player, endingHere: () -> Unit = {}, forgotten: () -> Unit = {}): () -> Unit
 }
 
 /**
@@ -93,7 +106,11 @@ object NoCasting : Casting {
 private class CastContextCasting(private val context: Context) : Casting, CastPlayers {
     private var castContext: CastContext? = null
     private val gate = StartGate()
-    private val players = mutableSetOf<Player>()
+
+    /** What a cast player is told when the cast is ended from here, and when it's forgotten. */
+    private class Told(val endingHere: () -> Unit, val forgotten: () -> Unit)
+
+    private val players = mutableMapOf<Player, Told>()
 
     private val available = MutableStateFlow(false)
     override val isAvailable: StateFlow<Boolean> = available.asStateFlow()
@@ -154,7 +171,12 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
                 // A moment without the network: playback stays on the cast device (see
                 // RemoteMediaClientDevice), so it's still the one named
                 override fun onSessionSuspended(session: CastSession, reason: Int) = Unit
-                override fun onSessionEnding(session: CastSession) = Unit
+
+                // Ended from this phone however it's done (the cast button's dialog, the system's
+                // output switcher, as well as stopCasting), before the cast device stops on the way out
+                override fun onSessionEnding(session: CastSession) {
+                    players.values.toList().forEach { it.endingHere() }
+                }
                 override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
                 override fun onSessionResumeFailed(session: CastSession, error: Int) = Unit
             },
@@ -171,13 +193,16 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
     }
 
     override fun stopCasting() {
+        players.values.toList().forEach { it.endingHere() }
         castContext?.sessionManager?.endCurrentSession(true)
     }
 
     override fun forgetCast() {
-        players.toList().forEach {
-            it.stop()
-            it.clearMediaItems()
+        players.toList().forEach { (player, told) ->
+            told.endingHere()
+            player.stop()
+            player.clearMediaItems()
+            told.forgotten()
         }
         stopCasting()
     }
@@ -196,8 +221,20 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
             .build()
     }
 
-    override fun forgetsWithCast(player: Player): () -> Unit {
-        players += player
+    override fun remoteCastPlayer(converter: MediaItemConverter, onConnectionChanged: (Boolean) -> Unit): RemotePlayer {
+        val player = RemoteCastPlayer.Builder(context).setMediaItemConverter(converter).build()
+        player.setSessionAvailabilityListener(
+            object : SessionAvailabilityListener {
+                override fun onCastSessionAvailable() = onConnectionChanged(true)
+
+                override fun onCastSessionUnavailable() = onConnectionChanged(false)
+            },
+        )
+        return RemotePlayer(player, player.isCastSessionAvailable)
+    }
+
+    override fun forgetsWithCast(player: Player, endingHere: () -> Unit, forgotten: () -> Unit): () -> Unit {
+        players[player] = Told(endingHere, forgotten)
         return { players -= player }
     }
 
