@@ -189,11 +189,12 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
             .setSeekBackIncrementMs(local.seekBackIncrement)
             .setSeekForwardIncrementMs(local.seekForwardIncrement)
             .build()
-        return CastPlayer.Builder(context)
+        val player = CastPlayer.Builder(context)
             .setLocalPlayer(local)
             .setRemotePlayer(remote)
             .setTransferCallback(PausedComingBack())
             .build()
+        return CastSeekGuard(player) { remote.currentTimeline.isEmpty }
     }
 
     override fun forgetsWithCast(player: Player): () -> Unit {

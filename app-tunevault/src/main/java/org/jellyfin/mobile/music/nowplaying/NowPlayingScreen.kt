@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.music.nowplaying
 
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.cast.PlayingOnLabel
 import org.jellyfin.mobile.common.ui.components.PlayPauseButton
@@ -48,6 +48,7 @@ import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.music.R
 import org.jellyfin.mobile.music.domain.RepeatMode
+import org.jellyfin.mobile.music.domain.Track
 import org.jellyfin.mobile.music.library.AlbumCover
 import org.jellyfin.mobile.music.library.FavoriteButton
 import org.jellyfin.mobile.music.ui.artistOrUnknown
@@ -101,26 +102,7 @@ fun NowPlayingScreen(
                 modifier = Modifier.fillMaxWidth().testTag(NowPlayingTags.COVER).then(openAlbum),
             )
             Spacer(Modifier.height(24.dp))
-            Text(
-                text = track?.title.orEmpty(),
-                style = MaterialTheme.typography.h6,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = openAlbum,
-            )
-            val artistId = track?.artistId
-            Text(
-                text = track?.let { artistOrUnknown(it.artist) }.orEmpty(),
-                style = MaterialTheme.typography.subtitle1,
-                modifier = if (artistId != null) Modifier.clickable { actions.onOpenArtist(artistId) } else Modifier,
-            )
-            Text(
-                text = track?.albumTitle.orEmpty(),
-                style = MaterialTheme.typography.body2,
-                color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
-                modifier = openAlbum,
-            )
+            TrackNames(track, openAlbum, actions.onOpenArtist)
             Spacer(Modifier.height(16.dp))
             SeekBar(positionMs = state.positionMs, durationMs = state.durationMs, onSeek = actions.onSeek)
             TransportControls(state, actions)
@@ -128,6 +110,35 @@ fun NowPlayingScreen(
             sleepTimer?.let { SleepTimerLabel(it.state, stringResource(R.string.sleeps_after_song)) }
         }
     }
+}
+
+/**
+ * The song's title, artist and album, each on one line and scrolling if it's too long, so the
+ * controls below stay put from song to song.
+ */
+@Composable
+private fun TrackNames(track: Track?, openAlbum: Modifier, onOpenArtist: (String) -> Unit) {
+    Text(
+        text = track?.title.orEmpty(),
+        style = MaterialTheme.typography.h6,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        modifier = openAlbum.basicMarquee(),
+    )
+    val artistId = track?.artistId
+    Text(
+        text = track?.let { artistOrUnknown(it.artist) }.orEmpty(),
+        style = MaterialTheme.typography.subtitle1,
+        maxLines = 1,
+        modifier = (if (artistId != null) Modifier.clickable { onOpenArtist(artistId) } else Modifier).basicMarquee(),
+    )
+    Text(
+        text = track?.albumTitle.orEmpty(),
+        style = MaterialTheme.typography.body2,
+        color = MaterialTheme.colors.onBackground.copy(alpha = VaultAlpha.SECONDARY),
+        maxLines = 1,
+        modifier = openAlbum.basicMarquee(),
+    )
 }
 
 @Composable

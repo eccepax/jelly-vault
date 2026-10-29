@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.cast
 
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -56,7 +57,14 @@ fun PlayingOnLabel(
                 modifier = Modifier.size(16.dp),
             )
         }
-        Text(text = playingOn, style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary)
+        // A long device name scrolls on one line, rather than pushing what's below down
+        Text(
+            text = playingOn,
+            style = MaterialTheme.typography.caption,
+            color = MaterialTheme.colors.primary,
+            maxLines = 1,
+            modifier = Modifier.weight(1f, fill = false).basicMarquee(),
+        )
     }
     if (confirming) {
         ConfirmDialog(
