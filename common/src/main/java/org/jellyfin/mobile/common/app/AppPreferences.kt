@@ -33,7 +33,24 @@ open class AppPreferences(context: Context) {
             }
         }
 
+    /** Whether downloads wait for Wi-Fi (any unmetered network); Settings changes it. */
+    var downloadOnWifiOnly: Boolean
+        get() = sharedPreferences.getBoolean(PREF_DOWNLOAD_WIFI_ONLY, downloadOnWifiOnlyByDefault)
+        set(value) {
+            sharedPreferences.edit {
+                putBoolean(PREF_DOWNLOAD_WIFI_ONLY, value)
+            }
+        }
+
+    /**
+     * Off unless the app shows a download waiting for Wi-Fi: without that, a download held back on
+     * mobile data would look stuck.
+     */
+    protected open val downloadOnWifiOnlyByDefault: Boolean
+        get() = false
+
     companion object {
+        const val PREF_DOWNLOAD_WIFI_ONLY = "download_wifi_only"
         const val PREF_SERVER_ID = "pref_server_id"
         const val PREF_USER_ID = "pref_user_id"
         const val PREF_INSTANCE_URL = "pref_instance_url"

@@ -31,7 +31,7 @@ class DownloadsViewModelTest {
         DownloadsViewModel(
             finished = emptyFlow(),
             downloadTracks = { downloaded += it },
-            removeTrack = { removed += it },
+            removeTracks = { removed += it },
             repairDownloads = {
                 repairs++
                 if (repairFails) error("Server unreachable")

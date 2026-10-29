@@ -14,7 +14,6 @@ import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
-import org.jellyfin.mobile.downloads.DownloadMethod
 import org.jellyfin.mobile.downloads.DownloadRequests
 import org.jellyfin.mobile.library.LibraryItem
 import org.jellyfin.mobile.library.LibraryRoute
@@ -26,6 +25,7 @@ import org.jellyfin.mobile.player.ui.PlayerRoute
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.settings.SettingsRoute
 import org.jellyfin.mobile.settings.SettingsViewModel
+import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
 import org.jellyfin.mobile.testsupport.captureWithSystemBars
@@ -77,6 +77,7 @@ class AudioVaultScreenshotTest {
         val library = mockk<LibraryViewModel>(relaxed = true).apply {
             every { items } returns MutableStateFlow(audiobooks)
             every { downloadedIds } returns MutableStateFlow(emptySet())
+            every { waitingIds } returns MutableStateFlow(emptySet())
             every { hiddenIds } returns MutableStateFlow(emptySet())
             every { title } returns MutableStateFlow("All Audiobooks")
             every { canGoUp } returns MutableStateFlow(false)
@@ -129,12 +130,11 @@ class AudioVaultScreenshotTest {
             every { exoPlayerAllowPressSpeedUp } returns true
             every { skipSilenceEnabled } returns false
             every { libraryGlobalFlattened } returns false
-            every { downloadMethod } returns DownloadMethod.WIFI_ONLY
             every { removeDownloadsOnSignOut } returns true
         }
         val settings = SettingsViewModel(
             preferences = preferences,
-            downloadManager = mockk(relaxed = true),
+            downloads = FakeDownloadSettings().apply { bytesUsed.value = 1_250_000_000L },
             playback = FakeAudiobookController(),
             signOut = {},
             app = ClientInfo(name = "AudioVault", version = "1.0.0"),

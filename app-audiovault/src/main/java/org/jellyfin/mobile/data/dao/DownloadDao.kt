@@ -16,6 +16,9 @@ interface DownloadDao {
     @Query("DELETE FROM $TABLE_NAME WHERE item_id LIKE :downloadId")
     suspend fun delete(downloadId: String)
 
+    @Query("DELETE FROM $TABLE_NAME WHERE item_id IN (:downloadIds)")
+    suspend fun delete(downloadIds: List<String>)
+
     @Query("DELETE FROM $TABLE_NAME")
     suspend fun deleteAll()
 

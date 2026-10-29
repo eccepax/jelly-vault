@@ -29,8 +29,10 @@ import org.jellyfin.mobile.books.reader.TextSetting
 import org.jellyfin.mobile.books.reader.TextSettingActions
 import org.jellyfin.mobile.books.reader.TextSettingPicker
 import org.jellyfin.mobile.books.reader.TextSettingRows
+import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
+import org.jellyfin.mobile.common.ui.components.RemoveDownloadsFailures
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutFailures
@@ -47,10 +49,8 @@ data class BookSettingsState(
     val lineSpacing: Float,
     val removeDownloadsOnSignOut: Boolean,
     val downloadOnWifiOnly: Boolean,
-    /** Space the downloaded books take. */
-    val downloadBytes: Long = 0L,
-    /** Anything to remove, even books waiting for Wi-Fi that take no space yet. */
-    val hasDownloads: Boolean = false,
+    /** Space the downloaded books take; null until known, and then nothing is said about it. */
+    val downloadSpace: DownloadSpace? = null,
     /** For About: the name as the bug form lists it, and the version. */
     val appName: String,
     val appVersion: String,
@@ -127,7 +127,7 @@ private fun DownloadsSection(state: BookSettingsState, actions: BookSettingsActi
         checked = state.removeDownloadsOnSignOut,
         onCheckedChange = actions.onRemoveDownloadsOnSignOut,
     )
-    DownloadsSpaceSetting(state.downloadBytes, state.hasDownloads, actions.onRemoveAllDownloads)
+    state.downloadSpace?.let { DownloadsSpaceSetting(it.bytes, it.hasDownloads, actions.onRemoveAllDownloads) }
 }
 
 @Composable
@@ -147,12 +147,14 @@ private fun AccountSection(removeDownloadsOnSignOut: Boolean, actions: BookSetti
 @Composable
 fun BookSettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: BookSettingsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
+    val downloadSpace by viewModel.downloadSpace.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
     LaunchedEffect(viewModel) { viewModel.reload() }
     LaunchedEffect(signedOut) { if (signedOut) onSignedOut() }
     SignOutFailures(viewModel.signOutFailures)
+    RemoveDownloadsFailures(viewModel.removeDownloadsFailures)
     BookSettingsScreen(
-        state = state,
+        state = state.copy(downloadSpace = downloadSpace),
         actions = BookSettingsActions(
             onBack = onBack,
             onFontScale = viewModel::setFontScale,

@@ -15,15 +15,21 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         if (RETIRED_PREFS.any(sharedPreferences::contains)) {
             sharedPreferences.edit { RETIRED_PREFS.forEach { remove(it) } }
         }
-    }
-
-    var downloadMethod: Int?
-        get() = sharedPreferences.getInt(Constants.PREF_DOWNLOAD_METHOD, -1).takeIf { it >= 0 }
-        set(value) {
-            if (value != null) {
-                sharedPreferences.edit { putInt(Constants.PREF_DOWNLOAD_METHOD, value) }
+        // Before the Wi-Fi only switch, a choice of networks: any but Wi-Fi only let mobile data in.
+        // Read without getInt, which would throw on every launch for a value kept as anything else:
+        // a list setting kept it as text ("0"), and a restored backup may bring a Long.
+        if (sharedPreferences.contains(OLD_DOWNLOAD_METHOD)) {
+            val method = when (val old = sharedPreferences.all[OLD_DOWNLOAD_METHOD]) {
+                is Number -> old.toInt()
+                is String -> old.trim().toIntOrNull()
+                else -> null
+            }
+            sharedPreferences.edit {
+                if (method != null) putBoolean(PREF_DOWNLOAD_WIFI_ONLY, method == OLD_WIFI_ONLY)
+                remove(OLD_DOWNLOAD_METHOD)
             }
         }
+    }
 
     var mediaSegmentActions: String
         get() = sharedPreferences.getString(
@@ -63,5 +69,9 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
     private companion object {
         /** The Bluetooth permission prompt, removed in favour of pausing when headphones go */
         val RETIRED_PREFS = listOf("pref_ignore_bluetooth_permission")
+
+        /** The networks downloads could use, before the Wi-Fi only switch: 0 was Wi-Fi only */
+        const val OLD_DOWNLOAD_METHOD = "pref_download_method"
+        const val OLD_WIFI_ONLY = 0
     }
 }

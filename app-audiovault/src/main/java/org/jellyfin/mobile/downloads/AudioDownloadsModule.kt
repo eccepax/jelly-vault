@@ -5,18 +5,21 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
-import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.DownloadSettings
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.downloads.Media3DownloadSettings
 import org.jellyfin.mobile.common.downloads.Media3ItemDownloads
 import org.jellyfin.mobile.common.downloads.downloadRequirements
 import org.jellyfin.mobile.common.downloads.fileDownloadManager
@@ -37,12 +40,6 @@ import org.koin.dsl.module
 import timber.log.Timber
 import java.io.File
 
-/** Wi-Fi only waits for an unmetered network; mobile data (with or without roaming) takes any network. */
-@UnstableApi
-fun DownloadManager.applyDownloadMethod(@DownloadMethod method: Int?) {
-    requirements = downloadRequirements(wifiOnly = method == DownloadMethod.WIFI_ONLY)
-}
-
 /** Where a track's file is fetched from; the data source adds the authorization. */
 private fun ApiClient.trackUri(trackId: String): String =
     itemDownloadUrl(requireNotNull(baseUrl) { "No server" }, trackId.toUUID(), token = null)
@@ -53,15 +50,36 @@ private fun Context.deleteOldTrackCache() {
     File(filesDir, "Downloads").takeIf { it.isDirectory }?.deleteRecursively()
 }
 
+/** How long signing out waits for listening to reach the server, as it does for ending the session. */
+private const val SEND_LISTENING_ON_SIGN_OUT_MS = 5_000L
+
+/**
+ * What can be sent in time, without holding up signing out or stopping it: a slow or unreachable
+ * server, or a failure, leaves the rest to be forgotten with the account.
+ */
+private suspend fun OfflineListeningSync.sendBeforeSigningOut() {
+    try {
+        withTimeoutOrNull(SEND_LISTENING_ON_SIGN_OUT_MS) { sync() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        Timber.w(e, "Couldn't send the listening before signing out")
+    }
+}
+
 @UnstableApi
 val audioDownloadsModule = module {
     single<DatabaseProvider> { StandaloneDatabaseProvider(androidContext()) }
     single { DownloadFiles(File(androidContext().filesDir, "downloaded")) }
     single {
         androidContext().deleteOldTrackCache()
-        fileDownloadManager(androidContext(), get(), get<DataSource.Factory>(), get()).apply {
-            applyDownloadMethod(get<AudioVaultAppPreferences>().downloadMethod)
-        }
+        fileDownloadManager(
+            androidContext(),
+            get(),
+            get<DataSource.Factory>(),
+            get(),
+            requirements = downloadRequirements(get<AudioVaultAppPreferences>().downloadOnWifiOnly),
+        )
     }
     single<ItemDownloads> {
         val context = androidContext()
@@ -93,23 +111,47 @@ val audioDownloadsModule = module {
                 }
         }
     }
+    // What Settings shows and changes: Wi-Fi only, the space downloads take, and removing them all
+    single<DownloadSettings> {
+        val downloads = get<AudiobookDownloads>()
+        Media3DownloadSettings(
+            manager = get(),
+            savedWifiOnly = get<AudioVaultAppPreferences>()::downloadOnWifiOnly,
+            bytesUsed = downloads.bytesUsed,
+            hasDownloads = downloads.hasDownloads,
+            removeAll = downloads::removeAll,
+        )
+    }
     // Listening saved on the device reaches the server once it can be reached
-    single { OfflineListeningSync(get<JellyfinDatabase>().downloadDao, JellyfinServerPositions(get())) }
+    single {
+        OfflineListeningSync(
+            get<JellyfinDatabase>().downloadDao,
+            JellyfinServerPositions(get()),
+            isKept = get<AudiobookDownloads>()::isKept,
+        )
+    }
     // Signing out keeps downloads unless the user asked otherwise in Settings
     single {
-        val downloadsOnSignOut = DownloadsOnSignOut(get(), get<AudiobookDownloads>()::removeAll)
+        val downloads = get<AudiobookDownloads>()
+        val downloadsOnSignOut = DownloadsOnSignOut(get(), downloads::removeAll)
         val sleepTimer = get<SleepTimer>()
         val reporter = get<AudiobookProgressReporter>()
         val casting = get<Casting>()
+        val offlineListening = get<OfflineListeningSync>()
         audioVaultSignOut(
             session = get(),
             logout = get<ApiClientController>()::logoutUser,
             stopPlayback = {
                 sleepTimer.cancel()
                 reporter.finishAndStop()
+                offlineListening.sendBeforeSigningOut()
             },
             forgetCast = casting::forgetCast,
-            forgetDownloads = { downloadsOnSignOut() },
+            forgetDownloads = {
+                // Listening that couldn't be sent by now is the account's, not the next one's
+                downloads.forgetUnsentListening()
+                downloadsOnSignOut()
+            },
         )
     }
 }

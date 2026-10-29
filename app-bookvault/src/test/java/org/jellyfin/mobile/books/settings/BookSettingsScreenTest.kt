@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.books.app.EpubFontFamily
+import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +34,6 @@ class BookSettingsScreenTest {
         lineSpacing = 1.5f,
         removeDownloadsOnSignOut = false,
         downloadOnWifiOnly = true,
-        downloadBytes = 0L,
         appName = "BookVault",
         appVersion = "1.2.3",
     )
@@ -122,7 +122,7 @@ class BookSettingsScreenTest {
 
     @Test
     fun `shows the space books take, and removing them all asks first`() {
-        show(defaults.copy(downloadBytes = 1_500_000_000L, hasDownloads = true))
+        show(defaults.copy(downloadSpace = DownloadSpace(bytes = 1_500_000_000L, hasDownloads = true)))
 
         composeRule.onNodeWithText("Downloads use 1.5 GB").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").performScrollTo().performClick()
@@ -134,7 +134,7 @@ class BookSettingsScreenTest {
 
     @Test
     fun `with no books downloaded there is nothing to remove`() {
-        show()
+        show(defaults.copy(downloadSpace = DownloadSpace(bytes = 0L, hasDownloads = false)))
 
         composeRule.onNodeWithText("Nothing downloaded").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Remove all downloads").assertDoesNotExist()

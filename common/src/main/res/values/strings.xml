@@ -43,12 +43,14 @@
     <string name="vault_play">Play</string>
     <string name="vault_pause">Pause</string>
     <string name="vault_downloaded">Downloaded</string>
+    <string name="vault_waiting_for_wifi">Waiting for Wi-Fi</string>
     <string name="vault_pref_download_wifi_only">Download over Wi-Fi only</string>
     <string name="vault_downloads_nothing">Nothing downloaded</string>
     <string name="vault_downloads_use">Downloads use %1$s</string>
     <string name="vault_downloads_remove_all">Remove all downloads</string>
     <string name="vault_downloads_remove_all_confirm">Remove every download from this device?</string>
     <string name="vault_downloads_remove_all_yes">Yes, remove all</string>
+    <string name="vault_downloads_remove_all_failed">Couldn\'t remove the downloads. Try again.</string>
     <string name="vault_search_clear">Clear search</string>
     <string name="vault_offline_banner">Offline · showing your downloads</string>
     <string name="settings_about">About</string>

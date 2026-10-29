@@ -135,6 +135,16 @@ class LibraryScreenTest {
     }
 
     @Test
+    fun `a book whose download waits for Wi-Fi says so instead of looking downloaded`() {
+        show(defaults.copy(downloadedIds = setOf(dune.id.toString()), waitingIds = setOf(dune.id.toString())))
+
+        composeRule.onAllNodesWithTag(VaultTestTags.WAITING_FOR_WIFI_MARK, useUnmergedTree = true)
+            .fetchSemanticsNodes().size shouldBe 1
+        composeRule.onAllNodesWithTag(VaultTestTags.DOWNLOADED_MARK, useUnmergedTree = true)
+            .fetchSemanticsNodes().size shouldBe 0
+    }
+
+    @Test
     fun `hidden items, when shown, are marked as hidden`() {
         show(defaults.copy(hiddenIds = setOf(kindred.id.toString()), showHidden = true))
 
@@ -370,7 +380,7 @@ class LibraryScreenTest {
 
 /** Stands in for a library row, as a composable of its own like the real one, counting each time it's drawn. */
 @Composable
-private fun CountedRow(item: LibraryItem, downloaded: Boolean, hidden: Boolean, drawn: MutableMap<String, Int>) {
+private fun CountedRow(item: LibraryItem, downloaded: RowDownload, hidden: Boolean, drawn: MutableMap<String, Int>) {
     drawn[item.displayName] = (drawn[item.displayName] ?: 0) + 1
     Text("${item.displayName} $downloaded $hidden")
 }

@@ -2,17 +2,9 @@ package org.jellyfin.mobile.downloads
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
-import androidx.media3.exoplayer.offline.DownloadManager
-import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
-import org.jellyfin.mobile.common.ui.components.Choice
-import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.rememberAskForNotificationsOnce
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -24,14 +16,12 @@ interface DownloadRequests {
 }
 
 /**
- * [DownloadRequests] that settle what a download needs once for the whole book, not per track: which
- * networks it may use (asked the first time, then kept), and showing its progress (asked once).
+ * [DownloadRequests] that settle what a download needs once for the whole book, not per track:
+ * showing its progress (asked once). Which networks it may use is Settings' Wi-Fi only switch.
  */
 @Composable
 fun rememberDownloadRequests(
     preferences: AudioVaultAppPreferences = koinInject(),
-    /** Lets downloads already waiting use the networks chosen too. */
-    applyMethod: (Int) -> Unit = koinInject<DownloadManager>().let { manager -> { manager.applyDownloadMethod(it) } },
     /** In a view model, so leaving the library, or a rotation, doesn't cut a book's download short. */
     download: (List<String>) -> Unit = koinViewModel<DownloadsViewModel>()::download,
     remove: (List<String>) -> Unit = koinViewModel<DownloadsViewModel>()::remove,
@@ -42,30 +32,13 @@ fun rememberDownloadRequests(
     )
     val startDownload by rememberUpdatedState(download)
     val startRemove by rememberUpdatedState(remove)
-    val applyNow by rememberUpdatedState(applyMethod)
-    // The book waiting on which networks it may use; saved, so a rotation doesn't drop the question
-    var waiting by rememberSaveable { mutableStateOf<List<String>?>(null) }
-
-    fun go(trackIds: List<String>, method: Int) {
-        askForNotifications()
-        applyNow(method)
-        startDownload(trackIds)
-    }
-
-    waiting?.let { trackIds ->
-        ChooseNetwork { method ->
-            preferences.downloadMethod = method
-            waiting = null
-            go(trackIds, method)
-        }
-    }
 
     return remember {
         object : DownloadRequests {
             override fun download(trackIds: List<String>) {
                 if (trackIds.isEmpty()) return
-                val method = preferences.downloadMethod
-                if (method == null) waiting = trackIds else go(trackIds, method)
+                askForNotifications()
+                startDownload(trackIds)
             }
 
             override fun remove(trackIds: List<String>) {
@@ -74,30 +47,3 @@ fun rememberDownloadRequests(
         }
     }
 }
-
-/**
- * Asked before the first download, offering what the settings do: it must be answered (dismissing
- * it does nothing), there's no download without it.
- */
-@Composable
-private fun ChooseNetwork(onChoose: (Int) -> Unit) {
-    ChoiceDialog(
-        title = stringResource(R.string.network_title),
-        message = stringResource(R.string.network_message),
-        choices = downloadNetworks(),
-        selected = null,
-        onSelect = onChoose,
-        onDismiss = {},
-    )
-}
-
-/** The networks downloads may use, as the settings and the first download offer them. */
-@Composable
-internal fun downloadNetworks() = listOf(
-    Choice(DownloadMethod.WIFI_ONLY, stringResource(R.string.wifi_only), stringResource(R.string.wifi_only_summary)),
-    Choice(
-        DownloadMethod.MOBILE_DATA,
-        stringResource(R.string.mobile_data),
-        stringResource(R.string.mobile_data_summary),
-    ),
-)

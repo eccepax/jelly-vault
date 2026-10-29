@@ -17,6 +17,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +85,16 @@ fun OfflineBanner(modifier: Modifier = Modifier, text: String = stringResource(R
         )
         Text(text, style = MaterialTheme.typography.caption)
     }
+}
+
+/** The mark on an item whose download is held back until there's Wi-Fi (Settings' Wi-Fi only). */
+@Composable
+fun WaitingForWifiMark(modifier: Modifier = Modifier) {
+    Icon(
+        Icons.Filled.WifiOff,
+        contentDescription = stringResource(R.string.vault_waiting_for_wifi),
+        modifier = modifier.padding(end = VaultSpacing.Small).size(MARK_SIZE),
+    )
 }
 
 /** The small tick on an item that's downloaded to the device. */

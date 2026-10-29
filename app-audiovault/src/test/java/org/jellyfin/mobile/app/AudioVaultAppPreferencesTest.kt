@@ -18,9 +18,6 @@ import org.robolectric.annotation.Config
 /**
  * Runs against a real [AudioVaultAppPreferences] over an in-memory [FakeSharedPreferences].
  * Robolectric provides the Android framework classes the preferences use.
- *
- * [downloadToInternal] must write `PREF_DOWNLOAD_INTERNAL`, not `PREF_DOWNLOAD_METHOD`; mixing them
- * up silently corrupts the download-method setting.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -32,8 +29,6 @@ class AudioVaultAppPreferencesTest {
     }
     private val preferences = AudioVaultAppPreferences(context)
 
-    // --- downloadMethod -----------------------------------------------------------------------
-
     @Test
     fun `it hasn't asked about notifications until it's said it has, and remembers that`() {
         preferences.askedForNotifications shouldBe false
@@ -43,25 +38,61 @@ class AudioVaultAppPreferencesTest {
         AudioVaultAppPreferences(context).askedForNotifications shouldBe true
     }
 
+    // --- downloadOnWifiOnly ----------------------------------------------------------------------
+
     @Test
-    fun `downloadMethod is null when never set`() {
-        preferences.downloadMethod shouldBe null
+    fun `downloads use any network until told to wait for Wi-Fi, and that's remembered`() {
+        // The library doesn't show a download waiting for Wi-Fi: on by default, one would look stuck
+        preferences.downloadOnWifiOnly shouldBe false
+
+        preferences.downloadOnWifiOnly = true
+
+        AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe true
     }
 
     @Test
-    fun `downloadMethod round-trips a stored value`() {
-        preferences.downloadMethod = 2
+    fun `the networks chosen before there was a switch carry over, and the old choice is let go`() {
+        val carriedOver = listOf(OLD_WIFI_ONLY to true, OLD_MOBILE_DATA to false, OLD_MOBILE_AND_ROAMING to false)
+        for ((method, wifiOnly) in carriedOver) {
+            val upgraded = FakeSharedPreferences()
+            upgraded.edit().putInt(OLD_DOWNLOAD_METHOD, method).apply()
+            val context = mockk<Context>(relaxed = true) {
+                every { getSharedPreferences(any(), any()) } returns upgraded
+            }
 
-        preferences.downloadMethod shouldBe 2
+            AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe wifiOnly
+            upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
+        }
     }
 
     @Test
-    fun `setting downloadMethod to null does not clear a previously stored value`() {
-        preferences.downloadMethod = 2
+    fun `an old choice of networks kept as text or a long still carries over`() {
+        val kept = listOf<SharedPreferences.Editor.() -> Unit>(
+            { putString(OLD_DOWNLOAD_METHOD, "0") },
+            { putLong(OLD_DOWNLOAD_METHOD, OLD_WIFI_ONLY.toLong()) },
+        )
+        for (keep in kept) {
+            val upgraded = FakeSharedPreferences()
+            upgraded.edit().apply(keep).apply()
+            val context = mockk<Context>(relaxed = true) {
+                every { getSharedPreferences(any(), any()) } returns upgraded
+            }
 
-        preferences.downloadMethod = null
+            AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe true
+            upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
+        }
+    }
 
-        preferences.downloadMethod shouldBe 2
+    @Test
+    fun `an old choice of networks that isn't a number is let go instead of failing every launch`() {
+        val upgraded = FakeSharedPreferences()
+        upgraded.edit().putString(OLD_DOWNLOAD_METHOD, "wifi").apply()
+        val context = mockk<Context>(relaxed = true) {
+            every { getSharedPreferences(any(), any()) } returns upgraded
+        }
+
+        AudioVaultAppPreferences(context).downloadOnWifiOnly shouldBe false
+        upgraded.contains(OLD_DOWNLOAD_METHOD) shouldBe false
     }
 
     // --- mediaSegmentActions --------------------------------------------------------------------
@@ -156,6 +187,12 @@ class AudioVaultAppPreferencesTest {
     }
 }
 
+/** How the networks downloads may use were kept before the Wi-Fi only switch. */
+private const val OLD_DOWNLOAD_METHOD = "pref_download_method"
+private const val OLD_WIFI_ONLY = 0
+private const val OLD_MOBILE_DATA = 1
+private const val OLD_MOBILE_AND_ROAMING = 2
+
 private class FakeSharedPreferences : SharedPreferences {
     private val values = mutableMapOf<String, Any?>()
 
@@ -165,7 +202,9 @@ private class FakeSharedPreferences : SharedPreferences {
     @Suppress("UNCHECKED_CAST")
     override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? =
         values[key] as? MutableSet<String> ?: defValues
-    override fun getInt(key: String?, defValue: Int): Int = values[key] as? Int ?: defValue
+
+    // As the real ones: a value of another type throws rather than reading as the default
+    override fun getInt(key: String?, defValue: Int): Int = values[key]?.let { it as Int } ?: defValue
     override fun getLong(key: String?, defValue: Long): Long = values[key] as? Long ?: defValue
     override fun getFloat(key: String?, defValue: Float): Float = values[key] as? Float ?: defValue
     override fun getBoolean(key: String?, defValue: Boolean): Boolean = values[key] as? Boolean ?: defValue

@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.common.ui.components
 
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -239,10 +240,17 @@ fun SignOutSetting(
 
 /** Says so each time a sign out fails ([org.jellyfin.mobile.common.account.SigningOut.failures]). */
 @Composable
-fun SignOutFailures(failures: Flow<Unit>) {
+fun SignOutFailures(failures: Flow<Unit>) = ToastEach(failures, R.string.sign_out_failed)
+
+/** Says so each time removing all downloads fails (DownloadsInSettings.removeFailures). */
+@Composable
+fun RemoveDownloadsFailures(failures: Flow<Unit>) = ToastEach(failures, R.string.vault_downloads_remove_all_failed)
+
+@Composable
+private fun ToastEach(events: Flow<Unit>, @StringRes message: Int) {
     val context = LocalContext.current
-    LaunchedEffect(failures) {
-        failures.collect { Toast.makeText(context, R.string.sign_out_failed, Toast.LENGTH_SHORT).show() }
+    LaunchedEffect(events) {
+        events.collect { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
     }
 }
 
