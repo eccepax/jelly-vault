@@ -26,14 +26,14 @@ internal class VaultMediaItemConverter(
 
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
         val stream = castStream(mediaItem)
-        // Without a type the receiver takes it for a movie, and shows no cover or artist
+        // Without a type the receiver takes it for a movie, and shows no cover or artist. A live
+        // channel is one: as music, the receiver shows its music screen and plays only the sound.
         val typed = if (mediaItem.mediaMetadata.mediaType != null) {
             mediaItem
         } else {
+            val type = if (live) MediaMetadata.MEDIA_TYPE_MOVIE else MediaMetadata.MEDIA_TYPE_MUSIC
             mediaItem.buildUpon()
-                .setMediaMetadata(
-                    mediaItem.mediaMetadata.buildUpon().setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build(),
-                )
+                .setMediaMetadata(mediaItem.mediaMetadata.buildUpon().setMediaType(type).build())
                 .build()
         }
         val sent = checkNotNull(default.toMediaQueueItem(typed).media)

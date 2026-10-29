@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -25,6 +26,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.IOException
+import java.time.Duration
 
 /**
  * A live stream on the cast device, for an app with no media session. An ExoPlayer stands in for
@@ -197,9 +199,88 @@ class PlayerLiveCastingTest {
         // Its remote's stop, another sender taking over, the stream ending: the cast player stops
         device.stop()
         settle()
+        stopped shouldBe 0 // not until it's stayed stopped
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(PlayerLiveCasting.STOPPED_THERE_AFTER_MS))
 
         stopped shouldBe 1
         casting.started.value shouldBe false
+    }
+
+    @Test
+    fun `the cast device stopping for a moment isn't reported as stopped there`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        // Media3's cast player says it's idle while the cast device's queue is empty for a moment,
+        // as it is when the channel changes
+        device.stop()
+        settle()
+        device.prepare()
+        advance(device).untilState(Player.STATE_READY)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(PlayerLiveCasting.STOPPED_THERE_AFTER_MS))
+
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `a channel playing there isn't taken for stopped while Media3 says idle when asked`() {
+        // Media3's cast player says it's idle whenever it's asked while it has no queue from the cast
+        // device, which a live stream's may never come: only what it tells its listeners counts
+        val saysIdle = object : ForwardingPlayer(device) {
+            override fun getPlaybackState() = Player.STATE_IDLE
+        }
+        casting.start(saysIdle, connected = true)
+        settle()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(PlayerLiveCasting.STOPPED_THERE_AFTER_MS))
+
+        stopped shouldBe 0
+    }
+
+    @Test
+    fun `the next channel is sent to play at once, not paused`() {
+        // Media3's cast player loads an item playing or paused as it is when the item is set: a
+        // channel changed after a stop would load paused, and the play after it go nowhere
+        val playingWhenSent = mutableListOf<Boolean>()
+        val recording = object : ForwardingPlayer(device) {
+            override fun setMediaItem(mediaItem: MediaItem) {
+                playingWhenSent += playWhenReady
+                super.setMediaItem(mediaItem)
+            }
+        }
+        casting.start(recording, connected = true)
+        settle()
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        casting.stop()
+        settle()
+        casting.play(stream, title = "4.2 Blackhawks", subtitle = null, artworkUri = null)
+
+        playingWhenSent shouldBe listOf(true, true)
+    }
+
+    @Test
+    fun `a stop there from before the next channel was sent isn't reported`() {
+        connect()
+        var stopped = 0
+        casting.listenWith(onError = {}, onStopped = { stopped++ })
+        casting.play(stream, title = "4.1 Devils", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+
+        device.stop()
+        settle()
+        casting.play(stream, title = "4.2 Blackhawks", subtitle = null, artworkUri = null)
+        advance(device).untilState(Player.STATE_READY)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(PlayerLiveCasting.STOPPED_THERE_AFTER_MS))
+
+        stopped shouldBe 0
     }
 
     @Test

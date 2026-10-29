@@ -103,6 +103,15 @@ internal class PlayerLiveCasting(
     private var onStopped: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
 
+    companion object {
+        /**
+         * How long the cast device stays stopped before it counts as stopped there: Media3's cast
+         * player says it's idle while the cast device's queue is empty for a moment, as it is as
+         * the channel changes.
+         */
+        internal const val STOPPED_THERE_AFTER_MS = 1_500L
+    }
+
     /** Bumped by every play and stop, so a play with nowhere to go is only told of while it's the last. */
     private var plays = 0
 
@@ -124,17 +133,34 @@ internal class PlayerLiveCasting(
     private val _started = MutableStateFlow(false)
     override val started: StateFlow<Boolean> = _started.asStateFlow()
 
+    /** The cast player's state as it last told its listeners. */
+    private var reportedState = Player.STATE_IDLE
+
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _started.value = isPlaying
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            val stopped = playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED
-            if (!sent || !stopped || player?.playerError != null) return
-            sent = false
-            _started.value = false
-            onStopped?.invoke()
+            reportedState = playbackState
+            if (!sent || !stoppedThere()) return
+            val play = plays
+            handler.postDelayed(
+                {
+                    if (play != plays || !sent || !stoppedThere()) return@postDelayed
+                    sent = false
+                    _started.value = false
+                    onStopped?.invoke()
+                },
+                STOPPED_THERE_AFTER_MS,
+            )
+        }
+
+        // As last told, not as asked: Media3's cast player says it's idle whenever it's asked while
+        // it has no queue from the cast device, which a live stream's may never come
+        private fun stoppedThere(): Boolean {
+            val stopped = reportedState == Player.STATE_IDLE || reportedState == Player.STATE_ENDED
+            return stopped && player?.playerError == null
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -182,9 +208,11 @@ internal class PlayerLiveCasting(
                     .build(),
             )
             .build()
+        // Before it's set: Media3's cast player loads it playing or paused as it is then, and a play
+        // sent while it loads goes nowhere (a channel changed after a stop would sit paused)
+        player.playWhenReady = true
         player.setMediaItem(item)
         player.prepare()
-        player.playWhenReady = true
         sent = true
     }
 
