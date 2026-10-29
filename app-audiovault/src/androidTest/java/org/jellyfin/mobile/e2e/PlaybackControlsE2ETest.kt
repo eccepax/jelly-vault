@@ -33,6 +33,8 @@ class PlaybackControlsE2ETest : LoggedInE2ETest() {
     fun fastForwardAdvancesThePlaybackPosition() {
         loginAndWaitForLibrary()
         startPlaybackFromFirstLibraryItem()
+        // A tap while the stream is still opening is dropped
+        waitForPlaying()
 
         val positionBefore = seconds(playerPosition())
         tap(R.string.player_fast_forward) // +30s (audiobook skip-forward interval)
