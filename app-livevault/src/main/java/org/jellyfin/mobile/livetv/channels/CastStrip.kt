@@ -24,13 +24,18 @@ fun CastStrip(
     onOpen: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    failed: Boolean = false,
 ) {
     val device = castDevice ?: stringResource(CastR.string.unnamed_cast_device)
+    val subtitle = when {
+        failed -> stringResource(R.string.player_failed)
+        else -> stringResource(CastR.string.playing_on, device)
+    }
     MiniPlayerBar(
         title = channel.castTitle,
-        subtitle = stringResource(CastR.string.playing_on, device),
+        subtitle = subtitle,
         cover = { ChannelLogo(channel.logoUrl) },
-        isPlaying = true,
+        isPlaying = !failed,
         onTogglePlayPause = null,
         onExpand = onOpen,
         modifier = modifier,

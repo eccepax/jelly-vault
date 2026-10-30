@@ -25,6 +25,7 @@ import org.jellyfin.mobile.livetv.channels.CastStrip
 import org.jellyfin.mobile.livetv.channels.ChannelsRoute
 import org.jellyfin.mobile.livetv.channels.ChannelsViewModel
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.livetv.playback.PlaybackState
 import org.jellyfin.mobile.livetv.playback.PlayerRoute
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.WatchViewModel
@@ -67,10 +68,16 @@ fun LiveSignedIn(
             onChannelClick = watch::watch,
             onSignOut = account::signOut,
             bottomBar = {
-                // The channel left playing on the cast device: back to it, or stop it
+                // The channel left playing on the cast device: back to it (its retry, if it failed there), or stop it
                 val channel = watchState.channel
                 if (watchState.casting && channel != null) {
-                    CastStrip(channel, watchState.castDevice, onOpen = watch::reopen, onStop = watch::stopChannel)
+                    CastStrip(
+                        channel,
+                        watchState.castDevice,
+                        onOpen = watch::reopen,
+                        onStop = watch::stopChannel,
+                        failed = watchState.playback is PlaybackState.Failed,
+                    )
                 }
             },
         )

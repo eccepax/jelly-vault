@@ -24,13 +24,14 @@ class CastStripTest {
     private val devils = channel("4.1", "Devils")
     private val events = mutableListOf<String>()
 
-    private fun show(castDevice: String?) {
+    private fun show(castDevice: String?, failed: Boolean = false) {
         composeRule.setContent {
             CastStrip(
                 channel = devils,
                 castDevice = castDevice,
                 onOpen = { events += "open" },
                 onStop = { events += "stop" },
+                failed = failed,
             )
         }
     }
@@ -66,5 +67,13 @@ class CastStripTest {
         composeRule.onNodeWithContentDescription("Stop").performClick()
 
         events shouldBe listOf("stop")
+    }
+
+    @Test
+    fun `a channel that failed there says so, rather than playing`() {
+        show(castDevice = "Main Bedroom TV", failed = true)
+
+        composeRule.onNodeWithText("Couldn't play this channel").assertExists()
+        composeRule.onNodeWithText("Playing on Main Bedroom TV").assertDoesNotExist()
     }
 }
