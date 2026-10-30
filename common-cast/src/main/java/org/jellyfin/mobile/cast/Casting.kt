@@ -288,11 +288,23 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
  * meanwhile, it plays on there as it did.
  */
 @UnstableApi
-private class PausedComingBack(
+internal class PausedComingBack(
     private val now: () -> Long = SystemClock::elapsedRealtime,
 ) : CastPlayer.TransferCallback {
     /** When playback came back here paused from a cast device that was playing. */
     private var pausedComingBackAt: Long? = null
+
+    /** The player playback came back to, heard until it's played here or cast again. */
+    private var cameBackTo: Player? = null
+    private val playedHere = object : Player.Listener {
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // The player's own value, not the event's: this transfer's own changes may arrive late
+            if (cameBackTo?.playWhenReady == true) {
+                pausedComingBackAt = null
+                stopHearing()
+            }
+        }
+    }
 
     override fun transferState(sourcePlayer: Player, targetPlayer: Player) {
         val wasPlaying = sourcePlayer.playWhenReady && sourcePlayer.playbackState != Player.STATE_ENDED
@@ -311,14 +323,26 @@ private class PausedComingBack(
         } else {
             CastPlayer.TransferCallback.DEFAULT.transferState(sourcePlayer, targetPlayer)
         }
+        stopHearing()
         if (!toCast) {
             targetPlayer.playWhenReady = false
             pausedComingBackAt = if (wasPlaying) now() else null
+            // Played here meanwhile (and paused again, or it would carry on anyway), casting again
+            // goes as it was left here
+            if (wasPlaying) {
+                cameBackTo = targetPlayer
+                targetPlayer.addListener(playedHere)
+            }
         } else {
             val carryOn = pausedComingBackAt?.let { now() - it <= CARRY_ON_WITHIN_MS } == true
             if (carryOn) targetPlayer.playWhenReady = true
             pausedComingBackAt = null
         }
+    }
+
+    private fun stopHearing() {
+        cameBackTo?.removeListener(playedHere)
+        cameBackTo = null
     }
 
     companion object {
