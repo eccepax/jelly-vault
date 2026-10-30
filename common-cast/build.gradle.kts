@@ -54,3 +54,10 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
 }
+
+androidComponents {
+    // Compose UI tests rely on the debug-only ui-test-manifest, so unit tests run against debug builds only
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        variant.enableUnitTest = false
+    }
+}
