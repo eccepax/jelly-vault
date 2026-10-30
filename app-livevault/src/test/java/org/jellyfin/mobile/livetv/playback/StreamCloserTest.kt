@@ -128,6 +128,17 @@ class StreamCloserTest {
     }
 
     @Test
+    fun `a stream the ledger doesn't hold as it was is still closed`() = runTest {
+        // The ledger keeps tickets as text, and gives back one with an empty session id without it
+        val closer = closer()
+        val ticket = stream("a").ticket
+
+        closer.closeNow(ticket)
+
+        log.events shouldContainExactly listOf("close:ls-a-1")
+    }
+
+    @Test
     fun `closing everything waits for a close already under way`() = runTest {
         val closer = closer()
         val ticket = stream("a").ticket

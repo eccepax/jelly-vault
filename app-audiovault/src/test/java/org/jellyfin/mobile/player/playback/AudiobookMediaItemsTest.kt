@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.player.session.withPlayableUri
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner

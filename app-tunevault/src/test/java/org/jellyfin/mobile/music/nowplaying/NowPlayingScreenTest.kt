@@ -1,9 +1,13 @@
 package org.jellyfin.mobile.music.nowplaying
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -20,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w411dp-h914dp")
@@ -44,10 +49,12 @@ class NowPlayingScreenTest {
     )
     private val events = mutableListOf<String>()
 
-    private fun show(state: NowPlayingUiState) {
+    private fun show(state: NowPlayingUiState, castDevice: String? = null) {
         composeRule.setContent {
             NowPlayingScreen(
                 state = state,
+                castDevice = castDevice,
+                onStopCasting = { events += "stop casting" },
                 actions = NowPlayingActions(
                     onCollapse = { events += "collapse" },
                     onTogglePlayPause = { events += "toggle" },
@@ -63,6 +70,76 @@ class NowPlayingScreenTest {
                 ),
             )
         }
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE) // the default lays text out on one line, however long
+    fun `long names scroll on one line rather than pushing the buttons down`() {
+        val long = "A name far too long to fit across the screen on one line, nor on two of them either"
+        var state by mutableStateOf(playing)
+        var castDevice by mutableStateOf<String?>("Kitchen")
+        composeRule.setContent {
+            NowPlayingScreen(
+                state = state,
+                castDevice = castDevice,
+                actions = NowPlayingActions(
+                    onCollapse = {},
+                    onTogglePlayPause = {},
+                    onNext = {},
+                    onPrevious = {},
+                    onSeek = {},
+                    onCycleRepeat = {},
+                    onToggleShuffle = {},
+                    onOpenQueue = {},
+                    onToggleFavorite = {},
+                    onOpenAlbum = {},
+                    onOpenArtist = {},
+                ),
+            )
+        }
+        val shortTop = composeRule.onNodeWithContentDescription("Next").getUnclippedBoundsInRoot().top
+
+        state = playing.copy(track = londonMay.copy(title = long, artist = long, albumTitle = long))
+        castDevice = long
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithContentDescription("Next").getUnclippedBoundsInRoot().top shouldBe shortTop
+    }
+
+    @Test
+    fun `while casting, says which device it's playing on`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the device's name offers to stop casting`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").performClick()
+        composeRule.onNodeWithText("Stop casting").performClick()
+
+        events shouldBe listOf("stop casting")
+        composeRule.onNodeWithText("Stop casting").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the stop-casting offer can be turned down`() {
+        show(playing, castDevice = "Kitchen speaker")
+
+        composeRule.onNodeWithText("Playing on Kitchen speaker").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        events shouldBe emptyList()
+        composeRule.onNodeWithText("Stop casting").assertDoesNotExist()
+    }
+
+    @Test
+    fun `playing here, no device is named`() {
+        show(playing)
+
+        composeRule.onNodeWithText("Playing on", substring = true).assertDoesNotExist()
     }
 
     @Test

@@ -12,8 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.account.DownloadsOnSignOut
-import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.downloads.DownloadFiles
 import org.jellyfin.mobile.common.downloads.DownloadGroups
@@ -32,6 +32,7 @@ import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.mobile.player.source.MediaSourceResolver
+import org.jellyfin.mobile.settings.audioVaultSignOut
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.koin.android.ext.koin.androidContext
@@ -135,16 +136,18 @@ val audioDownloadsModule = module {
         val downloadsOnSignOut = DownloadsOnSignOut(get(), downloads::removeAll)
         val sleepTimer = get<SleepTimer>()
         val reporter = get<AudiobookProgressReporter>()
+        val casting = get<Casting>()
         val offlineListening = get<OfflineListeningSync>()
-        SignOut(
-            get(),
-            get<ApiClientController>()::logoutUser,
-            whileSignedIn = {
+        audioVaultSignOut(
+            session = get(),
+            logout = get<ApiClientController>()::logoutUser,
+            stopPlayback = {
                 sleepTimer.cancel()
                 reporter.finishAndStop()
                 offlineListening.sendBeforeSigningOut()
             },
-            forgetAccount = {
+            forgetCast = casting::forgetCast,
+            forgetDownloads = {
                 // Listening that couldn't be sent by now is the account's, not the next one's
                 downloads.forgetUnsentListening()
                 downloadsOnSignOut()

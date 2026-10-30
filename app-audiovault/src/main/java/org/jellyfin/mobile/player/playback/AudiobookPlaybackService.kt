@@ -27,10 +27,14 @@ import kotlinx.coroutines.launch
 import org.jellyfin.mobile.MainActivity
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
+import org.jellyfin.mobile.cast.CastStream
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.SessionCasting
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.player.forAudiobooks
+import org.jellyfin.mobile.player.session.withPlayableUri
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -49,9 +53,12 @@ class AudiobookPlaybackService : MediaSessionService() {
     private val voiceSearch: AudiobookVoiceSearch by inject()
     private val audiobooks: JellyfinAudiobooks by inject()
     private val appController: DeferredAudiobookController by inject()
+    private val casting: Casting by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var session: MediaSession? = null
+    private var exoPlayer: ExoPlayer? = null
+    private var sessionCasting: SessionCasting? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -74,7 +81,9 @@ class AudiobookPlaybackService : MediaSessionService() {
                 addListener(WakeModeFollowsTrack({ downloads.fileFor(it.mediaId) != null }, ::setWakeMode))
             }
 
-        return MediaSession.Builder(this, AudiobookPlayer(exoPlayer))
+        // Transcode seeking is this device's: a cast device seeks in what it's sent itself
+        val local = TranscodeSeekingPlayer(exoPlayer)
+        return MediaSession.Builder(this, AudiobookPlayer(local))
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
             .setSessionActivity(
@@ -86,7 +95,24 @@ class AudiobookPlaybackService : MediaSessionService() {
                 ),
             )
             .build()
+            .also { session ->
+                this.exoPlayer = exoPlayer
+                sessionCasting = SessionCasting.attach(
+                    session,
+                    local,
+                    casting,
+                    // Chapters wherever it plays
+                    wrap = ::AudiobookPlayer,
+                    castStream = ::castStream,
+                    // Only for an item with no track id: this device's stream may have restarted part way
+                    castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },
+                )
+            }
     }
+
+    /** Where the cast device fetches [item] from: the server, even when it plays from a download here. */
+    private fun castStream(item: MediaItem): CastStream? =
+        item.toAudiobookTrack().id.takeIf { it.isNotEmpty() }?.let { audiobooks.castStream(it) }
 
     /** Uses the FFmpeg decoders for what the device can't play itself. */
     private fun renderersFactory() = DefaultRenderersFactory(this)
@@ -148,10 +174,12 @@ class AudiobookPlaybackService : MediaSessionService() {
     }
 
     private fun releaseSession() {
-        session?.run {
-            player.release()
-            release()
-        }
+        // The session's player is either of these, so each is released here rather than through it
+        sessionCasting?.release()
+        exoPlayer?.release()
+        session?.release()
+        sessionCasting = null
+        exoPlayer = null
         session = null
     }
 
@@ -242,6 +270,8 @@ class AudiobookSessionCallback(
         if (customCommand.customAction != SET_SKIP_SILENCE.customAction) {
             return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
         }
+        // This device's player only, also while casting: the Default Media Receiver can't skip silence,
+        // so it plays a cast as it is, and the setting is this device's once playback is back here
         exoPlayer.skipSilenceEnabled = args.getBoolean(KEY_ENABLED)
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }

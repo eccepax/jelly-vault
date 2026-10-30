@@ -20,6 +20,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.NoCasting
 import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
@@ -35,7 +38,12 @@ import org.koin.compose.viewmodel.koinViewModel
  * started, with nothing else to show.
  */
 @Composable
-fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinViewModel()) {
+fun PlayerRoute(
+    onBack: () -> Unit,
+    viewModel: AudiobookPlayerViewModel = koinViewModel(),
+    /** The app passes its own; without one there's no cast button. */
+    casting: Casting = NoCasting,
+) {
     val context = LocalContext.current
     val goBack by rememberUpdatedState(onBack)
     // Once: a book that can't start can stop the one playing too, and back can be tapped as the
@@ -52,6 +60,8 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
+    val castDevice by casting.castDevice.collectAsState()
+    val connectingTo by casting.connectingTo.collectAsState()
     val progress = rememberProgress(viewModel)
     val holdToSpeedUp = rememberHoldToSpeedUp(viewModel)
 
@@ -59,10 +69,16 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
     LeaveWhenStopped(presence) { leave() }
     ForgetStartFailuresOnLeaving(viewModel)
     ToastErrors(playback.error)
-    KeepScreenOn(playback.isPlaying)
+    // Not while casting: the phone may sit there for the whole book
+    KeepScreenOn(playback.isPlayingHere)
 
     val playbackInfo = stringResource(
-        if (playback.currentTrack?.fromDevice == true) R.string.playback_info_from_device else R.string.playback_info_streamed,
+        // On a cast device, even a download is streamed
+        if (playback.currentTrack?.fromDevice == true && !playback.isRemote) {
+            R.string.playback_info_from_device
+        } else {
+            R.string.playback_info_streamed
+        },
     )
     val state = playerUiState(playback, progress, playbackInfo).copy(
         speed = speed,
@@ -86,6 +102,10 @@ fun PlayerRoute(onBack: () -> Unit, viewModel: AudiobookPlayerViewModel = koinVi
             onTrack = viewModel::skipToTrack,
             onSkipSegment = viewModel::skipOfferedSegment,
         ),
+        castDevice = castDevice,
+        connectingTo = connectingTo,
+        onStopCasting = casting::stopCasting,
+        castButton = remember(casting) { { CastButton(casting) } },
     )
 }
 

@@ -145,6 +145,29 @@ class PlayerPlaybackControllerTest {
     }
 
     @Test
+    fun `buffering while asked to play shows as buffering, and stops once it plays`() {
+        controller.play(abc)
+        run(player).untilState(Player.STATE_BUFFERING)
+        shadowOf(Looper.getMainLooper()).idle()
+        controller.state.value.isBuffering shouldBe true
+
+        run(player).untilState(Player.STATE_READY)
+        settle()
+        state.isBuffering shouldBe false
+        state.isPlaying shouldBe true
+    }
+
+    @Test
+    fun `buffering while paused isn't shown as buffering`() {
+        controller.play(abc)
+        controller.pause()
+        run(player).untilState(Player.STATE_BUFFERING)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        controller.state.value.isBuffering shouldBe false
+    }
+
+    @Test
     fun `play and pause toggle`() {
         controller.play(abc)
         run(player).untilState(Player.STATE_READY)

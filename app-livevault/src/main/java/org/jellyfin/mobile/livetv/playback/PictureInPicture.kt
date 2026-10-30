@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.util.Consumer
+import org.jellyfin.mobile.livetv.app.isTelevision
 
 /**
  * While [enabled], leaving the app (Home, or a gesture) shrinks it into a floating window instead
@@ -53,8 +54,7 @@ fun rememberInPictureInPicture(): Boolean {
 }
 
 private fun ComponentActivity.supportsPictureInPicture(): Boolean =
-    packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
-        !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) && !isTelevision
 
 private fun pictureInPictureParams(autoEnter: Boolean = false): PictureInPictureParams =
     PictureInPictureParams.Builder()

@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.casting
 import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
@@ -128,6 +130,8 @@ val tuneAppModule = module {
         )
         DeferredPlaybackController(connection, mainExecutor, CoroutineScope(SupervisorJob() + Dispatchers.Main))
     }
+    // Chromecast where Google Play services can run it (the service moves its session onto it)
+    single<Casting> { casting(androidApplication()) }
     single { OfflinePlayReporter(JellyfinPlaybackReporter(get()), get<TuneDatabase>().pendingPlayDao) }
     single<PlaybackReporter> { get<OfflinePlayReporter>() }
     single { PlaybackReportingTracker(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main)) }
@@ -160,6 +164,7 @@ val tuneAppModule = module {
                 DownloadsOnSignOut(get(), downloads::removeAll)()
             },
             logout = apiClientController::logoutUser,
+            forgetCast = get<Casting>()::forgetCast,
         )
     }
 

@@ -3,6 +3,9 @@ package org.jellyfin.mobile.music.nowplaying
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.music.navigation.PlayerScaffold
@@ -20,10 +23,13 @@ fun PlayerShell(
     onOpenArtist: (artistId: String) -> Unit = {},
     library: @Composable () -> Unit,
 ) {
-    val sleepTimer: SleepTimer = koinInject()
-    val sleepTimerState by sleepTimer.state.collectAsState()
-    val sleepTimerShown by koinInject<SleepTimerVisibility>().isShown.collectAsState()
+    val sleepTimer = sleepTimerUi()
     val state by viewModel.state.collectAsState()
+    val casting: Casting = koinInject()
+    val castDevice by casting.castDevice.collectAsState()
+    val connectingTo by casting.connectingTo.collectAsState()
+    // Now Playing recomposes as the song plays: the same lambda keeps the top bar from redrawing
+    val castButton: @Composable () -> Unit = remember(casting) { { CastButton(casting) } }
     PlayerScaffold(
         hasTrack = state.track != null,
         library = library,
@@ -60,21 +66,31 @@ fun PlayerShell(
                                 onOpenArtist(artistId)
                             },
                         ),
-                        sleepTimer = if (!sleepTimerShown) {
-                            null
-                        } else {
-                            SleepTimerUi(
-                                state = sleepTimerState,
-                                onStart = sleepTimer::start,
-                                onEndOfSegment = sleepTimer::stopAtEndOfSegment,
-                                onExtend = { sleepTimer.extend() },
-                                onCancel = sleepTimer::cancel,
-                            )
-                        },
+                        sleepTimer = sleepTimer,
+                        castDevice = castDevice,
+                        connectingTo = connectingTo,
+                        onStopCasting = casting::stopCasting,
+                        castButton = castButton,
                     )
                 },
                 queue = { onBack -> QueueRoute(onBack = onBack) },
             )
         },
+    )
+}
+
+/** The sleep timer's controls, or null while the timer is hidden (a setting). */
+@Composable
+private fun sleepTimerUi(): SleepTimerUi? {
+    val sleepTimer: SleepTimer = koinInject()
+    val sleepTimerState by sleepTimer.state.collectAsState()
+    val sleepTimerShown by koinInject<SleepTimerVisibility>().isShown.collectAsState()
+    if (!sleepTimerShown) return null
+    return SleepTimerUi(
+        state = sleepTimerState,
+        onStart = sleepTimer::start,
+        onEndOfSegment = sleepTimer::stopAtEndOfSegment,
+        onExtend = { sleepTimer.extend() },
+        onCancel = sleepTimer::cancel,
     )
 }

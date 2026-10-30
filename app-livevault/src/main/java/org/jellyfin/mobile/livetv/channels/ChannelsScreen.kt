@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.livetv.channels
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -63,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.jellyfin.mobile.cast.CastButton
+import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.components.ConfirmDialog
 import org.jellyfin.mobile.common.ui.components.EmptyState
@@ -76,6 +77,7 @@ import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultColors
 import org.jellyfin.mobile.common.ui.theme.focusBorder
 import org.jellyfin.mobile.livetv.R
+import org.jellyfin.mobile.livetv.app.isTelevision
 import org.jellyfin.mobile.livetv.catalog.ChannelFilter
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.sdk.model.ClientInfo
@@ -88,7 +90,7 @@ import org.jellyfin.mobile.common.R as CommonR
  * Every channel, narrowed by a tag chip (or Favorites) and a search. One column on phones, a grid
  * on tablets and TVs; cards and chips are focusable, so a TV remote's D-pad moves through them.
  * [onTv], the remote starts on the channel to continue (else the first one) rather than on search.
- * The menu names [app] and its version, for a bug report.
+ * The menu names [app] and its version, for a bug report. [castButton] is the app's cast button.
  */
 @Composable
 fun ChannelsScreen(
@@ -97,6 +99,9 @@ fun ChannelsScreen(
     onTv: Boolean = false,
     app: ClientInfo,
     actions: ChannelsActions,
+    castButton: @Composable () -> Unit = {},
+    /** Along the bottom, below the channels however many there are (the channel left on a cast device). */
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val startFocus = remember { FocusRequester() }
     val loaded = state is ChannelsUiState.Loaded && state.channels.isNotEmpty()
@@ -110,44 +115,65 @@ fun ChannelsScreen(
                 onQueryChange = actions.onQueryChange,
                 onSignOut = actions.onSignOut,
                 app = app,
+                castButton = castButton,
             )
-            when (state) {
-                ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
-                ChannelsUiState.Error -> ErrorState(stringResource(R.string.channels_error), onRetry = actions.onRetry)
-                is ChannelsUiState.Loaded -> {
-                    state.lastChannel?.let { channel ->
-                        ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
-                    }
-                    FilterChips(
-                        tags = state.tags,
-                        filter = state.filter,
-                        onTagSelect = actions.onTagSelect,
-                        onFavoritesSelect = actions.onFavoritesSelect,
-                    )
-                    if (state.channels.isEmpty()) {
-                        EmptyState(emptyMessage(state.filter))
-                    } else {
-                        ChannelGrid(
-                            channels = state.channels,
-                            now = now,
-                            onFavoriteToggle = actions.onFavoriteToggle,
-                            onChannelClick = actions.onChannelClick,
-                            firstFocus = startFocus.takeIf { state.lastChannel == null },
-                            // Another tag, or favorites, is another list: start it at its top
-                            scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
-                        )
-                    }
-                }
+            Column(Modifier.weight(1f)) {
+                Channels(state, now, actions, startFocus)
+            }
+            bottomBar()
+        }
+    }
+}
+
+@Composable
+private fun Channels(state: ChannelsUiState, now: Instant, actions: ChannelsActions, startFocus: FocusRequester) {
+    when (state) {
+        ChannelsUiState.Loading -> LoadingState(Modifier.testTag(ChannelsScreenTags.LOADING))
+        ChannelsUiState.Error -> ErrorState(stringResource(R.string.channels_error), onRetry = actions.onRetry)
+        is ChannelsUiState.Loaded -> {
+            state.lastChannel?.let { channel ->
+                ContinueWatching(channel, now, actions.onFavoriteToggle, actions.onChannelClick, startFocus)
+            }
+            FilterChips(
+                tags = state.tags,
+                filter = state.filter,
+                onTagSelect = actions.onTagSelect,
+                onFavoritesSelect = actions.onFavoritesSelect,
+            )
+            if (state.channels.isEmpty()) {
+                EmptyState(emptyMessage(state.filter))
+            } else {
+                ChannelGrid(
+                    channels = state.channels,
+                    now = now,
+                    onFavoriteToggle = actions.onFavoriteToggle,
+                    onChannelClick = actions.onChannelClick,
+                    firstFocus = startFocus.takeIf { state.lastChannel == null },
+                    // Another tag, or favorites, is another list: start it at its top
+                    scrollKey = "${state.filter.tag}|${state.filter.favoritesOnly}",
+                )
             }
         }
     }
 }
 
 @Composable
-private fun Header(query: String, onQueryChange: (String) -> Unit, onSignOut: () -> Unit, app: ClientInfo) {
+private fun Header(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSignOut: () -> Unit,
+    app: ClientInfo,
+    castButton: @Composable () -> Unit,
+) {
     Column {
         // The same bar as the other apps' main screens
-        VaultTopBar(title = stringResource(R.string.live_tv_title), actions = { MoreMenu(onSignOut, app) })
+        VaultTopBar(
+            title = stringResource(R.string.live_tv_title),
+            actions = {
+                castButton()
+                MoreMenu(onSignOut, app)
+            },
+        )
         SearchField(
             query = query,
             onQueryChange = onQueryChange,
@@ -389,7 +415,7 @@ private fun NowPlaying(channel: LiveChannel, now: Instant) {
 }
 
 @Composable
-private fun ChannelLogo(logoUrl: String?) {
+internal fun ChannelLogo(logoUrl: String?) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -454,6 +480,8 @@ fun ChannelsRoute(
     viewModel: ChannelsViewModel = koinViewModel(),
     // The app's name as the server knows it and the bug form lists it
     app: ClientInfo = koinInject(),
+    casting: Casting = koinInject(),
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val now by produceState(Instant.now()) {
@@ -467,8 +495,7 @@ fun ChannelsRoute(
         viewModel.refresh()
         onPauseOrDispose {}
     }
-    val onTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK ==
-        Configuration.UI_MODE_TYPE_TELEVISION
+    val onTv = LocalConfiguration.current.isTelevision
     ChannelsScreen(
         state = state,
         now = now,
@@ -489,6 +516,8 @@ fun ChannelsRoute(
             onRetry = viewModel::retry,
             onSignOut = onSignOut,
         ),
+        castButton = remember(casting) { { CastButton(casting) } },
+        bottomBar = bottomBar,
     )
 }
 

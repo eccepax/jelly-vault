@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.livetv.channels
 
 import android.app.Application
+import androidx.compose.material.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -8,11 +9,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
@@ -109,10 +112,26 @@ class ChannelsScreenTest {
                             onSignOut = { signedOut = true },
                             onRetry = { retried = true },
                         ),
+                        castButton = { Text("cast", Modifier.testTag(CAST_BUTTON)) },
+                        bottomBar = { Text("strip", Modifier.testTag(BOTTOM_BAR)) },
                     )
                 }
             }
         }
+    }
+
+    @Test
+    fun `the bottom bar stays on screen below a list longer than the screen`() {
+        show(loaded(channels = (1..60).map { channel("$it", "Channel $it") }))
+
+        composeRule.onNodeWithTag(BOTTOM_BAR).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the cast button is in the top bar`() {
+        show(ChannelsUiState.Loading)
+
+        composeRule.onNodeWithTag(CAST_BUTTON).assertIsDisplayed()
     }
 
     @Test
@@ -371,3 +390,6 @@ class ChannelsScreenTest {
         composeRule.onNodeWithTag(ChannelsScreenTags.SEARCH).assertIsNotFocused()
     }
 }
+
+private const val CAST_BUTTON = "cast_button"
+private const val BOTTOM_BAR = "bottom_bar"

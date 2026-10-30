@@ -24,5 +24,9 @@ fun LiveProgram.endTimeText(zone: ZoneId = ZoneId.systemDefault(), locale: Local
 val LiveChannel.displayName: String
     get() = channelDisplayName(name)
 
+/** What the cast device and the casting notification show for it: its number and [displayName]. */
+val LiveChannel.castTitle: String
+    get() = "$number $displayName"
+
 /** [displayName] for when only the name is known. */
 fun channelDisplayName(name: String): String = name.removePrefix(LiveChannel.FREE_PREFIX).trim().ifEmpty { name }

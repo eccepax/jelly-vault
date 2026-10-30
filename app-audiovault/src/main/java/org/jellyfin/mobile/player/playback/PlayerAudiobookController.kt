@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player.playback
 
 import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,9 +86,12 @@ class PlayerAudiobookController(
 
     override fun setSkipSilence(enabled: Boolean) = setSkipSilence.invoke(enabled)
 
+    /** While casting, it's the cast device's stream volume: Media3's cast player sets it there. */
     override fun setVolume(volume: Float) {
         player.volume = volume
     }
+
+    private val isRemote: Boolean get() = player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
 
     override fun stop() {
         player.stop()
@@ -118,6 +122,7 @@ class PlayerAudiobookController(
                 isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 isEnded = player.playbackState == Player.STATE_ENDED,
                 error = newError?.let { it.localizedMessage ?: it.errorCodeName } ?: kept,
+                isRemote = isRemote,
             )
         }
     }

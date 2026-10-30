@@ -15,12 +15,17 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import org.jellyfin.mobile.cast.Casting
+import org.jellyfin.mobile.cast.SessionCasting
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.music.TuneMainActivity
+import org.jellyfin.mobile.music.catalog.JellyfinMusicCatalog
 import org.jellyfin.mobile.music.downloads.TrackCacheKey
+import org.jellyfin.mobile.player.session.withPlayableUri
+import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 
 /**
@@ -34,6 +39,8 @@ class PlaybackService : MediaSessionService() {
 
     private val downloads: ItemDownloads by inject()
     private var session: MediaSession? = null
+    private var player: ExoPlayer? = null
+    private var casting: SessionCasting? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -52,8 +59,9 @@ class PlaybackService : MediaSessionService() {
             .build()
         // A downloaded song needs only the CPU kept awake; one streaming needs Wi-Fi too
         player.addListener(WakeModeFollowsTrack({ it.trackId?.let(downloads::fileFor) != null }, player::setWakeMode))
+        this.player = player
 
-        session = MediaSession.Builder(this, player)
+        val session = MediaSession.Builder(this, player)
             .setCallback(StreamUriCallback)
             .setSessionActivity(
                 PendingIntent.getActivity(
@@ -64,6 +72,12 @@ class PlaybackService : MediaSessionService() {
                 ),
             )
             .build()
+        this.session = session
+        // The cast device gets its own url for each song, asking only for what it plays, and its type
+        val catalog = get<JellyfinMusicCatalog>()
+        casting = SessionCasting.attach(session, player, get<Casting>(), castStream = { item ->
+            item.trackId?.let { catalog.castStream(it) }
+        })
     }
 
     /** Fully downloaded songs play from the device; anything else streams. */
@@ -83,10 +97,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        session?.run {
-            player.release()
-            release()
-        }
+        // The session's player is either of these, so each is released here rather than through it
+        casting?.release()
+        player?.release()
+        session?.release()
+        casting = null
+        player = null
         session = null
         super.onDestroy()
     }

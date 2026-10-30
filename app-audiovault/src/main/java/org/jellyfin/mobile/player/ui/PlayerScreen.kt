@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.cast.PlayingOnLabel
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
@@ -138,8 +139,20 @@ object PlayerTags {
     const val PLAY_PAUSE = "player_play_pause"
 }
 
+/**
+ * [castDevice] names the cast device the book is playing on (null while it's on this device), and
+ * tapping its name offers [onStopCasting]; [connectingTo] names one picked and still starting.
+ * [castButton] is the app's cast button.
+ */
 @Composable
-fun PlayerScreen(state: PlayerUiState, actions: PlayerActions) {
+fun PlayerScreen(
+    state: PlayerUiState,
+    actions: PlayerActions,
+    castDevice: String? = null,
+    connectingTo: String? = null,
+    onStopCasting: () -> Unit = {},
+    castButton: @Composable () -> Unit = {},
+) {
     var showingInfo by rememberSaveable { mutableStateOf(false) }
     var choosingSpeed by rememberSaveable { mutableStateOf(false) }
     var choosingSleepTimer by rememberSaveable { mutableStateOf(false) }
@@ -153,6 +166,7 @@ fun PlayerScreen(state: PlayerUiState, actions: PlayerActions) {
                 onSleepTimer = { choosingSleepTimer = true },
                 onTracklist = { choosingTrack = true },
                 onPlaybackInfo = { showingInfo = !showingInfo },
+                castButton = castButton,
             )
             CoverArea(
                 state = state,
@@ -173,6 +187,12 @@ fun PlayerScreen(state: PlayerUiState, actions: PlayerActions) {
             )
             ChapterSeekBar(state, actions.onSeek)
             PlayerControls(state, actions)
+            PlayingOnLabel(
+                castDevice,
+                onStopCasting,
+                Modifier.align(Alignment.CenterHorizontally).padding(bottom = VaultSpacing.Small),
+                connectingTo = connectingTo,
+            )
             Box(
                 modifier = Modifier.fillMaxWidth().padding(bottom = VaultSpacing.Large),
                 contentAlignment = Alignment.Center,
@@ -247,6 +267,7 @@ private fun PlayerTopBar(
     onSleepTimer: () -> Unit,
     onTracklist: () -> Unit,
     onPlaybackInfo: () -> Unit,
+    castButton: @Composable () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     VaultTopBar(
@@ -260,6 +281,7 @@ private fun PlayerTopBar(
             }
         },
         actions = {
+            castButton()
             IconButton(onClick = onSleepTimer) {
                 Icon(
                     Icons.Filled.Bedtime,

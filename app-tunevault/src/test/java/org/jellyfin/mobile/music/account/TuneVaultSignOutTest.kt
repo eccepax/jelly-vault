@@ -38,6 +38,7 @@ class TuneVaultSignOutTest {
             session = { session.end() },
             clearAccountData = { events += "clear account data" },
             logout = { events += "logout" },
+            forgetCast = { events += "forget cast after ${playback.commands}" },
         )
     }
 
@@ -51,6 +52,18 @@ class TuneVaultSignOutTest {
     }
 
     @Test
+    fun `ends any cast and forgets it once playback has stopped, since the cast device holds stream urls with the token in them`() =
+        runTest {
+            val signOut = signOut()
+            playingAReportedSong()
+
+            signOut()
+
+            events.filter { it.startsWith("forget cast") } shouldBe listOf("forget cast after [stop]")
+            events.indexOfFirst { it.startsWith("forget cast") } shouldBe 0
+        }
+
+    @Test
     fun `stops playback, reports the stop, ends the session, then logs out`() = runTest {
         val signOut = signOut()
         playingAReportedSong()
@@ -59,7 +72,7 @@ class TuneVaultSignOutTest {
 
         playback.commands shouldBe listOf("stop")
         reporter.reports.last() shouldBe "stopped a @0s"
-        events shouldBe listOf("end session", "clear account data", "logout")
+        events shouldBe listOf("forget cast after [stop]", "end session", "clear account data", "logout")
     }
 
     @Test

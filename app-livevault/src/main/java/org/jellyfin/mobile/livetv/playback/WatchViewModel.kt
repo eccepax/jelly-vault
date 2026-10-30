@@ -3,6 +3,7 @@ package org.jellyfin.mobile.livetv.playback
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,31 +11,59 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.jellyfin.mobile.cast.LiveCasting
+import org.jellyfin.mobile.livetv.channels.castTitle
 import org.jellyfin.mobile.livetv.domain.LiveChannel
 import org.jellyfin.mobile.livetv.viewing.ViewingMemory
 import timber.log.Timber
 
 /**
- * The channel being watched. Activity-scoped, so the stream (and the player) survive rotation;
- * when the activity finishes for good the stream is closed ([onCleared]).
+ * The channel being watched, here on [localPlayer] or on the cast device while one is connected
+ * ([cast]). Activity-scoped, so the stream (and the player) survive rotation; when the activity
+ * finishes for good the stream is closed ([onCleared]). While a channel plays on a cast device the
+ * app is kept alive ([keepAlive]), so the stream is still reported, and closed, from the background.
  */
 class WatchViewModel(
     streams: LiveStreams,
     closer: StreamCloser,
-    val player: LivePlayer,
+    val localPlayer: LivePlayer,
+    private val cast: LiveCasting,
     private val sessions: LiveTvSessions,
     private val memory: ViewingMemory,
+    private val keepAlive: CastKeepAlive = CastKeepAlive.None,
+    private val watchingNow: WatchingNow = WatchingNow(),
 ) : ViewModel() {
 
-    private val playback = LivePlayback(streams, player, closer, viewModelScope)
     private val lineup = MutableStateFlow<Map<String, LiveChannel>>(emptyMap())
+    private val player = CastingLivePlayer(localPlayer, cast, describe = { lineup.value[it] })
     private val _watching = MutableStateFlow(false)
+
+    // Stopped on the cast device itself, the viewer stopped watching: back to the channels
+    private val playback = LivePlayback(
+        streams,
+        player,
+        closer,
+        viewModelScope,
+        onStoppedOnCastDevice = { _watching.value = false },
+        // Left on the cast device from the channel list, a channel isn't brought back here unseen
+        playsHereWhenCastEnds = { _watching.value },
+    )
 
     /** Whether the player screen is up. */
     val watching: StateFlow<Boolean> = _watching.asStateFlow()
+
+    /** Signing out: the channel stops, its stream closed while the token works, and the screen goes. */
+    private val stopForSignOut: suspend () -> Unit = {
+        withContext(Dispatchers.Main.immediate) {
+            playback.stopNow()
+            _watching.value = false
+        }
+    }
 
     /**
      * When a channel that needs the provider login fails, the likely reason: the login (one stream
@@ -52,12 +81,16 @@ class WatchViewModel(
         lineup,
         player.videoStarted,
         loginInUse,
-    ) { playback, lineup, started, loginInUse ->
+        // Casting once connected, named or not (until then the channel still plays here)
+        combine(cast.connected, cast.deviceName) { connected, name -> connected to name.takeIf { connected } },
+    ) { playback, lineup, started, loginInUse, (casting, castDevice) ->
         WatchUiState(
             playback = playback,
             channel = playback.channelId?.let(lineup::get),
             videoStarted = started,
             loginInUse = loginInUse,
+            castDevice = castDevice,
+            casting = casting,
         )
     }.stateIn(
         viewModelScope,
@@ -66,6 +99,15 @@ class WatchViewModel(
     )
 
     init {
+        watchingNow.hold(stopForSignOut)
+        viewModelScope.launch {
+            combine(playback.state, cast.connected, cast.deviceName, lineup) { state, connected, device, lineup ->
+                val channelId = state.channelId?.takeIf { connected && state !is PlaybackState.Failed }
+                channelId?.let { id -> (lineup[id]?.castTitle ?: id) to device }
+            }.distinctUntilChanged().collect { casting ->
+                if (casting == null) keepAlive.release() else keepAlive.hold(casting.first, casting.second)
+            }
+        }
         // Where the viewer actually ended up watching: a zap's landing, not a channel that failed.
         viewModelScope.launch {
             playback.state.collect { state ->
@@ -85,8 +127,24 @@ class WatchViewModel(
 
     fun retry() = playback.retry()
 
-    /** Back to the channel list. */
+    /**
+     * Back to the channel list. A channel playing on a cast device plays on there (the list shows it,
+     * to come back to or stop); one playing here stops.
+     */
     fun exit() {
+        val playback = playback.state.value
+        val playsOnThere = cast.connected.value && playback.channelId != null && playback !is PlaybackState.Failed
+        if (!playsOnThere) this.playback.stop()
+        _watching.value = false
+    }
+
+    /** Back to the player, from the channel list, for the channel playing on the cast device. */
+    fun reopen() {
+        _watching.value = true
+    }
+
+    /** Stops the channel, wherever it plays: from the channel list, the one left on the cast device. */
+    fun stopChannel() {
         playback.stop()
         _watching.value = false
     }
@@ -94,7 +152,14 @@ class WatchViewModel(
     /** The app went to the background (not a rotation): frees the connection until [onForeground]. */
     fun onBackground() = playback.pause()
 
-    fun onForeground() = playback.resume()
+    fun onForeground() {
+        // Android doesn't let a cast connecting in the background keep the app alive: it's asked again here
+        keepAlive.holdAgain()
+        playback.resume()
+    }
+
+    /** Ends the cast; the channel comes back here (see [LivePlayback]). */
+    fun stopCasting() = cast.stopCasting()
 
     /** Who on the server is holding the login; none known when the server can't say. */
     private suspend fun loginHolders(): List<ChannelSession> = try {
@@ -108,15 +173,9 @@ class WatchViewModel(
 
     // Public so tests can end the view model's life the way the framework does.
     public override fun onCleared() {
+        watchingNow.letGo(stopForSignOut)
         playback.release()
         player.release()
+        keepAlive.release()
     }
-
-    private val PlaybackState.channelId: String?
-        get() = when (this) {
-            is PlaybackState.Tuning -> channelId
-            is PlaybackState.Playing -> channelId
-            is PlaybackState.Failed -> channelId
-            PlaybackState.Idle -> null
-        }
 }

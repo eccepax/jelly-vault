@@ -22,9 +22,12 @@ class WatchViewModelTest {
     private val log = EventLog()
     private val streams = FakeLiveStreams(log)
     private val player = FakeLivePlayer(log)
+    private val cast = FakeLiveCasting(log)
     private val ledger = FakeStreamLedger()
     private val sessions = FakeLiveTvSessions()
     private val memory = FakeViewingMemory()
+    private val keepAlive = FakeCastKeepAlive()
+    private val watchingNow = WatchingNow()
     private val bulls = channel("1", "Bulls")
     private val espn = channel("43", "ESPN")
     private val tubi = channel("5001", "FREE| Movies", tags = listOf("Free"))
@@ -49,8 +52,11 @@ class WatchViewModelTest {
             streams,
             StreamCloser(streams, ledger, scope = backgroundScope),
             player,
+            cast,
             sessions,
             memory,
+            keepAlive,
+            watchingNow,
         )
         try {
             block(viewModel)
@@ -111,6 +117,23 @@ class WatchViewModelTest {
     }
 
     @Test
+    fun `signing out stops the channel and closes its stream, once, though the screen lets go of it later`() =
+        watchTest { viewModel ->
+            viewModel.watch(bulls, listOf(bulls))
+            settle()
+
+            watchingNow.stop()
+            settle()
+
+            viewModel.watching.value shouldBe false
+            viewModel.state.value.playback shouldBe PlaybackState.Idle
+            player.playing shouldBe null
+            viewModel.onCleared()
+            settle()
+            log.events.count { it.startsWith("close:") } shouldBe 1
+        }
+
+    @Test
     fun `the view model going away closes the stream and frees the player`() = watchTest { viewModel ->
         viewModel.watch(bulls, listOf(bulls))
         settle()
@@ -119,6 +142,7 @@ class WatchViewModelTest {
         settle()
 
         player.released shouldBe true
+        cast.released shouldBe true
         streams.openStreams.shouldBeEmpty()
         ledger.all().shouldBeEmpty()
     }
@@ -212,5 +236,223 @@ class WatchViewModelTest {
         settle()
 
         memory.lastChannelId.value shouldBe bulls.id
+    }
+
+    @Test
+    fun `watching while casting plays the channel on the cast device, opened for it`() = watchTest { viewModel ->
+        cast.connected.value = true
+
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        log.events.first() shouldBe "open-for-cast:${bulls.id}"
+        cast.sent!![2] shouldBe "1 Bulls"
+        player.playing shouldBe null
+    }
+
+    @Test
+    fun `the state names the cast device while casting`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+        viewModel.state.value.castDevice shouldBe null
+
+        cast.deviceName.value = "Main Bedroom TV"
+        cast.connected.value = true
+        settle()
+
+        viewModel.state.value.castDevice shouldBe "Main Bedroom TV"
+    }
+
+    @Test
+    fun `a cast device named but not connected yet isn't shown as casting, as the channel still plays here`() =
+        watchTest { viewModel ->
+            viewModel.watch(bulls, listOf(bulls))
+            settle()
+
+            cast.deviceName.value = "Main Bedroom TV"
+            settle()
+
+            viewModel.state.value.castDevice shouldBe null
+            viewModel.state.value.casting shouldBe false
+        }
+
+    @Test
+    fun `a cast device connected before it has said its name is still casting`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        cast.connected.value = true
+        settle()
+
+        viewModel.state.value.casting shouldBe true
+        viewModel.state.value.castDevice shouldBe null
+    }
+
+    @Test
+    fun `the video has started once the cast device plays it`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls))
+        settle()
+
+        cast.started.value = true
+        settle()
+
+        viewModel.state.value.videoStarted shouldBe true
+    }
+
+    @Test
+    fun `stopping casting ends the cast`() = watchTest { viewModel ->
+        viewModel.stopCasting()
+
+        cast.castsStopped shouldBe 1
+    }
+
+    @Test
+    fun `the app is kept alive while a channel plays on a cast device, and only then`() = watchTest { viewModel ->
+        cast.connected.value = true
+        cast.deviceName.value = "Main Bedroom TV"
+        keepAlive.holding shouldBe null
+
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        keepAlive.holding shouldBe ("1 Bulls" to "Main Bedroom TV")
+
+        viewModel.stopChannel()
+        settle()
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `back in the foreground, keeping the app alive is asked for again, as Android may have refused it in the background`() =
+        watchTest { viewModel ->
+            cast.connected.value = true
+            viewModel.watch(bulls, listOf(bulls, espn))
+            settle()
+            val holds = keepAlive.holds
+
+            viewModel.onBackground()
+            viewModel.onForeground()
+            settle()
+
+            keepAlive.holds shouldBe holds + 1
+            keepAlive.holding shouldBe ("1 Bulls" to null)
+        }
+
+    @Test
+    fun `a channel playing here keeps nothing alive`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `a channel stopped on the cast device itself closes the player`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        cast.onStopped!!()
+        settle()
+
+        viewModel.watching.value shouldBe false
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `leaving the player while casting leaves the channel playing there`() = watchTest { viewModel ->
+        cast.connected.value = true
+        cast.deviceName.value = "Main Bedroom TV"
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        viewModel.exit()
+        settle()
+
+        viewModel.watching.value shouldBe false
+        viewModel.state.value.channel shouldBe bulls
+        viewModel.state.value.casting shouldBe true
+        log.events.contains("cast.stop") shouldBe false
+        streams.openStreams.size shouldBe 1
+        keepAlive.holding shouldBe ("1 Bulls" to "Main Bedroom TV")
+    }
+
+    @Test
+    fun `back to the player from the channel list, the channel plays on there, not tuned again`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        viewModel.exit()
+        settle()
+        val tunes = log.events.count { it.startsWith("open") || it.startsWith("cast.") }
+
+        viewModel.reopen()
+        settle()
+
+        viewModel.watching.value shouldBe true
+        viewModel.state.value.playback shouldBe PlaybackState.Playing(bulls.id)
+        log.events.count { it.startsWith("open") || it.startsWith("cast.") } shouldBe tunes
+    }
+
+    @Test
+    fun `stopping the channel from the channel list stops it there and closes its stream`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        viewModel.exit()
+        settle()
+
+        viewModel.stopChannel()
+        settle()
+
+        viewModel.state.value.channel shouldBe null
+        log.events.contains("cast.stop") shouldBe true
+        streams.openStreams.shouldBeEmpty()
+        keepAlive.holding shouldBe null
+    }
+
+    @Test
+    fun `another channel picked from the list while casting plays there instead`() = watchTest { viewModel ->
+        cast.connected.value = true
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+        viewModel.exit()
+        settle()
+
+        viewModel.watch(espn, listOf(bulls, espn))
+        settle()
+
+        viewModel.watching.value shouldBe true
+        cast.sent!![2] shouldBe "43 ESPN"
+        streams.openStreams.size shouldBe 1
+    }
+
+    @Test
+    fun `the cast ending while on the channel list stops the channel, rather than playing it here unseen`() =
+        watchTest { viewModel ->
+            cast.connected.value = true
+            viewModel.watch(bulls, listOf(bulls, espn))
+            settle()
+            viewModel.exit()
+            settle()
+
+            cast.connected.value = false
+            settle()
+
+            viewModel.state.value.channel shouldBe null
+            player.playing shouldBe null
+            streams.openStreams.shouldBeEmpty()
+        }
+
+    @Test
+    fun `playing here, leaving the player still stops the channel`() = watchTest { viewModel ->
+        viewModel.watch(bulls, listOf(bulls, espn))
+        settle()
+
+        viewModel.exit()
+        settle()
+
+        viewModel.state.value.channel shouldBe null
+        player.playing shouldBe null
     }
 }

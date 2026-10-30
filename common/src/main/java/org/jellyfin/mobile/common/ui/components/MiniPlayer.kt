@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.LinearProgressIndicator
@@ -33,17 +34,22 @@ import org.jellyfin.mobile.common.ui.theme.VaultSpacing
  * The bar along the bottom of a library while something is loaded: what it is, play/pause, and
  * any [actions] the app adds (next, stop). Tapping the bar opens the full player.
  */
+// Each is one thing the bar shows or does; grouping them would only hide them from the callers
+@Suppress("LongParameterList")
 @Composable
 fun MiniPlayerBar(
     title: String,
     subtitle: String?,
     cover: @Composable () -> Unit,
     isPlaying: Boolean,
-    onTogglePlayPause: () -> Unit,
+    /** No play button when null: for what can't pause (a live channel). */
+    onTogglePlayPause: (() -> Unit)?,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     /** How far through it is, from 0 to 1; no bar when null. */
     progress: Float? = null,
+    /** Waiting for the stream (see [PlayPauseButton]). */
+    isLoading: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Surface(
@@ -78,17 +84,35 @@ fun MiniPlayerBar(
                         )
                     }
                 }
-                PlayPauseButton(isPlaying = isPlaying, onClick = onTogglePlayPause)
+                if (onTogglePlayPause != null) {
+                    PlayPauseButton(isPlaying = isPlaying, onClick = onTogglePlayPause, isLoading = isLoading)
+                }
                 actions()
             }
         }
     }
 }
 
-/** Play or pause, saying (and showing) which tapping it does. */
+/**
+ * Play or pause, saying (and showing) which tapping it does. While [isLoading] (asked to play, the
+ * stream not there yet: a cast device starting a song, say) a ring turns round it, so a tap that
+ * seems to do nothing isn't taken for one that didn't register.
+ */
 @Composable
-fun PlayPauseButton(isPlaying: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, iconSize: Int = 24) {
+fun PlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Int = 24,
+    isLoading: Boolean = false,
+) {
     IconButton(onClick = onClick, modifier = modifier) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                modifier = Modifier.size((iconSize + LOADING_RING_MARGIN).dp),
+            )
+        }
         Icon(
             imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
             contentDescription = stringResource(if (isPlaying) R.string.vault_pause else R.string.vault_play),
@@ -96,6 +120,9 @@ fun PlayPauseButton(isPlaying: Boolean, onClick: () -> Unit, modifier: Modifier 
         )
     }
 }
+
+/** How much wider than the icon the loading ring is. */
+private const val LOADING_RING_MARGIN = 12
 
 private val MINI_PLAYER_ELEVATION = 8.dp
 private val MINI_PLAYER_COVER_SIZE = 44.dp

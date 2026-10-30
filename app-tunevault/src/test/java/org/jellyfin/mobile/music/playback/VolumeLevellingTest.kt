@@ -28,7 +28,7 @@ class VolumeLevellingTest {
     }
 
     private fun TestScope.playing(vararg tracks: org.jellyfin.mobile.music.domain.Track, index: Int = 0) {
-        playback.state.value = PlaybackState(queue = PlayQueue.of(tracks.toList(), index), isPlaying = true)
+        playback.state.value = playback.state.value.copy(queue = PlayQueue.of(tracks.toList(), index), isPlaying = true)
         runCurrent()
     }
 

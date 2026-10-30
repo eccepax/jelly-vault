@@ -94,4 +94,22 @@ class TuneVaultScreenshotTest {
         }
         capture("now-playing")
     }
+
+    @Test
+    fun `now playing on a cast device`() {
+        val playing = NowPlayingUiState(
+            track = track(
+                "lm",
+            ).copy(title = "London May", artist = "Bonnie \"Prince\" Billy", albumTitle = "The Purple Bird"),
+            isPlaying = true,
+            positionMs = 65_000L,
+            durationMs = 180_000L,
+        )
+        composeRule.setContent {
+            AppTheme(VaultBrand.TuneVault) {
+                NowPlayingScreen(state = playing, actions = NowPlayingActions(), castDevice = "Living Room TV")
+            }
+        }
+        capture("now-playing-cast")
+    }
 }

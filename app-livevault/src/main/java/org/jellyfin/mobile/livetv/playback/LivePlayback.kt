@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +24,15 @@ sealed interface PlaybackState {
     data class Failed(val channelId: String) : PlaybackState
 }
 
+/** The channel tuning, playing or failed; null when idle. */
+val PlaybackState.channelId: String?
+    get() = when (this) {
+        is PlaybackState.Tuning -> channelId
+        is PlaybackState.Playing -> channelId
+        is PlaybackState.Failed -> channelId
+        PlaybackState.Idle -> null
+    }
+
 /**
  * Live TV playback, built around one rule: every stream the server opens gets closed. The provider
  * allows a single connection, so a leaked stream blocks every channel.
@@ -31,6 +41,14 @@ sealed interface PlaybackState {
  * - An open in flight is never cancelled (its LiveStreamId would be lost); if the viewer has moved on
  *   by the time it returns, it's closed unplayed.
  * - Zaps stop the current channel at once and tune only where they land, after [ZAP_DEBOUNCE_MS].
+ * - Casting: the phone still opens and closes the stream, opened for the cast device while the
+ *   player is on one. When the player moves to or from a cast device, the channel is opened again
+ *   for where it now plays (closing the old stream first, as ever). In the background the channel
+ *   carries on on the cast device; if the cast ends there, the stream is freed as for any background.
+ *   Left on the cast device from the channel list ([playsHereWhenCastEnds] false), a channel whose
+ *   cast ends stops rather than coming back here unseen.
+ *   Stopped on the cast device itself (its remote, another app casting), the stream is closed and
+ *   [onStoppedOnCastDevice] told: the viewer stopped watching, wherever they did it.
  *
  * Not thread-safe: call it, and run [scope], on one thread (the main thread in the app).
  */
@@ -39,6 +57,9 @@ class LivePlayback(
     private val player: LivePlayer,
     private val closer: StreamCloser,
     private val scope: CoroutineScope,
+    private val onStoppedOnCastDevice: () -> Unit = {},
+    /** Whether a channel comes back here when the cast it played on ends; else it stops. */
+    private val playsHereWhenCastEnds: () -> Boolean = { true },
 ) {
     private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -52,12 +73,29 @@ class LivePlayback(
 
     /** The channel the viewer last asked for: where a zap starts from, and what retry tunes. */
     private var lastChannel: String? = null
-    private var resumeChannel: String? = null
+
+    /**
+     * A channel freed in the background, tuned again by [resume]; [castEnded] when that was because
+     * the cast it played on ended, so a cast coming back (the session rejoined) plays it there again.
+     * One freed from here (or failed) waits for the way back: it isn't opened from the background.
+     * Not [playsHere] (its cast ended with no player screen showing), the way back leaves it stopped.
+     */
+    private class Freed(val channelId: String, val castEnded: Boolean, val playsHere: Boolean = true)
+
+    private var freed: Freed? = null
+    private var inBackground = false
     private var tuneJob: Job? = null
     private var progressJob: Job? = null
 
     init {
-        player.listenWith { onPlayerError() }
+        player.listenWith(
+            object : LivePlayer.Listener {
+                override fun onError() = onPlayerError()
+
+                override fun onStoppedElsewhere() = onStoppedThere()
+            },
+        )
+        scope.launch { player.onCastDevice.drop(1).collect(::onCastDeviceChanged) }
     }
 
     /** Tunes [channelId]; [lineup] is the channel order zapping moves through. */
@@ -83,28 +121,32 @@ class LivePlayback(
 
     /**
      * The app went to the background: frees the connection, remembering the channel for [resume].
-     * A channel that had failed is tried again on the way back.
+     * A channel that had failed is tried again on the way back, wherever it failed. A channel on a
+     * cast device plays on.
      */
     fun pause() {
-        resumeChannel = when (val state = state.value) {
-            is PlaybackState.Playing -> state.channelId
-            is PlaybackState.Tuning -> state.channelId
-            is PlaybackState.Failed -> state.channelId
-            PlaybackState.Idle -> null
-        }
-        if (resumeChannel != null) stop()
+        inBackground = true
+        if (!player.onCastDevice.value || state.value is PlaybackState.Failed) freeForBackground()
     }
 
     fun resume() {
-        val channel = resumeChannel ?: return
-        resumeChannel = null
-        request(channel, debounce = false)
+        inBackground = false
+        val freed = freed ?: return
+        this.freed = null
+        if (freed.playsHere) request(freed.channelId, debounce = false)
+    }
+
+    /** Stops, returning once the stream is closed: for signing out, while the token still works. */
+    suspend fun stopNow() {
+        freed = null
+        stop()
+        tuneJob?.join()
     }
 
     /** For good (the screen is gone): closes through [closer], since [scope] may be ending too. */
     fun release() {
         generation++
-        resumeChannel = null
+        freed = null
         player.listenWith(null)
         stopPlayer()
         tuneJob?.cancel()
@@ -113,11 +155,46 @@ class LivePlayback(
         _state.value = PlaybackState.Idle
     }
 
+    private fun freeForBackground(castEnded: Boolean = false, playsHere: Boolean = true) {
+        freed = state.value.channelId?.let { Freed(it, castEnded, playsHere) }
+        if (freed != null) stop()
+    }
+
+    /**
+     * The player moved to or from a cast device: what's shown is opened again for where it plays now.
+     * In the background, a cast that ends frees the stream, and one that comes back (the session
+     * rejoined) plays the channel freed there again; not one freed from here.
+     */
+    private fun onCastDeviceChanged(onCastDevice: Boolean) {
+        val freed = freed
+        val channel = state.value.channelId
+        when {
+            onCastDevice && inBackground && channel == null && freed?.castEnded == true -> {
+                this.freed = null
+                request(freed.channelId, debounce = false)
+            }
+            channel == null -> Unit
+            !onCastDevice && inBackground -> freeForBackground(castEnded = true, playsHere = playsHereWhenCastEnds())
+            !onCastDevice && !playsHereWhenCastEnds() -> stop()
+            else -> request(channel, debounce = false)
+        }
+    }
+
     private fun onPlayerError() {
         val channel = (state.value as? PlaybackState.Playing)?.channelId ?: return
         Timber.w("Player failed on channel %s", channel)
         stop()
         _state.value = PlaybackState.Failed(channel)
+        // Failed on the cast device while in the background: tried again on the way back, as ever
+        if (inBackground) freed = Freed(channel, castEnded = false)
+    }
+
+    private fun onStoppedThere() {
+        if (state.value.channelId == null) return
+        Timber.i("The channel was stopped on the cast device")
+        freed = null
+        stop()
+        onStoppedOnCastDevice()
     }
 
     private fun request(channelId: String?, debounce: Boolean) {
@@ -137,8 +214,9 @@ class LivePlayback(
     }
 
     private suspend fun tune(channelId: String, gen: Int) {
-        val opened = withContext(NonCancellable) { open(channelId, gen) } ?: return
-        player.play(opened.url)
+        val forCast = player.onCastDevice.value
+        val opened = withContext(NonCancellable) { open(channelId, forCast, gen) } ?: return
+        player.play(opened.url, channelId, forCast)
         _state.value = PlaybackState.Playing(channelId)
         report(opened)
         progressJob = scope.launch {
@@ -150,9 +228,9 @@ class LivePlayback(
     }
 
     /** Opens [channelId] and records it; null when it failed or [gen] was superseded meanwhile (then it's closed). */
-    private suspend fun open(channelId: String, gen: Int): OpenedStream? {
+    private suspend fun open(channelId: String, forCast: Boolean, gen: Int): OpenedStream? {
         val opened = try {
-            streams.open(channelId)
+            streams.open(channelId, forCast)
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

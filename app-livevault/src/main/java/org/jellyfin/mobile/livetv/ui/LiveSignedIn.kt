@@ -21,16 +21,21 @@ import org.jellyfin.mobile.common.ui.components.SignOutFailures
 import org.jellyfin.mobile.common.ui.startOver
 import org.jellyfin.mobile.livetv.R
 import org.jellyfin.mobile.livetv.account.AccountViewModel
+import org.jellyfin.mobile.livetv.channels.CastStrip
 import org.jellyfin.mobile.livetv.channels.ChannelsRoute
 import org.jellyfin.mobile.livetv.channels.ChannelsViewModel
 import org.jellyfin.mobile.livetv.domain.LiveChannel
+import org.jellyfin.mobile.livetv.playback.PlaybackState
 import org.jellyfin.mobile.livetv.playback.PlayerRoute
 import org.jellyfin.mobile.livetv.playback.StreamCloser
 import org.jellyfin.mobile.livetv.playback.WatchViewModel
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-/** The signed-in app: the channel browser, or the player over it while a channel is being watched. */
+/**
+ * The signed-in app: the channel browser, or the player over it while a channel is being watched.
+ * A channel left playing on a cast device shows along the bottom of the browser.
+ */
 @Composable
 fun LiveSignedIn(
     watch: WatchViewModel = koinViewModel(),
@@ -57,7 +62,25 @@ fun LiveSignedIn(
             },
         )
     } else {
-        ChannelsRoute(viewModel = channels, onChannelClick = watch::watch, onSignOut = account::signOut)
+        val watchState by watch.state.collectAsState()
+        ChannelsRoute(
+            viewModel = channels,
+            onChannelClick = watch::watch,
+            onSignOut = account::signOut,
+            bottomBar = {
+                // The channel left playing on the cast device: back to it (its retry, if it failed there), or stop it
+                val channel = watchState.channel
+                if (watchState.casting && channel != null) {
+                    CastStrip(
+                        channel,
+                        watchState.castDevice,
+                        onOpen = watch::reopen,
+                        onStop = watch::stopChannel,
+                        failed = watchState.playback is PlaybackState.Failed,
+                    )
+                }
+            },
+        )
     }
 }
 

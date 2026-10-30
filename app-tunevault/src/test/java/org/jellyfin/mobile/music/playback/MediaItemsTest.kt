@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.jellyfin.mobile.music.domain.PlayQueue
 import org.jellyfin.mobile.music.domain.track
+import org.jellyfin.mobile.player.session.withPlayableUri
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner

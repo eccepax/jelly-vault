@@ -158,6 +158,23 @@ class AudiobookProgressReporterTest {
     }
 
     @Test
+    fun `played again in its last moments after finishing, a new listen starts`() = runTest {
+        reporter()
+        controller.playing(streamed, positionMs = 3_599_000L)
+        runCurrent()
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        controller.positionMs = 3_596_000L
+        controller.state.value = controller.state.value.copy(isEnded = false, isPlaying = true)
+        runCurrent()
+        play(1_000L)
+        pause()
+
+        server.reports.takeLast(2) shouldBe listOf("started streamed at 3596000", "paused streamed at 3597000")
+    }
+
+    @Test
     fun `a playback error ends the listen, so the server doesn't keep a dead session`() = runTest {
         reporter()
         controller.playing(streamed, positionMs = 50_000L)
@@ -276,6 +293,169 @@ class AudiobookProgressReporterTest {
 
         server.reports.shouldBeEmpty()
         device.reports shouldBe listOf("started downloaded at 0", "progress downloaded at 10000", "paused downloaded at 10000")
+    }
+
+    @Test
+    fun `a downloaded track playing on a cast device is streamed there, so the server hears of it`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L, isRemote = true)
+        runCurrent()
+
+        play(PROGRESS_INTERVAL_MS)
+        pause()
+
+        device.reports.shouldBeEmpty()
+        server.reports shouldBe listOf("started downloaded at 0", "progress downloaded at 10000", "paused downloaded at 10000")
+    }
+
+    @Test
+    fun `a download cast part way ends its listen here, and the server hears the rest from there`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L)
+        runCurrent()
+        play(5_000L)
+
+        cast(true)
+        play(PROGRESS_INTERVAL_MS)
+
+        device.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+        server.reports shouldBe listOf("started downloaded at 5000", "progress downloaded at 15000")
+    }
+
+    @Test
+    fun `a download back from a cast device ends its listen on the server, and goes on here`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 0L, isRemote = true)
+        runCurrent()
+        play(5_000L)
+
+        cast(false)
+        pause()
+
+        server.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+        device.reports shouldBe listOf("started downloaded at 5000", "paused downloaded at 5000")
+    }
+
+    @Test
+    fun `a download back from a cast device ends and goes on where it was, before the player here has got there`() =
+        runTest {
+            reporter()
+            controller.playing(downloaded, positionMs = 0L, isRemote = true)
+            runCurrent()
+            play(5_000L)
+
+            // This device's player has the track, and not yet the place it was given
+            controller.positionMs = 0L
+            cast(false)
+
+            server.reports shouldBe listOf("started downloaded at 0", "stopped downloaded at 5000")
+            device.reports shouldBe listOf("started downloaded at 5000")
+        }
+
+    @Test
+    fun `a streamed track cast part way goes on as one listen on the server`() = runTest {
+        reporter()
+        controller.playing(streamed, positionMs = 0L)
+        runCurrent()
+        play(5_000L)
+
+        cast(true)
+        pause()
+
+        server.reports shouldBe listOf("started streamed at 0", "paused streamed at 5000")
+    }
+
+    @Test
+    fun `a streamed track back from a cast device, paused, keeps its place before the player here has got there`() =
+        runTest {
+            reporter()
+            controller.playing(streamed, positionMs = 2_700_000L, isRemote = true)
+            runCurrent()
+            play(5_000L)
+
+            // Back here paused, in the same change, and this device's player not yet at the place
+            controller.positionMs = 0L
+            controller.state.value =
+                controller.state.value.copy(isRemote = false, playWhenReady = false, isPlaying = false)
+            runCurrent()
+
+            server.reports shouldBe listOf("started streamed at 2700000", "paused streamed at 2705000")
+        }
+
+    @Test
+    fun `a download finished on a cast device stays finished back here, paused at its end`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 3_599_000L, isRemote = true)
+        runCurrent()
+        controller.positionMs = 3_600_000L
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        controller.state.value =
+            controller.state.value.copy(isEnded = false, isRemote = false, playWhenReady = false)
+        runCurrent()
+        wait(PROGRESS_INTERVAL_MS)
+
+        server.reports shouldBe listOf("started downloaded at 3599000", "finished downloaded")
+        device.reports.shouldBeEmpty()
+    }
+
+    @Test
+    fun `played again from its start after finishing on a cast device, a new listen starts here`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 3_599_000L, isRemote = true)
+        runCurrent()
+        controller.positionMs = 3_600_000L
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+        controller.state.value =
+            controller.state.value.copy(isEnded = false, isRemote = false, playWhenReady = false)
+        runCurrent()
+
+        // A seek back says nothing new of the state: the position alone moved
+        controller.positionMs = 0L
+        wait(SAMPLE_INTERVAL_MS)
+
+        device.reports shouldBe listOf("started downloaded at 0")
+    }
+
+    @Test
+    fun `a download that ends just as the cast does is finished where it played, not started again here`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 3_599_000L, isRemote = true)
+        runCurrent()
+
+        controller.positionMs = 3_600_000L
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false, isRemote = false)
+        runCurrent()
+        wait(PROGRESS_INTERVAL_MS)
+
+        server.reports shouldBe listOf("started downloaded at 3599000", "finished downloaded")
+        device.reports.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a download that fails just as the cast ends is stopped where it played`() = runTest {
+        reporter()
+        controller.playing(downloaded, positionMs = 50_000L, isRemote = true)
+        runCurrent()
+
+        controller.state.value = controller.state.value.copy(
+            error = "Cast session ended",
+            isPlaying = false,
+            playWhenReady = false,
+            isRemote = false,
+        )
+        runCurrent()
+
+        server.reports shouldBe listOf("started downloaded at 50000", "stopped downloaded at 50000")
+        device.reports.shouldBeEmpty()
+    }
+
+    /** Playback moves onto a cast device, or back here, where it was. */
+    private fun TestScope.cast(remote: Boolean) {
+        controller.state.value = controller.state.value.copy(isRemote = remote)
+        runCurrent()
     }
 
     @Test

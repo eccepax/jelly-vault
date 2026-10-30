@@ -98,6 +98,17 @@ class JellyfinAudiobookPlaybackContractTest {
     }
 
     @Test
+    fun `an m4b of AAC is cast as it is, with byte ranges, so the cast device can seek in it`() = runBlocking<Unit> {
+        val stream = audiobooks.castStream(m4b.toString())
+
+        // The cast device fetches it on its own: no Authorization header
+        val response = get(stream.url, range = "bytes=1000-1999", authorized = false)
+
+        response.code shouldBe HttpURLConnection.HTTP_PARTIAL
+        response.contentType shouldBe "audio/mp4"
+    }
+
+    @Test
     fun `while a book plays, the server sees where the listener is, and that it's paused`() = runBlocking<Unit> {
         val halfway = runTimeMs() / 2
         val track = AudiobookTrack(id = m4b.toString(), title = "", durationMs = runTimeMs())
@@ -165,19 +176,24 @@ class JellyfinAudiobookPlaybackContractTest {
 
     private class Response(val code: Int, val contentType: String, val length: Long)
 
-    /** A GET as the player's data source makes it: the token in the Authorization header. Reads no body. */
-    private fun get(url: String, range: String? = null): Response {
+    /**
+     * A GET as the player's data source makes it: the token in the Authorization header. [authorized]
+     * false makes it as a cast device does, with only the url. Reads no body.
+     */
+    private fun get(url: String, range: String? = null, authorized: Boolean = true): Response {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
-        connection.setRequestProperty(
-            "Authorization",
-            AuthorizationHeaderBuilder.buildHeader(
-                clientName = api.clientInfo.name,
-                clientVersion = api.clientInfo.version,
-                deviceId = api.deviceInfo.id,
-                deviceName = api.deviceInfo.name,
-                accessToken = api.accessToken,
-            ),
-        )
+        if (authorized) {
+            connection.setRequestProperty(
+                "Authorization",
+                AuthorizationHeaderBuilder.buildHeader(
+                    clientName = api.clientInfo.name,
+                    clientVersion = api.clientInfo.version,
+                    deviceId = api.deviceInfo.id,
+                    deviceName = api.deviceInfo.name,
+                    accessToken = api.accessToken,
+                ),
+            )
+        }
         range?.let { connection.setRequestProperty("Range", it) }
         return try {
             Response(connection.responseCode, connection.contentType.orEmpty(), connection.contentLengthLong)

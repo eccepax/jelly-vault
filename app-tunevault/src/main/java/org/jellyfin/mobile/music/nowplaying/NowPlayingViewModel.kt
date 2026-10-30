@@ -24,6 +24,8 @@ import org.jellyfin.mobile.music.playback.PlaybackState
 data class NowPlayingUiState(
     val track: Track? = null,
     val isPlaying: Boolean = false,
+    /** Asked to play, and waiting for the stream: the play button shows it's busy. */
+    val isBuffering: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val repeatMode: RepeatMode = RepeatMode.OFF,
@@ -98,6 +100,7 @@ class NowPlayingViewModel(
     private fun toUiState(playbackState: PlaybackState, positionMs: Long) = NowPlayingUiState(
         track = playbackState.currentTrack,
         isPlaying = playbackState.isPlaying,
+        isBuffering = playbackState.isBuffering,
         positionMs = positionMs,
         // The server may not know a file's length (0); the player learns it once the stream loads.
         durationMs = playbackState.currentTrack?.durationMs?.takeIf { it > 0 } ?: playback.durationMs,
