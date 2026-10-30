@@ -12,6 +12,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.downloads.DownloadGroups
+import org.jellyfin.mobile.common.downloads.GroupStatus
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.downloads.AudiobookDownloads
 import org.jellyfin.mobile.downloads.audioItemIdOf
@@ -63,6 +65,9 @@ class DownloadE2ETest : LoggedInE2ETest() {
     @Test
     fun settingsShowsTheSpaceDownloadsTakeAndRemovesThemAll() {
         downloadATrack()
+        // Settings follows the space downloads take, so it doesn't settle for the test to read it
+        // while the rest of the book is still arriving
+        composeRule.waitUntil(timeoutMillis = DOWNLOAD_TIMEOUT_MS) { allDownloaded() }
 
         chooseFromLibraryMenu(context.getString(R.string.activity_name_settings))
         waitForComposeText(context.getString(CommonR.string.vault_downloads_remove_all))
@@ -92,4 +97,9 @@ class DownloadE2ETest : LoggedInE2ETest() {
     }
 
     private fun downloadedIds(): Set<String> = runBlocking { koinGet<AudiobookDownloads>().downloadedIds.first() }
+
+    private fun allDownloaded(): Boolean = runBlocking {
+        val statuses = koinGet<DownloadGroups>().statuses.first()
+        statuses.isNotEmpty() && statuses.values.all { it == GroupStatus.Downloaded }
+    }
 }

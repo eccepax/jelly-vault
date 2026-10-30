@@ -8,6 +8,7 @@ import org.junit.Test
 import org.jellyfin.mobile.common.R as CommonR
 
 /** The downloads can be listened to before signing in: opened from the connect screen, back returns to it. */
+@DownloadsArea
 class OfflineDownloadsE2ETest : LoggedInE2ETest() {
 
     @Test
