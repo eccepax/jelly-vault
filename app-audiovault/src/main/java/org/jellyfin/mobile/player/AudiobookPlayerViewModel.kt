@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
@@ -78,10 +80,18 @@ class AudiobookPlayerViewModel(
      * A book is starting until it's the one playing; one that fails (or doesn't come to play within
      * [START_TIMEOUT_MS]) stays starting until another is asked for, as the player screen leaves on
      * the failure itself. The screen, showing no book and none
-     * starting (as it's restored with the app's process gone), has nothing to show.
+     * starting (as it's restored with the app's process gone), has nothing to show. On a cast device
+     * the book is gone only once nothing's there for [CAST_HANDOFF_MS]: Media3's cast player holds
+     * nothing for a moment as playback moves there, until the cast device has the queue.
      * Followed only while the player screen follows it; [presenceNow] is where it starts from.
      */
-    val presence: Flow<PlayerPresence> = combine(playback.state, _starting, ::presenceOf).distinctUntilChanged()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val presence: Flow<PlayerPresence> = combine(playback.state, _starting) { state, starting ->
+        presenceOf(state, starting) to state.isRemote
+    }.distinctUntilChanged().transformLatest { (presence, onCast) ->
+        if (!presence.hasBook && onCast) delay(CAST_HANDOFF_MS)
+        emit(presence)
+    }.distinctUntilChanged()
 
     /** [presence] as it is now. */
     val presenceNow: PlayerPresence get() = presenceOf(playback.state.value, _starting.value)
@@ -192,6 +202,9 @@ class AudiobookPlayerViewModel(
     internal companion object {
         /** How long a book sent to the service may take to be the one playing (the service coming up). */
         const val START_TIMEOUT_MS = 15_000L
+
+        /** How long a cast device may hold nothing as playback moves there (see [presence]). */
+        const val CAST_HANDOFF_MS = 5_000L
         private const val MS_PER_MINUTE = 60_000L
         private const val PROGRESS_INTERVAL_MS = 250L
     }

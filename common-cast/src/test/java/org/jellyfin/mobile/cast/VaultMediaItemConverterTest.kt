@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.media3.common.MediaItem
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.MediaQueueItem
 import io.kotest.matchers.shouldBe
+import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -32,5 +34,23 @@ class VaultMediaItemConverterTest {
 
         sent.media?.metadata?.mediaType shouldBe MediaMetadata.MEDIA_TYPE_MOVIE
         sent.media?.streamType shouldBe MediaInfo.STREAM_TYPE_LIVE
+    }
+
+    @Test
+    fun `each song sent is remembered as it was sent`() {
+        val converter = VaultMediaItemConverter(castStream = { stream })
+
+        converter.toMediaQueueItem(untyped)
+
+        converter.sent["item"] shouldBe untyped
+    }
+
+    @Test
+    fun `a song the cast device gave only its id for comes back empty, so what's known of it is kept`() {
+        // Media3 keeps a song's details from before only when the converter has nothing for it
+        val undescribed = MediaQueueItem(JSONObject("""{"itemId": 7}"""))
+
+        undescribed.media shouldBe null
+        VaultMediaItemConverter(castStream = { stream }).toMediaItem(undescribed) shouldBe MediaItem.EMPTY
     }
 }
