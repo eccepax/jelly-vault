@@ -22,6 +22,9 @@ internal class SentItems(private val limit: Int = CAST_QUEUE_LIMIT * 2) {
     }
 
     operator fun get(mediaId: String): MediaItem? = items[mediaId]
+
+    /** Whether nothing has been sent yet. */
+    val isEmpty: Boolean get() = items.isEmpty()
 }
 
 /** What the Cast framework knows of a cast device's queue beyond what Media3's cast player has. */

@@ -10,6 +10,7 @@ import androidx.media3.cast.MediaItemConverter
 import androidx.media3.cast.RemoteCastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.DeviceInfo
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlayerTransferState
 import androidx.media3.common.util.UnstableApi
@@ -247,17 +248,24 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
             .setSeekBackIncrementMs(local.seekBackIncrement)
             .setSeekForwardIncrementMs(local.seekForwardIncrement)
             .build()
+        val sent = (converter as? VaultMediaItemConverter)?.sent
         val player = CastPlayer.Builder(context)
             .setLocalPlayer(local)
             .setRemotePlayer(remote)
-            .setTransferCallback(PausedComingBack())
+            // Nothing sent yet (the app started again mid-cast), what's there is taken as its own
+            .setTransferCallback(
+                PausedComingBack(sentFromHere = { sent == null || sent.isEmpty || sent[it.mediaId] != null }),
+            )
             .build()
         // Media3's cast player never has an error of its own: one the cast device has is given it here
         val reporting = CastFailureReporting(player)
         reporting.onRelease = onCastFailure(reporting::failedThere)
         val guarded = CastSeekGuard(reporting) { remote.currentTimeline.isEmpty }
-        val sent = (converter as? VaultMediaItemConverter)?.sent ?: return guarded
-        return CastQueueDetails(guarded, sent, SessionQueueLookup())
+        if (sent == null) return guarded
+        val details = CastQueueDetails(guarded, sent, SessionQueueLookup())
+        // Taken over by another app, this one leaves the cast device playing what that one sent
+        CastTakeover(details, sent) { castContext?.sessionManager?.endCurrentSession(false) }
+        return details
     }
 
     /** The connected cast device's queue, as the Cast framework fetches it a few songs at a time. */
@@ -318,11 +326,14 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
 /**
  * Playback carries over as Media3 does it, but back here it waits paused rather than starting out of
  * the phone's speaker. Cast again soon after (within [CARRY_ON_WITHIN_MS]) without playing here
- * meanwhile, it plays on there as it did.
+ * meanwhile, it plays on there as it did. A cast device playing a song this app didn't send (another
+ * app took it over, see [CastTakeover]) brings nothing back: the player here is left empty.
  */
 @UnstableApi
 internal class PausedComingBack(
     private val now: () -> Long = SystemClock::elapsedRealtime,
+    /** Whether this app sent the cast device [item]. */
+    private val sentFromHere: (item: MediaItem) -> Boolean = { true },
 ) : CastPlayer.TransferCallback {
     /** When playback came back here paused from a cast device that was playing. */
     private var pausedComingBackAt: Long? = null
@@ -340,6 +351,16 @@ internal class PausedComingBack(
     }
 
     override fun transferState(sourcePlayer: Player, targetPlayer: Player) {
+        val fromCast = sourcePlayer.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
+        val playingThere = sourcePlayer.currentMediaItem
+        if (fromCast && playingThere != null && !sentFromHere(playingThere)) {
+            stopHearing()
+            pausedComingBackAt = null
+            targetPlayer.playWhenReady = false
+            targetPlayer.stop()
+            targetPlayer.clearMediaItems()
+            return
+        }
         val wasPlaying = sourcePlayer.playWhenReady && sourcePlayer.playbackState != Player.STATE_ENDED
         val toCast = targetPlayer.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
         val state = PlayerTransferState.fromPlayer(sourcePlayer)

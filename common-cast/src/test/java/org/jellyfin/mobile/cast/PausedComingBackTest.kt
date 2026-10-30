@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
 class PausedComingBackTest {
 
     private var clock = 0L
-    private val transfer = PausedComingBack { clock }
+    private val transfer = PausedComingBack(now = { clock })
 
     private fun exo(): ExoPlayer = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
         .setMediaSourceFactory(FakeAudioSourceFactory())
@@ -51,6 +51,24 @@ class PausedComingBackTest {
         advance(thereExo).untilPendingCommandsAreFullyHandled()
         transfer.transferState(there, here)
         advance(here).untilPendingCommandsAreFullyHandled()
+    }
+
+    @Test
+    fun `back from a cast device playing another app's song, none of it comes here`() {
+        val ownOnly = PausedComingBack(now = { clock }, sentFromHere = { it.mediaId == "mine" })
+        here.setMediaItems(listOf(MediaItem.Builder().setMediaId("mine").setUri("https://vault.test/mine").build()))
+        thereExo.setMediaItems(
+            listOf(MediaItem.Builder().setMediaId("theirs").setUri("https://vault.test/theirs").build()),
+        )
+        thereExo.prepare()
+        thereExo.play()
+        advance(thereExo).untilPendingCommandsAreFullyHandled()
+
+        ownOnly.transferState(there, here)
+        advance(here).untilPendingCommandsAreFullyHandled()
+
+        here.mediaItemCount shouldBe 0
+        here.playWhenReady shouldBe false
     }
 
     @Test
