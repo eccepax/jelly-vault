@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.annotation.OptIn
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.test.utils.TestExoPlayerBuilder
+import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.gms.cast.MediaStatus
 import io.kotest.matchers.nulls.shouldBeNull
@@ -30,7 +32,9 @@ class CastFailuresTest {
     private var failures = 0
     private val watch = CastFailureWatch { failures++ }
 
-    private val exo = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext()).build()
+    private val exo = TestExoPlayerBuilder(ApplicationProvider.getApplicationContext())
+        .setMediaSourceFactory(FakeAudioSourceFactory())
+        .build()
     private var remote = true
 
     /** Stands in for Media3's cast player: playing there while [remote], and never with an error of its own. */
@@ -127,6 +131,21 @@ class CastFailuresTest {
         reporting.failedThere()
 
         reporting.prepare()
+
+        reporting.playerError.shouldBeNull()
+    }
+
+    @Test
+    fun `the cast device playing again (a skip there, which doesn't prepare) clears the error`() {
+        exo.setMediaItems(
+            listOf(MediaItem.Builder().setMediaId("1").build(), MediaItem.Builder().setMediaId("2").build()),
+        )
+        exo.prepare()
+        advance(exo).untilState(Player.STATE_READY)
+        reporting.failedThere()
+
+        exo.seekToNextMediaItem()
+        advance(exo).untilPendingCommandsAreFullyHandled()
 
         reporting.playerError.shouldBeNull()
     }

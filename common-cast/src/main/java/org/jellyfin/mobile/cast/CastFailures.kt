@@ -33,7 +33,8 @@ internal class CastFailureWatch(private val failed: () -> Unit) {
 /**
  * A session's cast player that has a player error when the cast device couldn't play what it was
  * sent ([failedThere]), as ExoPlayer has one here, so the app shows it the same way. Kept until
- * it's prepared again, as ExoPlayer keeps its own, or until playback comes back here.
+ * it's prepared again, as ExoPlayer keeps its own, until the cast device plays again (a skip to the
+ * next song there, which doesn't prepare), or until playback comes back here.
  */
 @OptIn(UnstableApi::class)
 internal class CastFailureReporting(player: Player) : ForwardingPlayer(player) {
@@ -48,6 +49,10 @@ internal class CastFailureReporting(player: Player) : ForwardingPlayer(player) {
             object : Player.Listener {
                 override fun onDeviceInfoChanged(deviceInfo: DeviceInfo) {
                     if (deviceInfo.playbackType != DeviceInfo.PLAYBACK_TYPE_REMOTE) cleared()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY) cleared()
                 }
             },
         )
