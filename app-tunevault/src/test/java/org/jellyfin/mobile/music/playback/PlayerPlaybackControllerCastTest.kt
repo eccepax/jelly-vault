@@ -70,15 +70,24 @@ class PlayerPlaybackControllerCastTest {
 
         override fun getMediaItemAt(index: Int): MediaItem = when {
             index in undescribed -> MediaItem.EMPTY
+            index in mislabelled -> super.getMediaItemAt(mislabelled.getValue(index))
             anotherApps -> super.getMediaItemAt(index).markedSentFromAnotherApp()
             else -> super.getMediaItemAt(index)
         }
 
+        /**
+         * Songs it shows another's details for, by index: as a song ends, a cast device's status can
+         * name the next song for the one before it for a moment.
+         */
+        var mislabelled: Map<Int, Int> = emptyMap()
+
         /** Whether what it plays is another app's (AudioVault took the cast device over, say). */
         var anotherApps = false
 
-        override fun getCurrentMediaItem(): MediaItem? =
-            super.getCurrentMediaItem()?.let { if (anotherApps) it.markedSentFromAnotherApp() else it }
+        override fun getCurrentMediaItem(): MediaItem? = when {
+            currentMediaItemIndex in mislabelled -> getMediaItemAt(currentMediaItemIndex)
+            else -> super.getCurrentMediaItem()?.let { if (anotherApps) it.markedSentFromAnotherApp() else it }
+        }
 
         /** How many times its queue was changed. */
         var edits = 0
@@ -189,6 +198,21 @@ class PlayerPlaybackControllerCastTest {
 
         player.edits shouldBe 0
         controller.state.value.currentTrack?.id shouldBe "t1"
+    }
+
+    @Test
+    fun `cast, a song shown with the next one's details as one ends isn't taken for a queue to send again`() {
+        player.remote = true
+        controller.play(twelve.take(3), startIndex = 0)
+        settle()
+        player.edits = 0
+
+        // The first song ending: for a moment its place, still the one playing, shows the second song
+        player.mislabelled = mapOf(0 to 1)
+        repeat(3) { player.statusChanged() }
+        settle()
+
+        player.edits shouldBe 0
     }
 
     @Test
