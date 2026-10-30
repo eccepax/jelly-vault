@@ -262,10 +262,7 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
         reporting.onRelease = onCastFailure(reporting::failedThere)
         val guarded = CastSeekGuard(reporting) { remote.currentTimeline.isEmpty }
         if (sent == null) return guarded
-        val details = CastQueueDetails(guarded, sent, SessionQueueLookup())
-        // Taken over by another app, this one leaves the cast device playing what that one sent
-        CastTakeover(details, sent) { castContext?.sessionManager?.endCurrentSession(false) }
-        return details
+        return CastQueueDetails(guarded, sent, SessionQueueLookup())
     }
 
     /** The connected cast device's queue, as the Cast framework fetches it a few songs at a time. */
@@ -327,7 +324,7 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
  * Playback carries over as Media3 does it, but back here it waits paused rather than starting out of
  * the phone's speaker. Cast again soon after (within [CARRY_ON_WITHIN_MS]) without playing here
  * meanwhile, it plays on there as it did. A cast device playing a song this app didn't send (another
- * app took it over, see [CastTakeover]) brings nothing back: the player here is left empty.
+ * app took it over, see [sentFromAnotherApp]) brings nothing back: the player here is left empty.
  */
 @UnstableApi
 internal class PausedComingBack(

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.jellyfin.mobile.cast.sentFromAnotherApp
 
 /**
  * [AudiobookPlaybackController] over any Media3 [Player]: a MediaController in the app, a
@@ -103,7 +104,14 @@ class PlayerAudiobookController(
     fun release() = player.release()
 
     private fun syncFromPlayer() {
-        val tracks = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toAudiobookTrack() }
+        // Every app on the phone casts in the one session: another app's book or song playing there
+        // isn't this one's, so there's no book here to show or report listening to
+        val anotherApps = player.currentMediaItem?.sentFromAnotherApp == true
+        val tracks = if (anotherApps) {
+            emptyList()
+        } else {
+            (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toAudiobookTrack() }
+        }
         // The player keeps its error past stop() and a new playlist, until it's prepared again: only
         // one not seen before is news.
         val playerError = player.playerError
@@ -117,10 +125,10 @@ class PlayerAudiobookController(
             state.copy(
                 tracks = tracks,
                 currentIndex = if (tracks.isEmpty()) 0 else player.currentMediaItemIndex,
-                playWhenReady = player.playWhenReady,
-                isPlaying = player.isPlaying,
-                isBuffering = player.playbackState == Player.STATE_BUFFERING,
-                isEnded = player.playbackState == Player.STATE_ENDED,
+                playWhenReady = player.playWhenReady && !anotherApps,
+                isPlaying = player.isPlaying && !anotherApps,
+                isBuffering = player.playbackState == Player.STATE_BUFFERING && !anotherApps,
+                isEnded = player.playbackState == Player.STATE_ENDED && !anotherApps,
                 error = newError?.let { it.localizedMessage ?: it.errorCodeName } ?: kept,
                 isRemote = isRemote,
             )

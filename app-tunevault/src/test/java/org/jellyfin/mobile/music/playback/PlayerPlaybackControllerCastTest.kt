@@ -13,6 +13,7 @@ import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.advance
 import androidx.media3.test.utils.robolectric.TestPlayerRunHelper.run
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
+import org.jellyfin.mobile.cast.markedSentFromAnotherApp
 import org.jellyfin.mobile.music.domain.RepeatMode
 import org.jellyfin.mobile.music.domain.track
 import org.junit.After
@@ -67,8 +68,17 @@ class PlayerPlaybackControllerCastTest {
         /** The songs it gives only the cast device's id for (it hasn't described them yet), by index. */
         var undescribed: Set<Int> = emptySet()
 
-        override fun getMediaItemAt(index: Int): MediaItem =
-            if (index in undescribed) MediaItem.EMPTY else super.getMediaItemAt(index)
+        override fun getMediaItemAt(index: Int): MediaItem = when {
+            index in undescribed -> MediaItem.EMPTY
+            anotherApps -> super.getMediaItemAt(index).markedSentFromAnotherApp()
+            else -> super.getMediaItemAt(index)
+        }
+
+        /** Whether what it plays is another app's (AudioVault took the cast device over, say). */
+        var anotherApps = false
+
+        override fun getCurrentMediaItem(): MediaItem? =
+            super.getCurrentMediaItem()?.let { if (anotherApps) it.markedSentFromAnotherApp() else it }
 
         /** How many times its queue was changed. */
         var edits = 0
@@ -179,6 +189,24 @@ class PlayerPlaybackControllerCastTest {
 
         player.edits shouldBe 0
         controller.state.value.currentTrack?.id shouldBe "t1"
+    }
+
+    @Test
+    fun `another app's book or song on the cast device is nothing playing here, and is left alone`() {
+        player.remote = true
+        controller.play(twelve.take(3), startIndex = 0)
+        settle()
+        player.edits = 0
+
+        // Every app on the phone casts in the one session: AudioVault took the cast device over
+        player.anotherApps = true
+        player.statusChanged()
+        settle()
+
+        controller.state.value.currentTrack shouldBe null
+        controller.state.value.queue.tracks shouldBe emptyList()
+        controller.state.value.isPlaying shouldBe false
+        player.edits shouldBe 0
     }
 
     @Test

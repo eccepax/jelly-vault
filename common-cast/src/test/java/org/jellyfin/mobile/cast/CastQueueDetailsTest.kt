@@ -148,12 +148,24 @@ class CastQueueDetailsTest {
     }
 
     @Test
-    fun `another sender's song, never sent from here, is left as the cast device has it`() {
-        castQueue = listOf(100 to song(7), 101 to MediaItem.EMPTY)
-        fetched[101] = "someone-else"
+    fun `another app's song is marked as that, and the app's own songs aren't`() {
+        sent.remember(song(0))
+        castQueue = listOf(100 to song(7), 101 to song(0), 102 to MediaItem.EMPTY)
+        fetched[102] = "someone-else"
 
         details.getMediaItemAt(0).mediaId shouldBe "s7"
-        details.getMediaItemAt(1) shouldBe MediaItem.EMPTY
+        details.getMediaItemAt(0).sentFromAnotherApp shouldBe true
+        details.getMediaItemAt(1).sentFromAnotherApp shouldBe false
+        // A bare id that isn't one of this app's songs is no song of its own to show
+        details.getMediaItemAt(2).sentFromAnotherApp shouldBe false
+        details.currentTimeline.getWindow(0, Timeline.Window()).mediaItem.sentFromAnotherApp shouldBe true
+    }
+
+    @Test
+    fun `with nothing sent yet (the app started again mid-cast), nothing there is marked as another app's`() {
+        castQueue = listOf(100 to song(7))
+
+        details.getMediaItemAt(0).sentFromAnotherApp shouldBe false
     }
 
     @Test

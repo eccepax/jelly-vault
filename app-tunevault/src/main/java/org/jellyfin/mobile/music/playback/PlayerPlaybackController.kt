@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.jellyfin.mobile.cast.CAST_QUEUE_LIMIT
 import org.jellyfin.mobile.cast.castWindowFrom
+import org.jellyfin.mobile.cast.sentFromAnotherApp
 import org.jellyfin.mobile.music.domain.PlayQueue
 import org.jellyfin.mobile.music.domain.QueueEntry
 import org.jellyfin.mobile.music.domain.RepeatMode
@@ -266,6 +267,12 @@ class PlayerPlaybackController(
     }
 
     private fun syncFromPlayer() {
+        // Every app on the phone casts in the one session: another app's book or song playing there
+        // isn't this one's, so nothing plays here, and the queue's gone (play mustn't resume theirs)
+        if (player.currentMediaItem?.sentFromAnotherApp == true) {
+            _state.update { PlaybackState(queue = PlayQueue.EMPTY.withRepeatMode(it.queue.repeatMode)) }
+            return
+        }
         val playingUid = player.currentMediaItem?.queueUid
         _state.update { state ->
             val index = state.queue.entries.indexOfFirst { it.uid == playingUid }

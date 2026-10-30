@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Looper
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -14,6 +15,7 @@ import io.kotest.matchers.longs.shouldBeInRange
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import org.jellyfin.mobile.cast.markedSentFromAnotherApp
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -286,9 +288,39 @@ class PlayerAudiobookControllerTest {
         onCast.state.value.isRemote shouldBe false
     }
 
+    @Test
+    fun `another app's book or song on the cast device is no book here`() {
+        val castable = Castable(AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)))
+        val onCast = PlayerAudiobookController(castable, streamUrl = {
+            "https://vault.test/Audio/$it/universal"
+        }, setSkipSilence = {})
+        onCast.play(listOf(track("a"), track("b")), 0, 0L)
+        settle()
+        castable.remote = true
+
+        // Every app on the phone casts in the one session: TuneVault took the cast device over
+        castable.anotherAppsSong = true
+        onCast.pause()
+        settle()
+
+        onCast.state.value.tracks shouldBe emptyList()
+        onCast.state.value.currentTrack shouldBe null
+        onCast.state.value.isPlaying shouldBe false
+        onCast.state.value.isRemote shouldBe true
+    }
+
     /** The player as a controller sees it once the session's player is a cast player. */
     private class Castable(player: Player) : ForwardingPlayer(player) {
         var remote = false
+
+        /** Whether the cast device plays a song another app sent (every item then shows as one). */
+        var anotherAppsSong = false
+
+        override fun getCurrentMediaItem(): MediaItem? =
+            super.getCurrentMediaItem()?.let { if (anotherAppsSong) it.markedSentFromAnotherApp() else it }
+
+        override fun getMediaItemAt(index: Int): MediaItem =
+            super.getMediaItemAt(index).let { if (anotherAppsSong) it.markedSentFromAnotherApp() else it }
 
         override fun getDeviceInfo(): DeviceInfo =
             if (remote) DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).build() else super.getDeviceInfo()

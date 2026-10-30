@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.cast
 
+import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.FlagSet
@@ -39,8 +40,10 @@ internal interface CastQueueLookup {
 /**
  * A cast device describes only the songs around the one playing; Media3's cast player has nothing
  * but the cast device's id for the rest. Those come back as the app [sent] them, looked up by that
- * id ([lookup]), and listeners hear of the queue again as more of it is known. Songs another sender
- * put there stay as the cast device has them. Played here, the player's own queue is left alone.
+ * id ([lookup]), and listeners hear of the queue again as more of it is known. Songs another app
+ * put there come as the cast device has them, marked [sentFromAnotherApp] once this app has sent
+ * any of its own (before that, after the app starts again mid-cast, they may be its own). Played
+ * here, the player's own queue is left alone.
  */
 @OptIn(UnstableApi::class)
 internal class CastQueueDetails(
@@ -93,7 +96,9 @@ internal class CastQueueDetails(
     /** [item] as the app sent it, when it's a bare id the cast device hasn't described. */
     private fun filled(itemId: Any?, item: MediaItem): MediaItem {
         sent[item.mediaId]?.let { return it }
-        if (!item.bare || itemId !is Int) return item
+        // Every app on the phone casts in the one session: another's song there isn't this one's
+        if (!item.bare) return if (sent.isEmpty) item else item.markedSentFromAnotherApp()
+        if (itemId !is Int) return item
         val contentId = contentIds[itemId] ?: lookup.contentIdOf(itemId)?.also { contentIds[itemId] = it }
         return contentId?.let { sent[it] } ?: item
     }
@@ -147,6 +152,22 @@ internal class CastQueueDetails(
         override fun getLastWindowIndex(shuffleModeEnabled: Boolean) = timeline.getLastWindowIndex(shuffleModeEnabled)
     }
 }
+
+/**
+ * Whether another app sent the cast device this song: every app on a phone casts to a device in the
+ * one session, so each sees the others' songs there. An app shows such a song as nothing of its own
+ * playing (see [CastQueueDetails]).
+ */
+val MediaItem.sentFromAnotherApp: Boolean
+    get() = mediaMetadata.extras?.getBoolean(SENT_FROM_ANOTHER_APP) == true
+
+/** This song, marked as another app's (see [sentFromAnotherApp]). */
+fun MediaItem.markedSentFromAnotherApp(): MediaItem {
+    val extras = Bundle(mediaMetadata.extras ?: Bundle()).apply { putBoolean(SENT_FROM_ANOTHER_APP, true) }
+    return buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setExtras(extras).build()).build()
+}
+
+private const val SENT_FROM_ANOTHER_APP = "org.jellyfin.mobile.cast.SENT_FROM_ANOTHER_APP"
 
 /** A song the cast device gave only its id for (see VaultMediaItemConverter.toMediaItem). */
 private val MediaItem.bare: Boolean get() = mediaId.isEmpty()
