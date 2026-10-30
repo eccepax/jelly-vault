@@ -17,6 +17,7 @@ import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.framework.media.MediaQueue
 import com.google.android.gms.cast.framework.media.RemoteMediaClient
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -254,7 +255,39 @@ private class CastContextCasting(private val context: Context) : Casting, CastPl
         // Media3's cast player never has an error of its own: one the cast device has is given it here
         val reporting = CastFailureReporting(player)
         reporting.onRelease = onCastFailure(reporting::failedThere)
-        return CastSeekGuard(reporting) { remote.currentTimeline.isEmpty }
+        val guarded = CastSeekGuard(reporting) { remote.currentTimeline.isEmpty }
+        val sent = (converter as? VaultMediaItemConverter)?.sent ?: return guarded
+        return CastQueueDetails(guarded, sent, SessionQueueLookup())
+    }
+
+    /** The connected cast device's queue, as the Cast framework fetches it a few songs at a time. */
+    private inner class SessionQueueLookup : CastQueueLookup {
+        private var changed: () -> Unit = {}
+        private var watchedQueue: MediaQueue? = null
+        private val fetched = object : MediaQueue.Callback() {
+            override fun itemsUpdatedAtIndexes(indexes: IntArray) = changed()
+        }
+
+        override fun contentIdOf(itemId: Int): String? {
+            val queue = queue() ?: return null
+            val index = queue.indexOfItemWithId(itemId).takeIf { it >= 0 } ?: return null
+            return queue.getItemAtIndex(index, true)?.media?.contentId
+        }
+
+        override fun onChanged(changed: () -> Unit) {
+            this.changed = changed
+        }
+
+        /** The connected cast device's queue, heard as its songs are fetched. */
+        private fun queue(): MediaQueue? {
+            val queue = castContext?.sessionManager?.currentCastSession?.remoteMediaClient?.mediaQueue
+            if (queue !== watchedQueue) {
+                watchedQueue?.unregisterCallback(fetched)
+                queue?.registerCallback(fetched)
+                watchedQueue = queue
+            }
+            return queue
+        }
     }
 
     override fun remoteCastPlayer(converter: MediaItemConverter, onConnectionChanged: (Boolean) -> Unit): RemotePlayer {

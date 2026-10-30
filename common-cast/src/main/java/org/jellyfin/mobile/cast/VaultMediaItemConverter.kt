@@ -14,7 +14,8 @@ import com.google.android.gms.cast.MediaQueueItem
  * Media3's own converter has them, with the item's id for the content id. Not the whole item in the
  * custom data, as Media3's converter sends it: the queue goes in one message the Cast framework caps
  * at 512 KB, and the cast player remembers the items it sent anyway. One it didn't send (another
- * sender's) comes back from what the cast device has of it.
+ * sender's) comes back from what the cast device has of it. Each one sent is kept in [sent], for the
+ * songs the cast device later gives only its id for (see CastQueueDetails).
  */
 @OptIn(UnstableApi::class)
 internal class VaultMediaItemConverter(
@@ -24,7 +25,11 @@ internal class VaultMediaItemConverter(
 ) : MediaItemConverter {
     private val default = DefaultMediaItemConverter()
 
+    /** The songs last sent, as they were sent. */
+    val sent = SentItems()
+
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
+        sent.remember(mediaItem)
         val stream = castStream(mediaItem)
         // Without a type the receiver takes it for a movie, and shows no cover or artist. A live
         // channel is one: as music, the receiver shows its music screen and plays only the sound.
@@ -46,10 +51,13 @@ internal class VaultMediaItemConverter(
         return MediaQueueItem.Builder(info).build()
     }
 
-    /** One the cast device hasn't sent the details of yet goes by its item id (Media3's converter throws on it). */
+    /**
+     * One the cast device gives only its id for (it describes just the songs around the one playing)
+     * is empty: Media3's cast player keeps what it already knew of it then (its own converter throws).
+     */
     override fun toMediaItem(mediaQueueItem: MediaQueueItem): MediaItem =
         if (mediaQueueItem.media == null) {
-            MediaItem.Builder().setMediaId("cast:${mediaQueueItem.itemId}").build()
+            MediaItem.EMPTY
         } else {
             default.toMediaItem(mediaQueueItem)
         }
