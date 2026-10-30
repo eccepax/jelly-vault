@@ -190,6 +190,51 @@ class AudiobookPlayerViewModelTest {
     }
 
     @Test
+    fun `cast, a moment with no track (the queue on its way there) isn't the book stopping`() = runTest {
+        val track = AudiobookTrack(id = book.toString(), title = "Book", durationMs = 60_000L)
+        controller.playing(track, isRemote = true)
+        val viewModel = viewModel()
+        val seen = mutableListOf<PlayerPresence>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.presence.collect { seen += it } }
+
+        // Media3's cast player holds nothing until the cast device has the queue
+        controller.state.value = controller.state.value.copy(tracks = emptyList())
+        advanceTimeBy(AudiobookPlayerViewModel.CAST_HANDOFF_MS - 1)
+        controller.playing(track, isRemote = true)
+        advanceTimeBy(AudiobookPlayerViewModel.CAST_HANDOFF_MS)
+
+        seen.none { !it.hasBook } shouldBe true
+    }
+
+    @Test
+    fun `cast, a queue that stays empty is the book stopping`() = runTest {
+        val track = AudiobookTrack(id = book.toString(), title = "Book", durationMs = 60_000L)
+        controller.playing(track, isRemote = true)
+        val viewModel = viewModel()
+        val seen = mutableListOf<PlayerPresence>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.presence.collect { seen += it } }
+
+        controller.state.value = controller.state.value.copy(tracks = emptyList())
+        advanceTimeBy(AudiobookPlayerViewModel.CAST_HANDOFF_MS + 1)
+
+        seen.last().hasBook shouldBe false
+    }
+
+    @Test
+    fun `played here, the book stopping is said at once`() = runTest {
+        val track = AudiobookTrack(id = book.toString(), title = "Book", durationMs = 60_000L)
+        controller.playing(track)
+        val viewModel = viewModel()
+        val seen = mutableListOf<PlayerPresence>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.presence.collect { seen += it } }
+
+        controller.state.value = controller.state.value.copy(tracks = emptyList())
+        runCurrent()
+
+        seen.last().hasBook shouldBe false
+    }
+
+    @Test
     fun `a book is starting from being asked for until it plays`() = runTest {
         val loading = CompletableDeferred<Unit>()
         val viewModel = viewModel(items = { ids ->
