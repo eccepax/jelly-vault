@@ -94,14 +94,16 @@ internal class CastQueueDetails(
     }
 
     /** [item] as the app sent it, when it's a bare id the cast device hasn't described. */
-    private fun filled(itemId: Any?, item: MediaItem): MediaItem {
-        sent[item.mediaId]?.let { return it }
+    private fun filled(itemId: Any?, item: MediaItem): MediaItem = sent[item.mediaId] ?: when {
         // Every app on the phone casts in the one session: another's song there isn't this one's
-        if (!item.bare) return if (sent.isEmpty) item else item.markedSentFromAnotherApp()
-        if (itemId !is Int) return item
-        val contentId = contentIds[itemId] ?: lookup.contentIdOf(itemId)?.also { contentIds[itemId] = it }
-        return contentId?.let { sent[it] } ?: item
+        !item.bare -> if (sent.isEmpty) item else item.markedSentFromAnotherApp()
+        itemId !is Int -> item
+        else -> contentIdOf(itemId)?.let { sent[it] } ?: item
     }
+
+    /** The content id of the cast device's item [itemId], once known; asked for until it is. */
+    private fun contentIdOf(itemId: Int): String? =
+        contentIds[itemId] ?: lookup.contentIdOf(itemId)?.also { contentIds[itemId] = it }
 
     /** More of the cast device's queue is known: listeners hear of the queue if any of it is new here. */
     private fun moreKnown() {
