@@ -516,7 +516,7 @@ fun ChannelsRoute(
             onRetry = viewModel::retry,
             onSignOut = onSignOut,
         ),
-        castButton = { CastButton(casting) },
+        castButton = remember(casting) { { CastButton(casting) } },
         bottomBar = bottomBar,
     )
 }

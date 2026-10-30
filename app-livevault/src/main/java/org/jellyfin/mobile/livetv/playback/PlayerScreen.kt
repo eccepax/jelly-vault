@@ -417,7 +417,7 @@ fun PlayerRoute(viewModel: WatchViewModel, onShowFree: () -> Unit, casting: Cast
         onShowFree = onShowFree,
         inPictureInPicture = inPictureInPicture,
         onStopCasting = viewModel::stopCasting,
-        castButton = { CastButton(casting) },
+        castButton = remember(casting) { { CastButton(casting) } },
         video = {
             val exoPlayer = (viewModel.localPlayer as? ExoLivePlayer)?.exoPlayer
             // On only while the channel plays here: a cast plays on the TV, and the phone can sleep

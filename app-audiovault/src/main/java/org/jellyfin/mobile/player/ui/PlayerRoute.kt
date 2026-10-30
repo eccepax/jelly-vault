@@ -105,7 +105,7 @@ fun PlayerRoute(
         castDevice = castDevice,
         connectingTo = connectingTo,
         onStopCasting = casting::stopCasting,
-        castButton = { CastButton(casting) },
+        castButton = remember(casting) { { CastButton(casting) } },
     )
 }
 
