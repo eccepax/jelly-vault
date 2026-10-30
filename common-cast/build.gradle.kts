@@ -50,5 +50,7 @@ dependencies {
     // the JUnit5 platform's vintage engine alongside the Jupiter suite.
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     testRuntimeOnly(libs.junit.vintage.engine)
 }
