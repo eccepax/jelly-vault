@@ -70,6 +70,12 @@ To get updates automatically, add this repository to [Obtainium](https://github.
 - Android 8.0 (API 26) or later
 - Jellyfin server 10.10.7 or newer, with an audiobook, ebook, and/or music library, or Live TV set up for LiveVault
 
+## Known issues
+
+- **Casting shares your sign-in with devices on your network.** AudioVault, TuneVault and LiveVault cast through Google's standard receiver, which can only play a plain web address, so the stream address includes your Jellyfin access token. While something is casting, the cast device and any other device on the same network that can see the cast session can read that token, and it stays valid until it is revoked on the server. Signing out of the app doesn't revoke it. On a network you don't trust, don't cast, or cast while signed in as a user who isn't a Jellyfin administrator. If you think the token was exposed, a Jellyfin administrator can revoke it by removing the phone under Dashboard → Devices.
+- **TuneVault's notification can show another app's cast.** If AudioVault starts casting to a device TuneVault is casting to, TuneVault's own screens show nothing playing, but its notification and lock-screen controls keep showing the book AudioVault is playing, and their buttons may control it. AudioVault's notification can do the same the other way round. Stopping the cast clears it.
+- **LiveVault taking over a cast device hasn't been tested.** AudioVault and TuneVault each leave alone what the other sends to a cast device; LiveVault casts a different way, so starting LiveVault on a device one of the others is casting to (or the reverse) may not behave as well.
+
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
