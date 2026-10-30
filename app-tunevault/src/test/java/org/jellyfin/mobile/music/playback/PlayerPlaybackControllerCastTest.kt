@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.FlagSet
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -62,6 +63,31 @@ class PlayerPlaybackControllerCastTest {
         var countShown: Int? = null
 
         override fun getMediaItemCount(): Int = countShown ?: super.getMediaItemCount()
+
+        /** The songs it gives only the cast device's id for (it hasn't described them yet), by index. */
+        var undescribed: Set<Int> = emptySet()
+
+        override fun getMediaItemAt(index: Int): MediaItem =
+            if (index in undescribed) MediaItem.EMPTY else super.getMediaItemAt(index)
+
+        /** How many times its queue was changed. */
+        var edits = 0
+
+        override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
+            edits++
+            super.removeMediaItems(fromIndex, toIndex)
+        }
+
+        override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
+            edits++
+            super.addMediaItems(index, mediaItems)
+        }
+
+        /** Tells its listeners something changed, as a cast device's status does. */
+        fun statusChanged() {
+            val events = Player.Events(FlagSet.Builder().add(Player.EVENT_TIMELINE_CHANGED).build())
+            listeners.toList().forEach { it.onEvents(this, events) }
+        }
 
         override fun getDeviceInfo(): DeviceInfo =
             DeviceInfo.Builder(if (remote) DeviceInfo.PLAYBACK_TYPE_REMOTE else DeviceInfo.PLAYBACK_TYPE_LOCAL).build()
@@ -137,6 +163,22 @@ class PlayerPlaybackControllerCastTest {
 
         held() shouldBe listOf("t1", "t2", "t3", "t4")
         playing shouldBe "t2"
+    }
+
+    @Test
+    fun `cast, songs the cast device hasn't described yet aren't taken for missing ones`() {
+        player.remote = true
+        controller.play(twelve.take(3), startIndex = 0)
+        settle()
+        player.edits = 0
+
+        // The cast device describes only the playing song: the others come back as bare ids
+        player.undescribed = setOf(1, 2)
+        repeat(3) { player.statusChanged() }
+        settle()
+
+        player.edits shouldBe 0
+        controller.state.value.currentTrack?.id shouldBe "t1"
     }
 
     @Test

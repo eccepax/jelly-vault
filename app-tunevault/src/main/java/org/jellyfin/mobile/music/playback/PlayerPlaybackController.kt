@@ -179,8 +179,14 @@ class PlayerPlaybackController(
     }
 
     /** Whether the player holds [queue] a window at a time: cast, and longer than [castWindow]. */
-    private fun castWindowed(queue: PlayQueue): Boolean =
-        player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE && queue.entries.size > castWindow
+    private fun castWindowed(queue: PlayQueue): Boolean = cast && queue.entries.size > castWindow
+
+    private val cast: Boolean get() = player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
+
+    /** Whether the player holds a song it has only the cast device's id for, not one of the queue's. */
+    private fun holdsUndescribed(): Boolean = (0 until player.mediaItemCount).any {
+        player.getMediaItemAt(it).queueUid == null
+    }
 
     /**
      * After each player event, once the player plays the queue's current entry: it holds what it
@@ -196,6 +202,9 @@ class PlayerPlaybackController(
         val current = queue.entries.getOrNull(queue.currentIndex) ?: return
         if (player.currentMediaItem?.queueUid != current.uid) return
         if (!castWindowed(queue)) {
+            // A cast device describes only the songs around the one playing: one it gave only its own
+            // id for isn't missing, and sending the queue again would only bring it back the same
+            if (cast && holdsUndescribed()) return
             if (!holdsWhole(queue)) reshape(queue)
             return
         }
