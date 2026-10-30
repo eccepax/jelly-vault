@@ -28,12 +28,16 @@ class LivePlaybackTest {
 
     private var stoppedOnCastDevice = 0
 
+    /** Whether the player screen is showing, so a channel comes back here when its cast ends. */
+    private var watching = true
+
     private fun TestScope.playback() = LivePlayback(
         streams = streams,
         player = player,
         closer = StreamCloser(streams, ledger, scope = backgroundScope),
         scope = backgroundScope,
         onStoppedOnCastDevice = { stoppedOnCastDevice++ },
+        playsHereWhenCastEnds = { watching },
     )
 
     /** After everything settles, no stream is left open on the server except [expected]. */
@@ -618,4 +622,43 @@ class LivePlaybackTest {
         log.events.last { it.startsWith("open") } shouldBe "open-for-cast:a"
         assertOnlyOpen("ls-a-2")
     }
+
+    @Test
+    fun `a channel left on the cast device from the list isn't tuned here on the way back when its cast ended`() =
+        runTest {
+            val playback = playback()
+            player.onCastDevice.value = true
+            playback.play("a", lineup)
+            runCurrent()
+            watching = false
+            playback.pause()
+            player.onCastDevice.value = false
+            settle()
+
+            playback.resume()
+            settle()
+
+            playback.state.value shouldBe PlaybackState.Idle
+            player.playing shouldBe null
+            assertOnlyOpen()
+        }
+
+    @Test
+    fun `a channel left on the cast device from the list still plays there again when the cast comes back`() =
+        runTest {
+            val playback = playback()
+            player.onCastDevice.value = true
+            playback.play("a", lineup)
+            runCurrent()
+            watching = false
+            playback.pause()
+            player.onCastDevice.value = false
+            settle()
+
+            player.onCastDevice.value = true
+            settle()
+
+            playback.state.value shouldBe PlaybackState.Playing("a")
+            log.events.last { it.startsWith("open") } shouldBe "open-for-cast:a"
+        }
 }

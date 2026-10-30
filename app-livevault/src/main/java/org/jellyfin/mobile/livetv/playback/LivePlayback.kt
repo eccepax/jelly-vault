@@ -78,8 +78,9 @@ class LivePlayback(
      * A channel freed in the background, tuned again by [resume]; [castEnded] when that was because
      * the cast it played on ended, so a cast coming back (the session rejoined) plays it there again.
      * One freed from here (or failed) waits for the way back: it isn't opened from the background.
+     * Not [playsHere] (its cast ended with no player screen showing), the way back leaves it stopped.
      */
-    private class Freed(val channelId: String, val castEnded: Boolean)
+    private class Freed(val channelId: String, val castEnded: Boolean, val playsHere: Boolean = true)
 
     private var freed: Freed? = null
     private var inBackground = false
@@ -130,9 +131,9 @@ class LivePlayback(
 
     fun resume() {
         inBackground = false
-        val channel = freed?.channelId ?: return
-        freed = null
-        request(channel, debounce = false)
+        val freed = freed ?: return
+        this.freed = null
+        if (freed.playsHere) request(freed.channelId, debounce = false)
     }
 
     /** Stops, returning once the stream is closed: for signing out, while the token still works. */
@@ -154,8 +155,8 @@ class LivePlayback(
         _state.value = PlaybackState.Idle
     }
 
-    private fun freeForBackground(castEnded: Boolean = false) {
-        freed = state.value.channelId?.let { Freed(it, castEnded) }
+    private fun freeForBackground(castEnded: Boolean = false, playsHere: Boolean = true) {
+        freed = state.value.channelId?.let { Freed(it, castEnded, playsHere) }
         if (freed != null) stop()
     }
 
@@ -173,7 +174,7 @@ class LivePlayback(
                 request(freed.channelId, debounce = false)
             }
             channel == null -> Unit
-            !onCastDevice && inBackground -> freeForBackground(castEnded = true)
+            !onCastDevice && inBackground -> freeForBackground(castEnded = true, playsHere = playsHereWhenCastEnds())
             !onCastDevice && !playsHereWhenCastEnds() -> stop()
             else -> request(channel, debounce = false)
         }
