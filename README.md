@@ -95,6 +95,10 @@ These apps are not affiliated with or endorsed by the Jellyfin project.
 
 Significant portions of this codebase — including the original fork/restructure from jellyfin-android and most subsequent features, bug fixes, and the test suite — were written with the assistance of AI coding tools (Claude).
 
+## Privacy
+
+The apps collect nothing: they talk only to the Jellyfin server you sign in to. See the [privacy policy](PRIVACY.md).
+
 ## License
 
 GNU General Public License v2.0 — see [LICENSE](LICENSE.md) for details. This project inherits the license of the upstream jellyfin-android project.
