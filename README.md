@@ -7,6 +7,11 @@ Four Android apps for a self-hosted [Jellyfin](https://jellyfin.org) server, one
 - **TuneVault**: music
 - **LiveVault**: live TV, on phones, tablets, and Google TV
 
+| AudioVault | BookVault | TuneVault | LiveVault |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/audiovault-library.png" width="200" alt="AudioVault library"> | <img src="docs/screenshots/bookvault-reader.png" width="200" alt="BookVault reading a PDF"> | <img src="docs/screenshots/tunevault-home.png" width="200" alt="TuneVault home"> | <img src="docs/screenshots/livevault-channels.png" width="200" alt="LiveVault channel list"> |
+| <img src="docs/screenshots/audiovault-player.png" width="200" alt="AudioVault player"> | <img src="docs/screenshots/bookvault-bookmarks-dark.png" width="200" alt="BookVault dark mode and bookmarks"> | <img src="docs/screenshots/tunevault-library.png" width="200" alt="TuneVault albums sorted by year"> | |
+
 ## Download
 
 Signed APKs for each app are attached to [Releases](../../releases), one release per app. Install the APK for the app you want; the apps install side by side.
