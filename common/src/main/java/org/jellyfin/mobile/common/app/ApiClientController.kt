@@ -115,7 +115,14 @@ class ApiClientController(
         )
     }
 
+    /**
+     * Forgets the signed-in user on this device, including the saved token: if the server couldn't
+     * revoke it (offline, no answer), it mustn't stay on the device still working.
+     */
     suspend fun logoutUser() {
+        appPreferences.currentUserId?.let { userDbId ->
+            withContext(Dispatchers.IO) { userDao.logout(userDbId) }
+        }
         appPreferences.currentUserId = null
         resetApiClientUser()
     }

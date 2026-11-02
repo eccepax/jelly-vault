@@ -64,6 +64,7 @@ class ApiClientControllerTest {
         every { appPreferences.currentServerId } returns 1L
         every { appPreferences.currentUserId } returns 1L
         every { userDao.getServerUser(1L, 1L) } returns serverUser
+        every { userDao.logout(any()) } returns Unit
     }
 
     @AfterEach
@@ -116,5 +117,31 @@ class ApiClientControllerTest {
         controller.loadSavedServerUser()
 
         coVerify { apiClient.update(accessToken = "stale-token", deviceInfo = any()) }
+    }
+
+    @Test
+    fun `signing out forgets the saved token, so one the server never revoked isn't left on the device`() = runTest {
+        controller.logoutUser()
+
+        verify { userDao.logout(1L) }
+        verify { appPreferences.currentUserId = null }
+    }
+
+    @Test
+    fun `signing out with nobody signed in touches no saved user`() = runTest {
+        every { appPreferences.currentUserId } returns null
+
+        controller.logoutUser()
+
+        verify(exactly = 0) { userDao.logout(any()) }
+    }
+
+    @Test
+    fun `a token the server rejects is forgotten too`() = runTest {
+        coEvery { userApi.getCurrentUser() } throws InvalidStatusException(401, null)
+
+        controller.loadSavedServerUser()
+
+        verify { userDao.logout(1L) }
     }
 }
