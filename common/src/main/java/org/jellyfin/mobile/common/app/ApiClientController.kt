@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.common.app
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.jellyfin.mobile.common.data.dao.ServerDao
 import org.jellyfin.mobile.common.data.dao.UserDao
@@ -11,6 +12,7 @@ import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.model.DeviceInfo
+import timber.log.Timber
 
 class ApiClientController(
     private val appPreferences: AppPreferences,
@@ -28,8 +30,7 @@ class ApiClientController(
         appPreferences.currentServerId = withContext(Dispatchers.IO) {
             serverDao.getServerByHostname(hostname)?.id ?: serverDao.insert(hostname)
         }
-        appPreferences.currentUserId = null
-        resetApiClientUser()
+        logoutUser()
         apiClient.update(baseUrl = hostname)
     }
 
@@ -73,7 +74,9 @@ class ApiClientController(
                 logoutUser()
             }
         } else {
-            resetApiClientUser()
+            // A user with no token can't be signed in (e.g. the token was forgotten but the app
+            // died before the signed-in user was): back to sign-in rather than 401s.
+            logoutUser()
         }
     }
 
@@ -120,11 +123,21 @@ class ApiClientController(
      * revoke it (offline, no answer), it mustn't stay on the device still working.
      */
     suspend fun logoutUser() {
-        appPreferences.currentUserId?.let { userDbId ->
-            withContext(Dispatchers.IO) { userDao.logout(userDbId) }
-        }
+        // Signed out in memory first, so a failed or interrupted write below can't leave the app
+        // signed in with no token (or a revoked one).
+        val userDbId = appPreferences.currentUserId
         appPreferences.currentUserId = null
         resetApiClientUser()
+        if (userDbId != null) forgetToken(userDbId)
+    }
+
+    /** Runs to the end even if the caller is cancelled; a failure is logged, not thrown. */
+    private suspend fun forgetToken(userDbId: Long) = withContext(NonCancellable + Dispatchers.IO) {
+        try {
+            userDao.logout(userDbId)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.e(e, "Couldn't forget the saved token")
+        }
     }
 
     private fun resetApiClientUser() {
