@@ -5,6 +5,7 @@ import io.kotest.matchers.ints.shouldNotBeExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -91,8 +92,9 @@ class JellyfinLiveStreamsContractTest {
         val stream = openFree(forCast = true)
 
         stream.url shouldContain ".m3u8"
-        // 10.10 names the parameter api_key, 10.11 on ApiKey; the server takes either.
-        stream.url shouldContain Regex("[?&](ApiKey|api_key)=${api.accessToken}")
+        // The server's own URL names it api_key on 10.10; the app always sends ApiKey.
+        stream.url shouldContain Regex("[?&]ApiKey=${Regex.escape(api.accessToken!!)}(&|$)")
+        stream.url shouldNotContain "api_key="
         val (status, playlist) = get(stream.url)
         status shouldBe 200
         playlist shouldStartWith "#EXTM3U"
