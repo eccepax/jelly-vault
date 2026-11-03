@@ -91,7 +91,8 @@ class JellyfinLiveStreamsContractTest {
         val stream = openFree(forCast = true)
 
         stream.url shouldContain ".m3u8"
-        stream.url shouldContain "ApiKey=${api.accessToken}"
+        // 10.10 names the parameter api_key, 10.11 on ApiKey; the server takes either.
+        stream.url shouldContain Regex("[?&](ApiKey|api_key)=${api.accessToken}")
         val (status, playlist) = get(stream.url)
         status shouldBe 200
         playlist shouldStartWith "#EXTM3U"
