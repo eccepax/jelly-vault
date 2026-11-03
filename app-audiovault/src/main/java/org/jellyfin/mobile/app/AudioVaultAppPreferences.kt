@@ -54,11 +54,13 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_LIBRARY_GLOBAL_FLATTEN, value) }
 
     var playbackSpeed: Float
-        get() = sharedPreferences.getFloat(Constants.PREF_PLAYBACK_SPEED, 1f)
+        // Media3 throws for a speed of 0 or less: one saved wrong (a restored backup) mustn't stop playback
+        get() = sharedPreferences.getFloat(Constants.PREF_PLAYBACK_SPEED, 1f).takeIf { it > 0f } ?: 1f
         set(value) = sharedPreferences.edit { putFloat(Constants.PREF_PLAYBACK_SPEED, value) }
 
-    /** The speed [book] (its first track's id) plays at: its own if one was chosen, else [playbackSpeed]. */
-    fun speedFor(book: String): Float = sharedPreferences.getFloat(bookSpeedKey(book), playbackSpeed)
+    /** The speed [book] (see AudiobookTrack.bookId) plays at: its own if one was chosen, else [playbackSpeed]. */
+    fun speedFor(book: String): Float =
+        sharedPreferences.getFloat(bookSpeedKey(book), 0f).takeIf { it > 0f } ?: playbackSpeed
 
     /** Chooses [speed] for [book], and as [playbackSpeed], where books with none of their own start. */
     fun setSpeedFor(book: String, speed: Float) = sharedPreferences.edit {

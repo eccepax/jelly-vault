@@ -74,7 +74,8 @@ class AudiobookPlayerViewModelTest {
 
     private fun bookNamed(id: UUID) = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = "Book")
 
-    private fun track(id: String) = AudiobookTrack(id = id, title = id, durationMs = 60_000L)
+    private fun track(id: String, book: String? = id) =
+        AudiobookTrack(id = id, title = id, durationMs = 60_000L, bookId = book)
 
     private fun options(vararg ids: UUID, startPositionMs: Long? = null) = PlayOptions(
         ids = ids.toList(),
@@ -440,7 +441,7 @@ class AudiobookPlayerViewModelTest {
         every { preferences.speedFor("fast narrator") } returns 0.9f
         val viewModel = viewModel()
 
-        controller.playing(track("slow narrator"), track("part 2"), index = 1)
+        controller.playing(track("part 1", book = "slow narrator"), track("part 2", book = "slow narrator"), index = 1)
         viewModel.speed.value shouldBe 1.5f
 
         controller.playing(track("fast narrator"))
@@ -453,13 +454,36 @@ class AudiobookPlayerViewModelTest {
     fun `choosing a speed while a book plays chooses it for that book`() = runTest {
         every { preferences.speedFor("book") } returns 1.25f
         val viewModel = viewModel()
-        controller.playing(track("book"), track("part 2"), index = 1)
+        controller.playing(track("part 1", book = "book"), track("part 2", book = "book"), index = 1)
 
         viewModel.setSpeed(1.5f)
 
         controller.commands shouldBe listOf("speed 1.5")
         verify { preferences.setSpeedFor("book", 1.5f) }
         verify(exactly = 0) { preferences.playbackSpeed = any() }
+    }
+
+    @Test
+    fun `the speed shown is the playing part's book's, wherever the queue starts`() = runTest {
+        every { preferences.speedFor("slow narrator") } returns 1.5f
+        val viewModel = viewModel()
+
+        // A cast device's window of a long book starts at the chapter playing, not the book's first
+        controller.playing(track("part 7", book = "slow narrator"))
+
+        viewModel.speed.value shouldBe 1.5f
+    }
+
+    @Test
+    fun `while nothing is loaded for a moment (a cast handing over) the speed shown stays the book's`() = runTest {
+        every { preferences.speedFor("slow narrator") } returns 1.5f
+        every { preferences.playbackSpeed } returns 1f
+        val viewModel = viewModel()
+        controller.playing(track("part 1", book = "slow narrator"))
+
+        controller.playing()
+
+        viewModel.speed.value shouldBe 1.5f
     }
 
     // --- Sleep timer and segments ------------------------------------------------------------------

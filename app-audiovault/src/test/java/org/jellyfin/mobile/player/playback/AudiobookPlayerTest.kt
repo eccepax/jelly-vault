@@ -37,8 +37,10 @@ class AudiobookPlayerTest {
         exoPlayer.release()
     }
 
-    private fun track(id: String, chapters: List<Chapter> = emptyList()) =
-        AudiobookTrack(id = id, title = id, durationMs = 100_000L, chapters = chapters)
+    private fun track(id: String, chapters: List<Chapter> = emptyList(), book: String? = null) =
+        AudiobookTrack(id = id, title = id, durationMs = 100_000L, chapters = chapters, bookId = book)
+
+    private fun item(track: AudiobookTrack) = track.toMediaItem { id -> "https://vault.test/$id" }
 
     private fun load(vararg tracks: AudiobookTrack, index: Int = 0, positionMs: Long = 0L) {
         player.setMediaItems(tracks.map { it.toMediaItem { id -> "https://vault.test/$id" } }, index, positionMs)
@@ -176,39 +178,60 @@ class AudiobookPlayerTest {
 
     // --- Speed per book ----------------------------------------------------------------------------
 
+    private val speeds = mapOf("slow narrator" to 1.5f, "fast narrator" to 0.9f)
+    private val speedy = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)) { speeds[it] }
+
     @Test
     fun `each book plays at its own speed as it's put in`() {
-        val speeds = mapOf("slow narrator" to 1.5f, "fast narrator" to 0.9f)
-        val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)) { speeds[it] }
-        fun put(vararg ids: String) {
-            player.setMediaItems(ids.map { track(it).toMediaItem { id -> "https://vault.test/$id" } }, 0, 0L)
-            settle()
-        }
-
-        put("slow narrator", "part 2")
+        speedy.setMediaItems(listOf(item(track("1", book = "slow narrator")), item(track("2", book = "slow narrator"))))
+        settle()
         exoPlayer.playbackParameters.speed shouldBe 1.5f
 
-        put("fast narrator")
+        speedy.setMediaItems(listOf(item(track("3", book = "fast narrator"))), 0, 0L)
+        settle()
         exoPlayer.playbackParameters.speed shouldBe 0.9f
     }
 
     @Test
-    fun `a book it knows no speed for leaves the speed as it is`() {
-        exoPlayer.setPlaybackSpeed(1.25f)
+    fun `a book started from a later part plays at the book's speed`() {
+        speedy.setMediaItem(item(track("part 2", book = "slow narrator")))
+        settle()
 
-        load(track("a"))
-
-        exoPlayer.playbackParameters.speed shouldBe 1.25f
+        exoPlayer.playbackParameters.speed shouldBe 1.5f
     }
 
     @Test
-    fun `a saved speed that can't be played leaves the speed as it is, rather than stopping playback`() {
-        exoPlayer.setPlaybackSpeed(1.25f)
-        val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)) { 0f }
-
-        player.setMediaItem(track("a").toMediaItem { id -> "https://vault.test/$id" })
+    fun `a book added to an emptied queue, rather than set, plays at its speed too`() {
+        speedy.clearMediaItems()
+        speedy.addMediaItems(listOf(item(track("1", book = "fast narrator"))))
         settle()
 
+        exoPlayer.playbackParameters.speed shouldBe 0.9f
+    }
+
+    @Test
+    fun `moving on to the book's next part leaves the speed as it is, such as held faster`() {
+        speedy.setMediaItems(listOf(item(track("1", book = "slow narrator")), item(track("2", book = "slow narrator"))))
+        speedy.prepare()
+        settle()
+        speedy.setPlaybackSpeed(3f)
+
+        speedy.seekToNextMediaItem()
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 3f
+    }
+
+    @Test
+    fun `a book it knows no speed for, or a track from elsewhere with no book, leaves the speed as it is`() {
+        exoPlayer.setPlaybackSpeed(1.25f)
+
+        speedy.setMediaItem(item(track("a", book = "unknown")))
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 1.25f
+
+        speedy.setMediaItem(item(track("b")))
+        settle()
         exoPlayer.playbackParameters.speed shouldBe 1.25f
     }
 }

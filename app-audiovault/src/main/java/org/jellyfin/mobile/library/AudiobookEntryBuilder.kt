@@ -30,6 +30,13 @@ internal object AudiobookEntryBuilder {
     /** [item]'s album tag, which tells apart separate books stored in the same folder. */
     fun albumKeyOf(item: BaseItemDto): String = item.album?.lowercase()?.trim() ?: ""
 
+    /**
+     * Which book [item] is part of, as the library groups them (its folder and album tag), so every
+     * part of a book has the same key whichever of them is asked for. A file the server gave no
+     * folder for is a book of its own.
+     */
+    fun bookKeyOf(item: BaseItemDto): String = "${parentDirOf(item) ?: item.id}:${albumKeyOf(item)}"
+
     /** A book's tracks in play order: by track number, then name. */
     val trackOrder: Comparator<BaseItemDto> = compareBy({ it.indexNumber ?: 0 }, { it.name.orEmpty() })
 

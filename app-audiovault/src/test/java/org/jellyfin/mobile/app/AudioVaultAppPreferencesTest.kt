@@ -65,6 +65,22 @@ class AudioVaultAppPreferencesTest {
         preferences.playbackSpeed shouldBe 1.5f
     }
 
+    @Test
+    fun `a saved speed that can't be played (a restored backup's 0) reads as the one chosen last`() {
+        preferences.playbackSpeed = 1.25f
+        fakeSharedPreferences.edit().putFloat("${Constants.PREF_PLAYBACK_SPEED}:book", 0f).apply()
+
+        preferences.speedFor("book") shouldBe 1.25f
+    }
+
+    @Test
+    fun `a speed chosen last that can't be played reads as normal speed`() {
+        fakeSharedPreferences.edit().putFloat(Constants.PREF_PLAYBACK_SPEED, -1f).apply()
+
+        preferences.playbackSpeed shouldBe 1f
+        preferences.speedFor("book") shouldBe 1f
+    }
+
     // --- downloadOnWifiOnly ----------------------------------------------------------------------
 
     @Test

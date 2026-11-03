@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 
 /**
  * The playback service's player, on either player (this device's, wrapped in a
@@ -9,13 +10,27 @@ import androidx.media3.common.Player
  * chapters, and on to the next or previous track past the first or last one, so the notification,
  * lock screen, headphones and the app's own chapter buttons all do the same.
  *
- * Each book put in plays at its own speed ([bookSpeed], by its first track's id; null leaves the
- * speed as it is), however it was asked for: the app, a voice search, another controller.
+ * Each book plays at its own speed ([bookSpeed], by [AudiobookTrack.bookId]; null leaves the speed as
+ * it is) as soon as it's the one playing, however it was put in (set or added; by the app, a voice
+ * search, another controller). Moving on within a book leaves the speed alone, so a speed held
+ * faster stays held.
  */
 class AudiobookPlayer(
     player: Player,
-    private val bookSpeed: (firstTrackId: String) -> Float? = { null },
+    private val bookSpeed: (bookId: String) -> Float? = { null },
 ) : OwnCommandsPlayer(player) {
+
+    /** The book whose speed was last put on; it's put on again only once another book plays. */
+    private var bookPlaying: String? = null
+
+    init {
+        player.addListener(
+            object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = followBook()
+                override fun onTimelineChanged(timeline: Timeline, reason: Int) = followBook()
+            },
+        )
+    }
 
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 
@@ -42,26 +57,12 @@ class AudiobookPlayer(
         }
     }
 
-    override fun setMediaItem(mediaItem: MediaItem) = putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem) }
-
-    override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) =
-        putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem, startPositionMs) }
-
-    override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) =
-        putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem, resetPosition) }
-
-    override fun setMediaItems(mediaItems: List<MediaItem>) = putIn(mediaItems) { super.setMediaItems(mediaItems) }
-
-    override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) =
-        putIn(mediaItems) { super.setMediaItems(mediaItems, resetPosition) }
-
-    override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) =
-        putIn(mediaItems) { super.setMediaItems(mediaItems, startIndex, startPositionMs) }
-
-    private inline fun putIn(book: List<MediaItem>, set: () -> Unit) {
-        set()
-        // Media3 refuses a speed of 0 or less by throwing: one saved wrong (a restored backup) mustn't stop playback
-        book.firstOrNull()?.mediaId?.let(bookSpeed)?.takeIf { it > 0f }?.let(::setPlaybackSpeed)
+    // Nothing loaded, or a track from elsewhere with no book: the speed stays as it is
+    private fun followBook() {
+        val book = currentMediaItem?.mediaMetadata?.bookId ?: return
+        if (book == bookPlaying) return
+        bookPlaying = book
+        bookSpeed(book)?.let(::setPlaybackSpeed)
     }
 
     override fun isCommandAvailable(command: Int): Boolean =

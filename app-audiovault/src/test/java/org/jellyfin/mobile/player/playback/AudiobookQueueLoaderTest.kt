@@ -41,12 +41,20 @@ class AudiobookQueueLoaderTest {
         coverUrl = { item -> "https://vault.test/Items/${item.id}/Images/Primary" },
     )
 
-    private fun onServer(id: UUID, name: String, resumeAt: Long = 0L, chapters: List<ChapterInfo>? = null) {
+    private fun onServer(
+        id: UUID,
+        name: String,
+        resumeAt: Long = 0L,
+        chapters: List<ChapterInfo>? = null,
+        album: String = "The Book",
+        folder: String = "/media/Audiobooks/The Book",
+    ) {
         server[id] = BaseItemDto(
             id = id,
             type = BaseItemKind.AUDIO_BOOK,
             name = name,
-            album = "The Book",
+            path = "$folder/$name.m4b",
+            album = album,
             albumArtist = "An Author",
             runTimeTicks = 60.minutes.inWholeMilliseconds * TICKS_PER_MS,
             chapters = chapters,
@@ -57,7 +65,14 @@ class AudiobookQueueLoaderTest {
     private fun downloaded(id: UUID, name: String, savedAtMs: Long = 0L) {
         downloads[id] = LocalJellyfinMediaSource(
             itemId = id,
-            item = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = name, runTimeTicks = 600_000_000_000L),
+            item = BaseItemDto(
+                id = id,
+                type = BaseItemKind.AUDIO_BOOK,
+                name = name,
+                path = "/media/Audiobooks/The Book/$name.m4b",
+                album = "The Book",
+                runTimeTicks = 600_000_000_000L,
+            ),
             sourceInfo = sourceInfo(),
             playSessionId = "session",
             localDirectoryUri = "/downloads",
@@ -110,6 +125,7 @@ class AudiobookQueueLoaderTest {
             durationMs = 60.minutes.inWholeMilliseconds,
             chapters = listOf(Chapter(0L, "Opening"), Chapter(90_000L, "Next")),
             fromDevice = false,
+            bookId = "/media/Audiobooks/The Book:the book",
         )
     }
 
@@ -210,6 +226,43 @@ class AudiobookQueueLoaderTest {
         transcodingSubProtocol = MediaStreamProtocol.HTTP, transcodingContainer = null, analyzeDurationMs = null,
         defaultAudioStreamIndex = null, defaultSubtitleStreamIndex = null, hasSegments = false,
     )
+
+    // --- Which book a track is ----------------------------------------------------------------------
+
+    @Test
+    fun `every part of a book is the same book, however much of it was asked for`() = runTest {
+        onServer(partOne, "Part 1")
+        onServer(partTwo, "Part 2")
+        onServer(partThree, "Part 3")
+
+        val whole = loader.load(options(partOne, partTwo, partThree)).getOrThrow().tracks
+        val fromPartTwo = loader.load(options(partTwo)).getOrThrow().tracks
+
+        whole.map { it.bookId }.distinct().size shouldBe 1
+        fromPartTwo.single().bookId shouldBe whole.first().bookId
+    }
+
+    @Test
+    fun `a book played from its download is the same book as streamed`() = runTest {
+        onServer(partOne, "Part 1")
+        downloaded(partTwo, "Part 2")
+        val streamed = loader.load(options(partOne)).getOrThrow().tracks.single()
+
+        val played = loader.load(options(partTwo, fromDownloads = true)).getOrThrow().tracks.single()
+
+        played.fromDevice shouldBe true
+        played.bookId shouldBe streamed.bookId
+    }
+
+    @Test
+    fun `books in one folder with different album tags are different books`() = runTest {
+        onServer(partOne, "Book One", album = "Book One", folder = "/media/Audiobooks/An Author")
+        onServer(partTwo, "Book Two", album = "Book Two", folder = "/media/Audiobooks/An Author")
+
+        val tracks = loader.load(options(partOne, partTwo)).getOrThrow().tracks
+
+        (tracks[0].bookId == tracks[1].bookId) shouldBe false
+    }
 
     private companion object {
         const val TICKS_PER_MS = 10_000L

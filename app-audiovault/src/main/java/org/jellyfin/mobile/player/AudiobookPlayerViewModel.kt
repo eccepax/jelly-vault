@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -50,10 +51,10 @@ class AudiobookPlayerViewModel(
 
     val durationMs: Long get() = playback.durationMs
 
-    /** The book loaded, by its first track's id; null with none. */
-    private val bookLoaded: String? get() = playback.state.value.tracks.firstOrNull()?.id
+    /** The book playing (see [AudiobookTrack.bookId]); null with none, or for a track from elsewhere. */
+    private val bookPlaying: String? get() = playback.state.value.currentTrack?.bookId
 
-    private val _speed = MutableStateFlow(speedOf(bookLoaded))
+    private val _speed = MutableStateFlow(speedOf(bookPlaying))
 
     /**
      * The speed chosen for the book loaded (see [AudioVaultAppPreferences.speedFor]), which holding
@@ -62,11 +63,11 @@ class AudiobookPlayerViewModel(
     val speed: StateFlow<Float> = _speed.asStateFlow()
 
     init {
-        // The service's player puts each book at its own speed, however it started: this only shows it
+        // The service's player puts each book at its own speed, however it started: this only shows it.
+        // With nothing loaded for a moment (a cast handing over) it keeps showing the book's.
         viewModelScope.launch {
-            playback.state.map { it.tracks.firstOrNull()?.id }.distinctUntilChanged().collect { book ->
-                _speed.value = speedOf(book)
-            }
+            playback.state.map { it.currentTrack }.filterNotNull().map { it.bookId }.distinctUntilChanged()
+                .collect { book -> _speed.value = speedOf(book) }
         }
     }
 
@@ -195,7 +196,7 @@ class AudiobookPlayerViewModel(
     fun setSpeed(speed: Float) {
         if (speed == _speed.value) return
         _speed.value = speed
-        val book = bookLoaded
+        val book = bookPlaying
         if (book != null) preferences.setSpeedFor(book, speed) else preferences.playbackSpeed = speed
         playback.setSpeed(speed)
     }
