@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -49,10 +50,27 @@ class AudiobookPlayerViewModel(
 
     val durationMs: Long get() = playback.durationMs
 
-    private val _speed = MutableStateFlow(preferences.playbackSpeed)
+    /** The book loaded, by its first track's id; null with none. */
+    private val bookLoaded: String? get() = playback.state.value.tracks.firstOrNull()?.id
 
-    /** The speed chosen, which holding fast-forward doesn't change though the player plays faster. */
+    private val _speed = MutableStateFlow(speedOf(bookLoaded))
+
+    /**
+     * The speed chosen for the book loaded (see [AudioVaultAppPreferences.speedFor]), which holding
+     * fast-forward doesn't change though the player plays faster.
+     */
     val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    init {
+        // The service's player puts each book at its own speed, however it started: this only shows it
+        viewModelScope.launch {
+            playback.state.map { it.tracks.firstOrNull()?.id }.distinctUntilChanged().collect { book ->
+                _speed.value = speedOf(book)
+            }
+        }
+    }
+
+    private fun speedOf(book: String?): Float = book?.let(preferences::speedFor) ?: preferences.playbackSpeed
 
     val sleepTimer: StateFlow<SleepTimerState> = sleepTimerEngine.state
 
@@ -173,10 +191,12 @@ class AudiobookPlayerViewModel(
 
     fun skipToTrack(index: Int) = playback.skipTo(index)
 
+    /** Plays at [speed], chosen for the book loaded (and where books with none of their own start). */
     fun setSpeed(speed: Float) {
         if (speed == _speed.value) return
         _speed.value = speed
-        preferences.playbackSpeed = speed
+        val book = bookLoaded
+        if (book != null) preferences.setSpeedFor(book, speed) else preferences.playbackSpeed = speed
         playback.setSpeed(speed)
     }
 

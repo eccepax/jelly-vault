@@ -38,6 +38,33 @@ class AudioVaultAppPreferencesTest {
         AudioVaultAppPreferences(context).askedForNotifications shouldBe true
     }
 
+    // --- speed per book ---------------------------------------------------------------------------
+
+    @Test
+    fun `a book with no speed of its own plays at the one chosen last`() {
+        preferences.playbackSpeed = 1.25f
+
+        preferences.speedFor("book") shouldBe 1.25f
+    }
+
+    @Test
+    fun `a speed chosen for a book is that book's, and remembered`() {
+        preferences.setSpeedFor("slow narrator", 1.5f)
+        preferences.setSpeedFor("fast narrator", 0.9f)
+
+        val reopened = AudioVaultAppPreferences(context)
+        reopened.speedFor("slow narrator") shouldBe 1.5f
+        reopened.speedFor("fast narrator") shouldBe 0.9f
+    }
+
+    @Test
+    fun `a speed chosen for a book is where books with none of their own start`() {
+        preferences.setSpeedFor("book", 1.5f)
+
+        preferences.speedFor("a new book") shouldBe 1.5f
+        preferences.playbackSpeed shouldBe 1.5f
+    }
+
     // --- downloadOnWifiOnly ----------------------------------------------------------------------
 
     @Test

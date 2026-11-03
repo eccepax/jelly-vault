@@ -41,6 +41,7 @@ class AudiobookPlaybackServiceTest {
 
     private val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
         every { playbackSpeed } returns 1.5f
+        every { speedFor(any()) } returns 1.5f
         every { skipSilenceEnabled } returns true
     }
     private val appController = mockk<DeferredAudiobookController>(relaxed = true)

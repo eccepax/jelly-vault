@@ -173,4 +173,42 @@ class AudiobookPlayerTest {
 
         where() shouldBe (0 to 90_000L)
     }
+
+    // --- Speed per book ----------------------------------------------------------------------------
+
+    @Test
+    fun `each book plays at its own speed as it's put in`() {
+        val speeds = mapOf("slow narrator" to 1.5f, "fast narrator" to 0.9f)
+        val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)) { speeds[it] }
+        fun put(vararg ids: String) {
+            player.setMediaItems(ids.map { track(it).toMediaItem { id -> "https://vault.test/$id" } }, 0, 0L)
+            settle()
+        }
+
+        put("slow narrator", "part 2")
+        exoPlayer.playbackParameters.speed shouldBe 1.5f
+
+        put("fast narrator")
+        exoPlayer.playbackParameters.speed shouldBe 0.9f
+    }
+
+    @Test
+    fun `a book it knows no speed for leaves the speed as it is`() {
+        exoPlayer.setPlaybackSpeed(1.25f)
+
+        load(track("a"))
+
+        exoPlayer.playbackParameters.speed shouldBe 1.25f
+    }
+
+    @Test
+    fun `a saved speed that can't be played leaves the speed as it is, rather than stopping playback`() {
+        exoPlayer.setPlaybackSpeed(1.25f)
+        val player = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)) { 0f }
+
+        player.setMediaItem(track("a").toMediaItem { id -> "https://vault.test/$id" })
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 1.25f
+    }
 }

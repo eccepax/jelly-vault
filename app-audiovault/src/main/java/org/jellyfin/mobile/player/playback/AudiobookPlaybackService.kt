@@ -83,7 +83,7 @@ class AudiobookPlaybackService : MediaSessionService() {
 
         // Transcode seeking is this device's: a cast device seeks in what it's sent itself
         val local = TranscodeSeekingPlayer(exoPlayer)
-        return MediaSession.Builder(this, AudiobookPlayer(local))
+        return MediaSession.Builder(this, AudiobookPlayer(local, preferences::speedFor))
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
             .setSessionActivity(
@@ -102,7 +102,7 @@ class AudiobookPlaybackService : MediaSessionService() {
                     local,
                     casting,
                     // Chapters wherever it plays
-                    wrap = ::AudiobookPlayer,
+                    wrap = { AudiobookPlayer(it, preferences::speedFor) },
                     castStream = ::castStream,
                     // Only for an item with no track id: this device's stream may have restarted part way
                     castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },

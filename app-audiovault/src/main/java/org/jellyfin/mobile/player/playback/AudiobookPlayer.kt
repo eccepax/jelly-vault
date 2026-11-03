@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.player.playback
 
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 
 /**
@@ -7,8 +8,14 @@ import androidx.media3.common.Player
  * [TranscodeSeekingPlayer], or a cast player). Next and previous move between the playing track's
  * chapters, and on to the next or previous track past the first or last one, so the notification,
  * lock screen, headphones and the app's own chapter buttons all do the same.
+ *
+ * Each book put in plays at its own speed ([bookSpeed], by its first track's id; null leaves the
+ * speed as it is), however it was asked for: the app, a voice search, another controller.
  */
-class AudiobookPlayer(player: Player) : OwnCommandsPlayer(player) {
+class AudiobookPlayer(
+    player: Player,
+    private val bookSpeed: (firstTrackId: String) -> Float? = { null },
+) : OwnCommandsPlayer(player) {
 
     private val chapterStarts: List<Long> get() = mediaMetadata.chapterStartsMs
 
@@ -33,6 +40,28 @@ class AudiobookPlayer(player: Player) : OwnCommandsPlayer(player) {
             currentPosition <= RESTART_WINDOW_MS && hasPreviousMediaItem() -> seekToPreviousMediaItem()
             else -> seekTo(0L)
         }
+    }
+
+    override fun setMediaItem(mediaItem: MediaItem) = putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem) }
+
+    override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) =
+        putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem, startPositionMs) }
+
+    override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) =
+        putIn(listOf(mediaItem)) { super.setMediaItem(mediaItem, resetPosition) }
+
+    override fun setMediaItems(mediaItems: List<MediaItem>) = putIn(mediaItems) { super.setMediaItems(mediaItems) }
+
+    override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) =
+        putIn(mediaItems) { super.setMediaItems(mediaItems, resetPosition) }
+
+    override fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long) =
+        putIn(mediaItems) { super.setMediaItems(mediaItems, startIndex, startPositionMs) }
+
+    private inline fun putIn(book: List<MediaItem>, set: () -> Unit) {
+        set()
+        // Media3 refuses a speed of 0 or less by throwing: one saved wrong (a restored backup) mustn't stop playback
+        book.firstOrNull()?.mediaId?.let(bookSpeed)?.takeIf { it > 0f }?.let(::setPlaybackSpeed)
     }
 
     override fun isCommandAvailable(command: Int): Boolean =

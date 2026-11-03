@@ -43,6 +43,7 @@ fun playerViewModel(
     )
     val preferences = mockk<AudioVaultAppPreferences>(relaxed = true) {
         every { playbackSpeed } returns speed
+        every { speedFor(any()) } returns speed
         every { exoPlayerAllowPressSpeedUp } answers { holdToSpeedUpNow() }
     }
     return AudiobookPlayerViewModel(
