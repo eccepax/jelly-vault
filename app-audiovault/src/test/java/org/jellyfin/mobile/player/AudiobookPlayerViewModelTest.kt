@@ -74,6 +74,8 @@ class AudiobookPlayerViewModelTest {
 
     private fun bookNamed(id: UUID) = BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = "Book")
 
+    private fun track(id: String) = AudiobookTrack(id = id, title = id, durationMs = 60_000L)
+
     private fun options(vararg ids: UUID, startPositionMs: Long? = null) = PlayOptions(
         ids = ids.toList(),
         mediaSourceId = null,
@@ -430,6 +432,34 @@ class AudiobookPlayerViewModelTest {
         viewModel.holdSpeedUp(false)
 
         controller.commands.last() shouldBe "speed 1.25"
+    }
+
+    @Test
+    fun `the speed shown is the book's own, as each book plays`() = runTest {
+        every { preferences.speedFor("slow narrator") } returns 1.5f
+        every { preferences.speedFor("fast narrator") } returns 0.9f
+        val viewModel = viewModel()
+
+        controller.playing(track("slow narrator"), track("part 2"), index = 1)
+        viewModel.speed.value shouldBe 1.5f
+
+        controller.playing(track("fast narrator"))
+        viewModel.speed.value shouldBe 0.9f
+        // The player puts each book at its speed itself: the screen only shows it
+        controller.commands shouldBe emptyList()
+    }
+
+    @Test
+    fun `choosing a speed while a book plays chooses it for that book`() = runTest {
+        every { preferences.speedFor("book") } returns 1.25f
+        val viewModel = viewModel()
+        controller.playing(track("book"), track("part 2"), index = 1)
+
+        viewModel.setSpeed(1.5f)
+
+        controller.commands shouldBe listOf("speed 1.5")
+        verify { preferences.setSpeedFor("book", 1.5f) }
+        verify(exactly = 0) { preferences.playbackSpeed = any() }
     }
 
     // --- Sleep timer and segments ------------------------------------------------------------------

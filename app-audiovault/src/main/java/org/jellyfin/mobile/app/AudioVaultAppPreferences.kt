@@ -57,6 +57,17 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         get() = sharedPreferences.getFloat(Constants.PREF_PLAYBACK_SPEED, 1f)
         set(value) = sharedPreferences.edit { putFloat(Constants.PREF_PLAYBACK_SPEED, value) }
 
+    /** The speed [book] (its first track's id) plays at: its own if one was chosen, else [playbackSpeed]. */
+    fun speedFor(book: String): Float = sharedPreferences.getFloat(bookSpeedKey(book), playbackSpeed)
+
+    /** Chooses [speed] for [book], and as [playbackSpeed], where books with none of their own start. */
+    fun setSpeedFor(book: String, speed: Float) = sharedPreferences.edit {
+        putFloat(bookSpeedKey(book), speed)
+        putFloat(Constants.PREF_PLAYBACK_SPEED, speed)
+    }
+
+    private fun bookSpeedKey(book: String) = "${Constants.PREF_PLAYBACK_SPEED}:$book"
+
     var skipSilenceEnabled: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_SKIP_SILENCE, false)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_SKIP_SILENCE, value) }
