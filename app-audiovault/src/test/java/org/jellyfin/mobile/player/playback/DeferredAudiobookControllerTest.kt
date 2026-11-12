@@ -62,12 +62,13 @@ class DeferredAudiobookControllerTest {
         controller.nextChapter()
         controller.skipTo(2)
         controller.setSpeed(1.5f)
+        controller.holdSpeed(3f)
         controller.setSkipSilence(true)
         controller.stop()
 
         delegate.commands shouldBe listOf(
             "play", "seekTo 5000", "rewind", "fastForward", "previousChapter", "nextChapter", "skipTo 2",
-            "speed 1.5", "skipSilence true", "stop",
+            "speed 1.5", "hold 3.0", "skipSilence true", "stop",
         )
     }
 
@@ -115,6 +116,7 @@ class DeferredAudiobookControllerTest {
         controller.nextChapter()
         controller.skipTo(1)
         controller.setSpeed(1.5f)
+        controller.holdSpeed(3f)
         controller.setSkipSilence(true)
         controller.setVolume(0.5f)
         attempts.shouldBeEmpty()

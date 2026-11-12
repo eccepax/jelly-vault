@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import android.app.Application
 import android.os.Looper
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.test.utils.TestExoPlayerBuilder
@@ -37,8 +38,10 @@ class AudiobookPlayerTest {
         exoPlayer.release()
     }
 
-    private fun track(id: String, chapters: List<Chapter> = emptyList()) =
-        AudiobookTrack(id = id, title = id, durationMs = 100_000L, chapters = chapters)
+    private fun track(id: String, chapters: List<Chapter> = emptyList(), book: String? = null) =
+        AudiobookTrack(id = id, title = id, durationMs = 100_000L, chapters = chapters, bookId = book)
+
+    private fun item(track: AudiobookTrack) = track.toMediaItem { id -> "https://vault.test/$id" }
 
     private fun load(vararg tracks: AudiobookTrack, index: Int = 0, positionMs: Long = 0L) {
         player.setMediaItems(tracks.map { it.toMediaItem { id -> "https://vault.test/$id" } }, index, positionMs)
@@ -172,5 +175,108 @@ class AudiobookPlayerTest {
         player.seekToNext()
 
         where() shouldBe (0 to 90_000L)
+    }
+
+    // --- Speed per book ----------------------------------------------------------------------------
+
+    private val speeds = mapOf("slow narrator" to 1.5f, "fast narrator" to 0.9f)
+    private val saved = mutableListOf<Pair<String, Float>>()
+    private val speedy = AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer), { speeds[it] }) { book, speed ->
+        saved += book to speed
+    }
+
+    @Test
+    fun `each book plays at its own speed as it's put in`() {
+        speedy.setMediaItems(listOf(item(track("1", book = "slow narrator")), item(track("2", book = "slow narrator"))))
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 1.5f
+
+        speedy.setMediaItems(listOf(item(track("3", book = "fast narrator"))), 0, 0L)
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 0.9f
+    }
+
+    @Test
+    fun `a book started from a later part plays at the book's speed`() {
+        speedy.setMediaItem(item(track("part 2", book = "slow narrator")))
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 1.5f
+    }
+
+    @Test
+    fun `a book added to an emptied queue, rather than set, plays at its speed too`() {
+        speedy.clearMediaItems()
+        speedy.addMediaItems(listOf(item(track("1", book = "fast narrator"))))
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 0.9f
+    }
+
+    @Test
+    fun `moving on to the book's next part leaves the speed as it is, such as held faster`() {
+        speedy.setMediaItems(listOf(item(track("1", book = "slow narrator")), item(track("2", book = "slow narrator"))))
+        speedy.prepare()
+        settle()
+        speedy.setPlaybackSpeed(3f)
+
+        speedy.seekToNextMediaItem()
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 3f
+    }
+
+    @Test
+    fun `a book it knows no speed for, or a track from elsewhere with no book, leaves the speed as it is`() {
+        exoPlayer.setPlaybackSpeed(1.25f)
+
+        speedy.setMediaItem(item(track("a", book = "unknown")))
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 1.25f
+
+        speedy.setMediaItem(item(track("b")))
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 1.25f
+    }
+
+    @Test
+    fun `a speed set by any controller (Auto, a watch, the app) is kept for the book playing`() {
+        speedy.setMediaItem(item(track("1", book = "slow narrator")))
+        settle()
+
+        speedy.setPlaybackSpeed(1.75f)
+        speedy.playbackParameters = PlaybackParameters(0.8f)
+
+        saved shouldBe listOf("slow narrator" to 1.75f, "slow narrator" to 0.8f)
+        exoPlayer.playbackParameters.speed shouldBe 0.8f
+    }
+
+    @Test
+    fun `a book's own speed put on as it starts isn't kept again`() {
+        speedy.setMediaItem(item(track("1", book = "slow narrator")))
+        settle()
+
+        saved shouldBe emptyList()
+    }
+
+    @Test
+    fun `holding fast-forward plays faster without keeping that speed for the book`() {
+        speedy.setMediaItem(item(track("1", book = "slow narrator")))
+        settle()
+
+        speedy.holdAt(3f)
+
+        exoPlayer.playbackParameters.speed shouldBe 3f
+        saved shouldBe emptyList()
+    }
+
+    @Test
+    fun `a speed set with nothing loaded, or for a track from elsewhere, isn't kept for any book`() {
+        speedy.setPlaybackSpeed(1.5f)
+        speedy.setMediaItem(item(track("b")))
+        settle()
+        speedy.setPlaybackSpeed(1.75f)
+
+        saved shouldBe emptyList()
     }
 }

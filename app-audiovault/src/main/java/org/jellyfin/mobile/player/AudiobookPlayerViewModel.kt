@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -49,10 +50,29 @@ class AudiobookPlayerViewModel(
 
     val durationMs: Long get() = playback.durationMs
 
-    private val _speed = MutableStateFlow(preferences.playbackSpeed)
+    /** The book playing (see [AudiobookTrack.bookId]); null with none, or for a track from elsewhere. */
+    private val bookPlaying: String? get() = playback.state.value.currentTrack?.bookId
 
-    /** The speed chosen, which holding fast-forward doesn't change though the player plays faster. */
+    private val _speed = MutableStateFlow(speedOf(bookPlaying))
+
+    /**
+     * The speed chosen for the book loaded (see [AudioVaultAppPreferences.speedFor]), which holding
+     * fast-forward doesn't change though the player plays faster.
+     */
     val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    init {
+        // The service's player puts each book at its own speed, however it started, and keeps one set
+        // from elsewhere (Auto, a watch): this only shows it. With nothing loaded for a moment (a cast
+        // handing over) it keeps showing the book's.
+        viewModelScope.launch {
+            playback.state.mapNotNull { state -> state.currentTrack?.let { it.bookId to state.speed } }
+                .distinctUntilChanged()
+                .collect { (book, _) -> _speed.value = speedOf(book) }
+        }
+    }
+
+    private fun speedOf(book: String?): Float = book?.let(preferences::speedFor) ?: preferences.playbackSpeed
 
     val sleepTimer: StateFlow<SleepTimerState> = sleepTimerEngine.state
 
@@ -173,15 +193,17 @@ class AudiobookPlayerViewModel(
 
     fun skipToTrack(index: Int) = playback.skipTo(index)
 
+    /** Plays at [speed], chosen for the book loaded (and where books with none of their own start). */
     fun setSpeed(speed: Float) {
         if (speed == _speed.value) return
         _speed.value = speed
-        preferences.playbackSpeed = speed
+        val book = bookPlaying
+        if (book != null) preferences.setSpeedFor(book, speed) else preferences.playbackSpeed = speed
         playback.setSpeed(speed)
     }
 
     /** Holding fast-forward plays faster until it's let go, back at the speed chosen. */
-    fun holdSpeedUp(holding: Boolean) = playback.setSpeed(
+    fun holdSpeedUp(holding: Boolean) = playback.holdSpeed(
         if (holding) Constants.HOLD_SPEEDUP_MULTIPLIER else _speed.value,
     )
 

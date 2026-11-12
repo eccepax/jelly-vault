@@ -138,6 +138,7 @@ val audioDownloadsModule = module {
         val reporter = get<AudiobookProgressReporter>()
         val casting = get<Casting>()
         val offlineListening = get<OfflineListeningSync>()
+        val preferences = get<AudioVaultAppPreferences>()
         audioVaultSignOut(
             session = get(),
             logout = get<ApiClientController>()::logoutUser,
@@ -148,8 +149,10 @@ val audioDownloadsModule = module {
             },
             forgetCast = casting::forgetCast,
             forgetDownloads = {
-                // Listening that couldn't be sent by now is the account's, not the next one's
+                // Listening that couldn't be sent by now is the account's, not the next one's; so are
+                // its books' own speeds
                 downloads.forgetUnsentListening()
+                preferences.forgetBookSpeeds()
                 downloadsOnSignOut()
             },
         )

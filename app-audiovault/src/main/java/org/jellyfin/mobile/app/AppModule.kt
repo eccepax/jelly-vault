@@ -123,10 +123,18 @@ val applicationModule = module {
             Futures.transform(
                 MediaController.Builder(context, token).setListener(onDisconnected).buildAsync(),
                 { controller ->
-                    PlayerAudiobookController(controller, audiobooks::streamUrl) { enabled ->
-                        val args = bundleOf(AudiobookSessionCallback.KEY_ENABLED to enabled)
-                        controller.sendCustomCommand(AudiobookSessionCallback.SET_SKIP_SILENCE, args)
-                    }
+                    PlayerAudiobookController(
+                        controller,
+                        audiobooks::streamUrl,
+                        setSkipSilence = { enabled ->
+                            val args = bundleOf(AudiobookSessionCallback.KEY_ENABLED to enabled)
+                            controller.sendCustomCommand(AudiobookSessionCallback.SET_SKIP_SILENCE, args)
+                        },
+                        holdSpeed = { speed ->
+                            val args = bundleOf(AudiobookSessionCallback.KEY_SPEED to speed)
+                            controller.sendCustomCommand(AudiobookSessionCallback.HOLD_SPEED, args)
+                        },
+                    )
                 },
                 mainExecutor,
             )

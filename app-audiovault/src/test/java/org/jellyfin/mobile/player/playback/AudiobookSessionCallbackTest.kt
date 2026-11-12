@@ -153,6 +153,27 @@ class AudiobookSessionCallbackTest {
     }
 
     @Test
+    fun `holding fast-forward plays faster without the speed being kept for the book`() {
+        val kept = mutableListOf<Float>()
+        val bookPlayer = AudiobookPlayer(exoPlayer, { null }) { _, speed -> kept += speed }
+        bookPlayer.setMediaItem(
+            AudiobookTrack(id = "a", title = "a", durationMs = 0L, bookId = "book").toMediaItem { it },
+        )
+        val holding = mockk<MediaSession> { every { player } returns bookPlayer }
+
+        val result = callback.onCustomCommand(
+            holding,
+            mockk(),
+            AudiobookSessionCallback.HOLD_SPEED,
+            Bundle().apply { putFloat(AudiobookSessionCallback.KEY_SPEED, 3f) },
+        )
+
+        result.get().resultCode shouldBe SessionResult.RESULT_SUCCESS
+        exoPlayer.playbackParameters.speed shouldBe 3f
+        kept shouldBe emptyList()
+    }
+
+    @Test
     fun `items from a controller get their streams back`() {
         val sent = AudiobookTrack(id = "a", title = "a", durationMs = 0L).toMediaItem { "https://vault.test/$it" }
         val stripped = MediaItem.Builder().setMediaId("a").setRequestMetadata(sent.requestMetadata).build()
@@ -163,10 +184,11 @@ class AudiobookSessionCallbackTest {
     }
 
     @Test
-    fun `the app's controller may skip silence, as well as the usual player commands`() {
+    fun `the app's controller may skip silence and hold a speed, as well as the usual player commands`() {
         val connection = callback.onConnect(mockk(relaxed = true), mockk(relaxed = true))
 
         connection.availableSessionCommands.contains(AudiobookSessionCallback.SET_SKIP_SILENCE) shouldBe true
+        connection.availableSessionCommands.contains(AudiobookSessionCallback.HOLD_SPEED) shouldBe true
         connection.availablePlayerCommands.contains(Player.COMMAND_PLAY_PAUSE) shouldBe true
     }
 }

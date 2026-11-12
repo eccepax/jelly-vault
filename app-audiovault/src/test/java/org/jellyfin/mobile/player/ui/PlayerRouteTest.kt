@@ -305,7 +305,7 @@ class PlayerRouteTest {
 
         composeRule.onNodeWithContentDescription(string(R.string.player_fast_forward)).performTouchInput { longClick() }
 
-        controller.commands shouldBe listOf("speed ${Constants.HOLD_SPEEDUP_MULTIPLIER}", "speed 1.0")
+        controller.commands shouldBe listOf("hold ${Constants.HOLD_SPEEDUP_MULTIPLIER}", "hold 1.0")
     }
 
     @Test
