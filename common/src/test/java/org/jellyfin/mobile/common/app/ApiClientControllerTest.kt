@@ -7,6 +7,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.test.runTest
 import org.jellyfin.mobile.common.data.dao.ServerDao
 import org.jellyfin.mobile.common.data.dao.UserDao
@@ -64,6 +65,7 @@ class ApiClientControllerTest {
         every { appPreferences.currentServerId } returns 1L
         every { appPreferences.currentUserId } returns 1L
         every { userDao.getServerUser(1L, 1L) } returns serverUser
+        every { userDao.logout(any()) } returns Unit
     }
 
     @AfterEach
@@ -87,6 +89,7 @@ class ApiClientControllerTest {
         controller.loadSavedServerUser()
 
         verify { appPreferences.currentUserId = null }
+        verify { userDao.logout(1L) }
     }
 
     @Test
@@ -96,6 +99,7 @@ class ApiClientControllerTest {
         controller.loadSavedServerUser()
 
         verify { appPreferences.currentUserId = null }
+        verify { userDao.logout(1L) }
     }
 
     @Test
@@ -116,5 +120,64 @@ class ApiClientControllerTest {
         controller.loadSavedServerUser()
 
         coVerify { apiClient.update(accessToken = "stale-token", deviceInfo = any()) }
+    }
+
+    @Test
+    fun `signing out forgets the saved token, so one the server never revoked isn't left on the device`() = runTest {
+        controller.logoutUser()
+
+        verify { userDao.logout(1L) }
+        verify { appPreferences.currentUserId = null }
+    }
+
+    @Test
+    fun `signing out with nobody signed in touches no saved user`() = runTest {
+        every { appPreferences.currentUserId } returns null
+
+        controller.logoutUser()
+
+        verify(exactly = 0) { userDao.logout(any()) }
+    }
+
+    @Test
+    fun `a saved user with no token is signed out, not left signed in issuing 401s`() = runTest {
+        every { userDao.getServerUser(1L, 1L) } returns serverUser.copy(
+            user = serverUser.user.copy(accessToken = null),
+        )
+
+        controller.loadSavedServerUser()
+
+        verify { appPreferences.currentUserId = null }
+    }
+
+    @Test
+    fun `signing out still signs out when the saved token can't be forgotten`() = runTest {
+        every { userDao.logout(any()) } throws IllegalStateException("database is locked")
+
+        controller.logoutUser()
+
+        verify { appPreferences.currentUserId = null }
+        verify { apiClient.update(accessToken = null, deviceInfo = any()) }
+    }
+
+    @Test
+    fun `signing out is signed out in memory before the saved token is forgotten`() = runTest {
+        controller.logoutUser()
+
+        verifyOrder {
+            appPreferences.currentUserId = null
+            userDao.logout(1L)
+        }
+    }
+
+    @Test
+    fun `switching server forgets the previous user's saved token`() = runTest {
+        every { serverDao.getServerByHostname("https://other.example") } returns null
+        every { serverDao.insert("https://other.example") } returns 2L
+
+        controller.setupServer("https://other.example")
+
+        verify { userDao.logout(1L) }
+        verify { appPreferences.currentUserId = null }
     }
 }
