@@ -76,8 +76,12 @@ class JellyfinLiveStreams(
             ),
             apiClient.accessToken,
         )
-        // Relative, and already carries the token (ApiKey).
-        source.transcodingUrl != null -> apiClient.baseUrl.orEmpty().trimEnd('/') + source.transcodingUrl
+        // Relative, and carries the token under the server version's name (10.10: api_key, which
+        // Jellyfin 12 refuses), so it's put back as ApiKey like every other stream URL.
+        source.transcodingUrl != null -> withAccessToken(
+            apiClient.baseUrl.orEmpty().trimEnd('/') + source.transcodingUrl,
+            apiClient.accessToken,
+        )
         else -> null
     }
 
