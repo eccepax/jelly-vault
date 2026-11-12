@@ -68,6 +68,15 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         putFloat(Constants.PREF_PLAYBACK_SPEED, speed)
     }
 
+    /**
+     * Forgets each book's own speed (signing out: the next account's books aren't these), keeping
+     * [playbackSpeed], where books with none of their own start.
+     */
+    fun forgetBookSpeeds() {
+        val bookSpeeds = sharedPreferences.all.keys.filter { it.startsWith(bookSpeedKey("")) }
+        sharedPreferences.edit { bookSpeeds.forEach(::remove) }
+    }
+
     private fun bookSpeedKey(book: String) = "${Constants.PREF_PLAYBACK_SPEED}:$book"
 
     var skipSilenceEnabled: Boolean

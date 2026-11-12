@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.player.playback
 
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 
@@ -14,10 +15,15 @@ import androidx.media3.common.Timeline
  * it is) as soon as it's the one playing, however it was put in (set or added; by the app, a voice
  * search, another controller). Moving on within a book leaves the speed alone, so a speed held
  * faster stays held.
+ *
+ * A speed set by any controller (the app's picker, Android Auto, a watch) is kept for the book
+ * playing by [keepSpeed], so it's the book's next time too; one only held for a while ([holdAt],
+ * holding fast-forward) isn't.
  */
 class AudiobookPlayer(
     player: Player,
     private val bookSpeed: (bookId: String) -> Float? = { null },
+    private val keepSpeed: (bookId: String, speed: Float) -> Unit = { _, _ -> },
 ) : OwnCommandsPlayer(player) {
 
     /** The book whose speed was last put on; it's put on again only once another book plays. */
@@ -62,7 +68,26 @@ class AudiobookPlayer(
         val book = currentMediaItem?.mediaMetadata?.bookId ?: return
         if (book == bookPlaying) return
         bookPlaying = book
-        bookSpeed(book)?.let(::setPlaybackSpeed)
+        bookSpeed(book)?.let(wrappedPlayer::setPlaybackSpeed)
+    }
+
+    override fun setPlaybackSpeed(speed: Float) {
+        keep(speed)
+        super.setPlaybackSpeed(speed)
+    }
+
+    override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {
+        keep(playbackParameters.speed)
+        super.setPlaybackParameters(playbackParameters)
+    }
+
+    /** Plays at [speed] for now (holding fast-forward), without keeping it for the book. */
+    fun holdAt(speed: Float) = wrappedPlayer.setPlaybackSpeed(speed)
+
+    // Kept before it's set, so whoever hears of the change finds it kept already
+    private fun keep(speed: Float) {
+        val book = currentMediaItem?.mediaMetadata?.bookId ?: return
+        if (speed > 0f) keepSpeed(book, speed)
     }
 
     override fun isCommandAvailable(command: Int): Boolean =

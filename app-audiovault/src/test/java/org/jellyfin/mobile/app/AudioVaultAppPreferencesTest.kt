@@ -74,6 +74,21 @@ class AudioVaultAppPreferencesTest {
     }
 
     @Test
+    fun `signing out forgets every book's own speed, not the one chosen last`() {
+        preferences.setSpeedFor("slow narrator", 1.5f)
+        preferences.setSpeedFor("fast narrator", 0.9f)
+        preferences.skipSilenceEnabled = true
+
+        preferences.forgetBookSpeeds()
+
+        // The next account's books start where books with none of their own do
+        preferences.speedFor("slow narrator") shouldBe 0.9f
+        preferences.playbackSpeed shouldBe 0.9f
+        preferences.skipSilenceEnabled shouldBe true
+        fakeSharedPreferences.all.keys.filter { it.startsWith("${Constants.PREF_PLAYBACK_SPEED}:") } shouldBe emptyList()
+    }
+
+    @Test
     fun `a speed chosen last that can't be played reads as normal speed`() {
         fakeSharedPreferences.edit().putFloat(Constants.PREF_PLAYBACK_SPEED, -1f).apply()
 

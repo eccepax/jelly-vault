@@ -420,7 +420,7 @@ class AudiobookPlayerViewModelTest {
 
         viewModel.holdSpeedUp(true)
 
-        controller.commands shouldBe listOf("speed ${Constants.HOLD_SPEEDUP_MULTIPLIER}")
+        controller.commands shouldBe listOf("hold ${Constants.HOLD_SPEEDUP_MULTIPLIER}")
         viewModel.speed.value shouldBe 1.25f
         verify(exactly = 0) { preferences.playbackSpeed = any() }
     }
@@ -432,7 +432,7 @@ class AudiobookPlayerViewModelTest {
 
         viewModel.holdSpeedUp(false)
 
-        controller.commands.last() shouldBe "speed 1.25"
+        controller.commands.last() shouldBe "hold 1.25"
     }
 
     @Test
@@ -484,6 +484,19 @@ class AudiobookPlayerViewModelTest {
         controller.playing()
 
         viewModel.speed.value shouldBe 1.5f
+    }
+
+    @Test
+    fun `a speed chosen elsewhere (Auto, a watch) for the book playing is shown`() = runTest {
+        every { preferences.speedFor("book") } returns 1.25f
+        val viewModel = viewModel()
+        controller.playing(track("part 1", book = "book"))
+
+        // The service's player keeps it for the book as it's set
+        every { preferences.speedFor("book") } returns 1.75f
+        controller.state.value = controller.state.value.copy(speed = 1.75f)
+
+        viewModel.speed.value shouldBe 1.75f
     }
 
     // --- Sleep timer and segments ------------------------------------------------------------------

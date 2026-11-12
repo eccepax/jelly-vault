@@ -11,10 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -63,11 +62,13 @@ class AudiobookPlayerViewModel(
     val speed: StateFlow<Float> = _speed.asStateFlow()
 
     init {
-        // The service's player puts each book at its own speed, however it started: this only shows it.
-        // With nothing loaded for a moment (a cast handing over) it keeps showing the book's.
+        // The service's player puts each book at its own speed, however it started, and keeps one set
+        // from elsewhere (Auto, a watch): this only shows it. With nothing loaded for a moment (a cast
+        // handing over) it keeps showing the book's.
         viewModelScope.launch {
-            playback.state.map { it.currentTrack }.filterNotNull().map { it.bookId }.distinctUntilChanged()
-                .collect { book -> _speed.value = speedOf(book) }
+            playback.state.mapNotNull { state -> state.currentTrack?.let { it.bookId to state.speed } }
+                .distinctUntilChanged()
+                .collect { (book, _) -> _speed.value = speedOf(book) }
         }
     }
 
@@ -202,7 +203,7 @@ class AudiobookPlayerViewModel(
     }
 
     /** Holding fast-forward plays faster until it's let go, back at the speed chosen. */
-    fun holdSpeedUp(holding: Boolean) = playback.setSpeed(
+    fun holdSpeedUp(holding: Boolean) = playback.holdSpeed(
         if (holding) Constants.HOLD_SPEEDUP_MULTIPLIER else _speed.value,
     )
 
