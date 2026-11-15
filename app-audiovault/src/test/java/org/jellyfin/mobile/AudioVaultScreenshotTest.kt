@@ -15,6 +15,7 @@ import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
+import org.jellyfin.mobile.data.entity.FinishedBookEntity
 import org.jellyfin.mobile.downloads.DownloadRequests
 import org.jellyfin.mobile.library.GroupBy
 import org.jellyfin.mobile.library.LibraryItem
@@ -27,6 +28,8 @@ import org.jellyfin.mobile.player.ui.PlayerRoute
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.mobile.settings.SettingsRoute
 import org.jellyfin.mobile.settings.SettingsViewModel
+import org.jellyfin.mobile.stats.ListeningStats
+import org.jellyfin.mobile.stats.StatsScreen
 import org.jellyfin.mobile.testing.downloads.FakeDownloadSettings
 import org.jellyfin.mobile.testsupport.PHONE_QUALIFIERS
 import org.jellyfin.mobile.testsupport.SCREENSHOT_SDK
@@ -44,6 +47,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
 import java.util.UUID
 
 /** AudioVault's main screens on a phone with 3-button navigation; see [captureWithSystemBars]. */
@@ -165,6 +169,25 @@ class AudioVaultScreenshotTest {
         capture("settings") { SettingsRoute(onBack = {}, onSignedOut = {}, viewModel = settings) }
     }
 
+    @Test
+    fun stats() {
+        val today = LocalDate.of(2026, 11, 15)
+        val minutes = listOf(35L, 0L, 80L, 50L, 120L, 20L, 65L)
+        val stats = ListeningStats(
+            todayMs = 65 * MINUTE_MS,
+            lastSevenDaysMs = minutes.sum() * MINUTE_MS,
+            allTimeMs = 4_210 * MINUTE_MS,
+            chart = minutes.mapIndexed { i, m -> today.minusDays(6L - i) to m * MINUTE_MS },
+            booksFinished = 12,
+            recentlyFinished = listOf(
+                FinishedBookEntity("a", "Project Hail Mary", 2L),
+                FinishedBookEntity("b", "Braiding Sweetgrass", 1L),
+            ),
+        )
+
+        capture("stats") { StatsScreen(stats, onBack = {}) }
+    }
+
     private fun capture(name: String, screen: @Composable () -> Unit) {
         composeRule.setContent { AppTheme(VaultBrand.AudioVault, content = screen) }
         composeRule.waitForIdle()
@@ -176,6 +199,7 @@ class AudioVaultScreenshotTest {
             override fun download(trackIds: List<String>) = Unit
             override fun remove(trackIds: List<String>) = Unit
         }
+        const val MINUTE_MS = 60_000L
         const val API_CLIENT_EXTENSIONS = "org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt"
     }
 }

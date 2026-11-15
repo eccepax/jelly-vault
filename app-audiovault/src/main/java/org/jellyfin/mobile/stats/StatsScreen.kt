@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
@@ -39,7 +40,6 @@ import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import org.koin.compose.viewmodel.koinViewModel
 import java.time.LocalDate
 import java.time.format.TextStyle
-import java.util.Locale
 import org.jellyfin.mobile.common.R as CommonR
 
 @Composable
@@ -122,6 +122,7 @@ private fun Figure(label: String, value: String, modifier: Modifier = Modifier) 
 @Composable
 private fun WeekChart(chart: List<Pair<LocalDate, Long>>) {
     val most = chart.maxOfOrNull { it.second }?.takeIf { it > 0 } ?: 1L
+    val locale = LocalConfiguration.current.locales[0]
     Row(
         horizontalArrangement = Arrangement.spacedBy(VaultSpacing.Small),
         verticalAlignment = Alignment.Bottom,
@@ -141,7 +142,7 @@ private fun WeekChart(chart: List<Pair<LocalDate, Long>>) {
                     )
                 }
                 Spacer(Modifier.height(VaultSpacing.XSmall))
-                SecondaryText(day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()))
+                SecondaryText(day.dayOfWeek.getDisplayName(TextStyle.SHORT, locale))
             }
         }
     }
