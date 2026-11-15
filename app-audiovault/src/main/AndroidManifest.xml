@@ -48,6 +48,31 @@
             </intent-filter>
         </activity>
 
+        <!-- The home-screen widget: the book playing, back 10 seconds and play/pause -->
+
+        <receiver
+
+            android:name=".widget.AudiobookWidgetReceiver"
+
+            android:exported="true"
+
+            android:label="@string/widget_name">
+
+            <intent-filter>
+
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+
+            </intent-filter>
+
+            <meta-data
+
+                android:name="android.appwidget.provider"
+
+                android:resource="@xml/audiobook_widget_info" />
+
+        </receiver>
+
+
         <service
             android:name=".player.playback.AudiobookPlaybackService"
             android:exported="true"

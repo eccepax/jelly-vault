@@ -81,6 +81,8 @@ dependencies {
     // Media
     implementation(libs.androidx.media)
     implementation(libs.bundles.androidx.media3)
+    // The home-screen widget
+    implementation(libs.androidx.glance.appwidget)
 
     // Common module
     implementation(project(":common"))
@@ -120,6 +122,8 @@ dependencies {
     testImplementation(project(":test-support"))
     // Migration tests (see the debug assets above)
     testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.androidx.glance.appwidget.testing)
+    testImplementation(libs.androidx.glance.testing)
     testRuntimeOnly(libs.junit.vintage.engine)
     androidTestImplementation(project(":common-testing"))
     androidTestImplementation(libs.bundles.androidx.test)

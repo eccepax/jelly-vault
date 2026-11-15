@@ -87,4 +87,7 @@
     <string name="sign_out_yes">Yes, sign out</string>
     <string name="sleep_end_of_chapter">End of this chapter</string>
     <string name="sleeps_after_chapter">Sleeps after this chapter</string>
+    <string name="widget_name">Now playing</string>
+    <string name="widget_description">The book playing, with back 10 seconds and play/pause</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
 </resources>

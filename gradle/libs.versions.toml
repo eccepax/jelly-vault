@@ -37,6 +37,7 @@ compose-material-icons = "1.7.8"
 # Network
 jellyfin-sdk = "1.7.1"
 coil = "3.3.0"
+androidx-glance = "1.1.1"
 reorderable = "3.1.0"
 
 # Media
@@ -78,6 +79,9 @@ androidx-room = { id = "androidx.room", version.ref = "androidx-room" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 
 [libraries]
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "androidx-glance" }
+androidx-glance-appwidget-testing = { group = "androidx.glance", name = "glance-appwidget-testing", version.ref = "androidx-glance" }
+androidx-glance-testing = { group = "androidx.glance", name = "glance-testing", version.ref = "androidx-glance" }
 # KotlinX
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
