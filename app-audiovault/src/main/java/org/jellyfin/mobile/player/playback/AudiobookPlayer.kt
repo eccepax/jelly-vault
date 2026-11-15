@@ -29,11 +29,20 @@ class AudiobookPlayer(
     /** The book whose speed was last put on; it's put on again only once another book plays. */
     private var bookPlaying: String? = null
 
+    /**
+     * The speed last put on (the book's, one set, or one held), sent again once the player is ready:
+     * a cast device drops a speed sent while it's still loading the queue.
+     */
+    private var speedWanted: Float? = null
+
     init {
         player.addListener(
             object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = followBook()
                 override fun onTimelineChanged(timeline: Timeline, reason: Int) = followBook()
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) putOnSpeedWanted()
+                }
             },
         )
     }
@@ -68,21 +77,33 @@ class AudiobookPlayer(
         val book = currentMediaItem?.mediaMetadata?.bookId ?: return
         if (book == bookPlaying) return
         bookPlaying = book
-        bookSpeed(book)?.let(wrappedPlayer::setPlaybackSpeed)
+        bookSpeed(book)?.let(::putOn)
+    }
+
+    private fun putOn(speed: Float) {
+        speedWanted = speed
+        wrappedPlayer.setPlaybackSpeed(speed)
+    }
+
+    // Every time: a player reports a speed it was sent even when it dropped it (Media3's cast player does)
+    private fun putOnSpeedWanted() {
+        speedWanted?.let(wrappedPlayer::setPlaybackSpeed)
     }
 
     override fun setPlaybackSpeed(speed: Float) {
         keep(speed)
+        speedWanted = speed
         super.setPlaybackSpeed(speed)
     }
 
     override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {
         keep(playbackParameters.speed)
+        speedWanted = playbackParameters.speed
         super.setPlaybackParameters(playbackParameters)
     }
 
     /** Plays at [speed] for now (holding fast-forward), without keeping it for the book. */
-    fun holdAt(speed: Float) = wrappedPlayer.setPlaybackSpeed(speed)
+    fun holdAt(speed: Float) = putOn(speed)
 
     // Kept before it's set, so whoever hears of the change finds it kept already
     private fun keep(speed: Float) {

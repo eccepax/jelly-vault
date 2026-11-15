@@ -65,7 +65,8 @@ class SessionCasting private constructor(private val casting: Casting) {
                 val player = castPlayers.castPlayer(local, converter)
                 attached.player = player
                 attached.forgetting = castPlayers.forgetsWithCast(player)
-                session.player = wrap(CastQueueCap(player))
+                // Another app's cast in the one session shows here as nothing playing
+                session.player = wrap(AnotherAppsHidden(CastQueueCap(player)))
             }
             return attached
         }

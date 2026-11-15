@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.playback
 
 import android.app.Application
 import android.os.Looper
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -278,5 +279,47 @@ class AudiobookPlayerTest {
         speedy.setPlaybackSpeed(1.75f)
 
         saved shouldBe emptyList()
+    }
+
+    // --- A cast device that drops a speed sent before its queue has loaded ---------------------
+
+    /** Like a cast device taking a queue: a speed set before it's ready is dropped, not kept. */
+    private class DropsSpeedUntilReady(player: Player) : ForwardingPlayer(player) {
+        override fun setPlaybackSpeed(speed: Float) {
+            if (playbackState == Player.STATE_READY) super.setPlaybackSpeed(speed)
+        }
+
+        override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {
+            if (playbackState == Player.STATE_READY) super.setPlaybackParameters(playbackParameters)
+        }
+    }
+
+    @Test
+    fun `a book's speed sent before a cast device was ready is sent again once it is`() {
+        AudiobookPlayer(DropsSpeedUntilReady(exoPlayer), { 1.5f })
+
+        exoPlayer.setMediaItem(item(track("1", book = "cast book")))
+        settle()
+        exoPlayer.playbackParameters.speed shouldBe 1f
+
+        exoPlayer.prepare()
+        advance(exoPlayer).untilState(Player.STATE_READY)
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 1.5f
+    }
+
+    @Test
+    fun `a speed held before a cast device was ready is held once it is`() {
+        val player = AudiobookPlayer(DropsSpeedUntilReady(exoPlayer), { 1.5f })
+        exoPlayer.setMediaItem(item(track("1", book = "cast book")))
+        settle()
+
+        player.holdAt(3f)
+        exoPlayer.prepare()
+        advance(exoPlayer).untilState(Player.STATE_READY)
+        settle()
+
+        exoPlayer.playbackParameters.speed shouldBe 3f
     }
 }
