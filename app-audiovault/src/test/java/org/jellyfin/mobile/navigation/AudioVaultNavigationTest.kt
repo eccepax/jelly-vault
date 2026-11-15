@@ -63,7 +63,13 @@ class AudioVaultNavigationTest {
                     Button(onClick = navigator.openPlayer) { Text("Play a download") }
                 }
             },
-            settings = { onBack -> Button(onClick = onBack) { Text("Settings page") } },
+            settings = { onBack, navigator ->
+                Column {
+                    Button(onClick = onBack) { Text("Settings page") }
+                    Button(onClick = navigator.openStats) { Text("Open stats") }
+                }
+            },
+            stats = { onBack -> Button(onClick = onBack) { Text("Stats page") } },
         )
     }
 
@@ -154,7 +160,8 @@ class AudioVaultNavigationTest {
                 },
                 player = { _ -> Text("Player page") },
                 downloads = { _, _ -> },
-                settings = { },
+                settings = { _, _ -> },
+                stats = { },
             )
         }
 
@@ -224,6 +231,30 @@ class AudioVaultNavigationTest {
         composeRule.activity.onBackPressedDispatcher.hasEnabledCallbacks() shouldBe false
 
         root = RootScreen.SignedIn
+        composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the listening stats open from settings, and back goes back to settings`() {
+        composeRule.setContent(content)
+        tap("Open settings")
+        tap("Open stats")
+        composeRule.onNodeWithText("Stats page").assertIsDisplayed()
+
+        systemBack()
+
+        composeRule.onNodeWithText("Settings page").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the stats close with the settings once there's no one signed in`() {
+        composeRule.setContent(content)
+        tap("Open settings")
+        tap("Open stats")
+
+        root = RootScreen.Connect
+        composeRule.waitForIdle()
+
         composeRule.onNodeWithText("Home taps: 0").assertIsDisplayed()
     }
 

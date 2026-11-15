@@ -70,6 +70,59 @@ class JellyfinDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `books gain a series, empty for the books already there`() {
+        appHelper.createDatabase(DB, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO audiobook_entries (id, server_id, parent_id, title, author, image_item_id, image_tag, " +
+                    "runtime_ticks, track_ids, is_bundle, date_added, last_played, played_percentage) " +
+                    "VALUES ('B:dir:book', 1, NULL, 'Book', NULL, NULL, NULL, 100, 't1,t2', 1, '', '', 40)",
+            )
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 9, true).use { db ->
+            db.query("SELECT title, series, series_index, series_key FROM audiobook_entries").use {
+                it.moveToFirst()
+                listOf(it.getString(0), it.getString(1), it.isNull(2), it.getString(3)) shouldBe listOf("Book", null, true, null)
+            }
+        }
+    }
+
+    @Test
+    fun `bookmarks come in empty, the library kept`() {
+        appHelper.createDatabase(DB, 9).use { db ->
+            db.execSQL("INSERT INTO hidden_item (itemId) VALUES ('h1')")
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 10, true).use { db ->
+            listOf("hidden_item", "audiobook_bookmark").map { table ->
+                db.query("SELECT COUNT(*) FROM $table").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+            } shouldBe listOf(1L, 0L)
+        }
+    }
+
+    @Test
+    fun `listening stats come in empty, the bookmarks kept`() {
+        appHelper.createDatabase(DB, 10).use { db ->
+            db.execSQL(
+                "INSERT INTO audiobook_bookmark (track_id, position_ms, label, note, created_at) " +
+                    "VALUES ('t1', 1000, 'One · 0:01', NULL, 1)",
+            )
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 11, true).use { db ->
+            listOf("audiobook_bookmark", "listening_day", "finished_book").map { table ->
+                db.query("SELECT COUNT(*) FROM $table").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+            } shouldBe listOf(1L, 0L, 0L)
+        }
+    }
+
     private fun SQLiteConnection.count(table: String): Long =
         prepare("SELECT COUNT(*) FROM $table").use {
             it.step()

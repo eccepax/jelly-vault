@@ -21,6 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.library.NextBook
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.playback.AudiobookQueueLoader
 import org.jellyfin.mobile.player.playback.AudiobookSleepTimerTarget
@@ -50,6 +51,7 @@ class AudiobookPlayerViewModelTest {
 
     private fun TestScope.viewModel(
         items: suspend (List<UUID>) -> List<BaseItemDto> = { ids -> ids.filter(onServer::contains).map(::bookNamed) },
+        nextInSeries: suspend (trackId: String) -> NextBook? = { null },
     ): AudiobookPlayerViewModel {
         val loader = AudiobookQueueLoader(
             items = items,
@@ -58,7 +60,16 @@ class AudiobookPlayerViewModelTest {
         )
         val sleepTimer = SleepTimer(AudiobookSleepTimerTarget(controller), backgroundScope)
         val segments = MediaSegmentSkipper(controller, { emptyList() }, { mockk() }, backgroundScope)
-        return AudiobookPlayerViewModel(controller, loader, sleepTimer, segments, preferences).also { runCurrent() }
+        return AudiobookPlayerViewModel(
+            controller,
+            loader,
+            sleepTimer,
+            segments,
+            preferences,
+            FakeBookmarks(),
+            nextInSeries,
+        )
+            .also { runCurrent() }
     }
 
     @BeforeEach
@@ -82,10 +93,50 @@ class AudiobookPlayerViewModelTest {
         mediaSourceId = null,
         startIndex = 0,
         startPosition = startPositionMs?.milliseconds,
-        audioStreamIndex = null,
-        subtitleStreamIndex = null,
         playFromDownloads = false,
     )
+
+    // --- Next in a series ---------------------------------------------------------------------------
+
+    private val hp1 = AudiobookTrack(id = "hp1", title = "HP1", durationMs = 60_000L)
+    private val hp2 = NextBook("HP2", listOf(book))
+
+    @Test
+    fun `once a book of a series has played to its end, the next one is offered`() = runTest {
+        val viewModel = viewModel(nextInSeries = { if (it == "hp1") hp2 else null })
+        controller.playing(hp1)
+        viewModel.nextInSeries.value shouldBe null
+
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        viewModel.nextInSeries.value shouldBe hp2
+    }
+
+    @Test
+    fun `a book in no series offers nothing once it ends`() = runTest {
+        val viewModel = viewModel()
+        controller.playing(hp1)
+
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        viewModel.nextInSeries.value shouldBe null
+    }
+
+    @Test
+    fun `playing the next one starts it from where it was left, and the offer goes`() = runTest {
+        val viewModel = viewModel(nextInSeries = { hp2 })
+        controller.playing(hp1)
+        controller.state.value = controller.state.value.copy(isEnded = true, isPlaying = false)
+        runCurrent()
+
+        viewModel.playNextInSeries()
+        runCurrent()
+
+        controller.commands.last() shouldBe "play $book from 0 at 0"
+        viewModel.nextInSeries.value shouldBe null
+    }
 
     // --- Starting a book ---------------------------------------------------------------------------
 

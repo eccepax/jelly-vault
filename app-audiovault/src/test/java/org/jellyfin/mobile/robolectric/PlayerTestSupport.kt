@@ -7,7 +7,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.data.dao.AudiobookBookmarkDao
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
+import org.jellyfin.mobile.player.FakeBookmarks
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.playback.AudiobookQueueLoader
 import org.jellyfin.mobile.player.playback.AudiobookSleepTimerTarget
@@ -34,6 +36,9 @@ fun playerViewModel(
     items: suspend (List<UUID>) -> List<BaseItemDto> = { ids ->
         ids.map { BaseItemDto(id = it, type = BaseItemKind.AUDIO_BOOK, name = "Book") }
     },
+    bookmarks: AudiobookBookmarkDao = FakeBookmarks(),
+    /** The clock bookmarks are saved by. */
+    now: () -> Long = { 0L },
 ): AudiobookPlayerViewModel {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val loader = AudiobookQueueLoader(
@@ -52,5 +57,7 @@ fun playerViewModel(
         SleepTimer(AudiobookSleepTimerTarget(controller), scope),
         MediaSegmentSkipper(controller, { emptyList() }, { MediaSegmentAction.NOTHING }, scope),
         preferences,
+        bookmarks,
+        now = now,
     )
 }

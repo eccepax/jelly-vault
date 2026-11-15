@@ -54,6 +54,7 @@ class SettingsScreenTest {
                         onRemoveAllDownloads = { events += "removeAll" },
                         onRemoveDownloadsOnSignOut = { events += "removeOnSignOut $it" },
                         onSignOut = { events += "signOut" },
+                        onListeningStats = { events += "listeningStats" },
                     ),
                 )
             }
@@ -186,5 +187,14 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("AudioVault 1.2.3").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Report a bug").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `the listening stats open from settings`() {
+        show()
+
+        composeRule.onNodeWithText(string(R.string.listening_stats)).performScrollTo().performClick()
+
+        events shouldBe listOf("listeningStats")
     }
 }

@@ -242,6 +242,17 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `shows whether shaking extends the sleep timer, and turning it off saves it`() {
+        val viewModel = viewModel()
+        viewModel.state.value.shakeToExtend shouldBe true
+
+        viewModel.setShakeToExtend(false)
+
+        preferences.shakeToExtendSleepTimer shouldBe false
+        viewModel.state.value.shakeToExtend shouldBe false
+    }
+
+    @Test
     fun `shows whether the sleep timer is shown, and hiding it goes through the timer`() {
         preferences.showSleepTimer = true
         val viewModel = viewModel()

@@ -1,12 +1,17 @@
 package org.jellyfin.mobile.library
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Checkbox
@@ -15,6 +20,7 @@ import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
+import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -41,27 +47,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.VaultTestTags
-import org.jellyfin.mobile.common.ui.components.Choice
-import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.CoverArt
 import org.jellyfin.mobile.common.ui.components.DownloadedMark
 import org.jellyfin.mobile.common.ui.components.EmptyState
 import org.jellyfin.mobile.common.ui.components.ErrorState
 import org.jellyfin.mobile.common.ui.components.ListDialog
 import org.jellyfin.mobile.common.ui.components.LoadingState
+import org.jellyfin.mobile.common.ui.components.MediaGridCard
 import org.jellyfin.mobile.common.ui.components.MediaListRow
 import org.jellyfin.mobile.common.ui.components.MiniPlayerBar
 import org.jellyfin.mobile.common.ui.components.SearchField
+import org.jellyfin.mobile.common.ui.components.SectionTitle
 import org.jellyfin.mobile.common.ui.components.SettingsActionRow
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.components.WaitingForWifiMark
+import org.jellyfin.mobile.common.ui.theme.VaultSpacing
 import java.util.UUID
 import kotlin.math.roundToInt
 import org.jellyfin.mobile.common.R as CommonR
@@ -81,8 +90,14 @@ data class LibraryUiState(
     val hiddenIds: Set<String> = emptySet(),
     val query: String = "",
     val sort: SortOption = SortOption.TITLE,
+    /** How the books are grouped, offered only where they can be ([canGroup]: the whole library's). */
+    val groupBy: GroupBy = GroupBy.NONE,
+    val canGroup: Boolean = false,
     val downloadedOnly: Boolean = false,
+    val finishedOnly: Boolean = false,
     val showHidden: Boolean = false,
+    /** Books started and not finished, shown above the list; empty, and there's no such row. */
+    val continueListening: List<LibraryItem> = emptyList(),
     /** What holding an item offers, while that menu is open. */
     val itemMenu: ItemMenu? = null,
     /** What's loaded in the player, for the mini player; null when nothing is. */
@@ -101,7 +116,9 @@ data class LibraryActions(
     val onUp: () -> Unit = {},
     val onQueryChange: (String) -> Unit = {},
     val onSort: (SortOption) -> Unit = {},
+    val onGroupBy: (GroupBy) -> Unit = {},
     val onDownloadedOnly: (Boolean) -> Unit = {},
+    val onFinishedOnly: (Boolean) -> Unit = {},
     val onShowHidden: (Boolean) -> Unit = {},
     val onSettings: () -> Unit = {},
     val onRefresh: () -> Unit = {},
@@ -186,6 +203,7 @@ private fun LibraryTopBar(
 private fun LibraryMenu(state: LibraryUiState, actions: LibraryActions) {
     var open by remember { mutableStateOf(false) }
     var sorting by rememberSaveable { mutableStateOf(false) }
+    var grouping by rememberSaveable { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
@@ -201,6 +219,10 @@ private fun LibraryMenu(state: LibraryUiState, actions: LibraryActions) {
                 open = false
                 actions.onDownloadedOnly(!state.downloadedOnly)
             }
+            CheckedMenuItem(stringResource(R.string.filter_finished_only), state.finishedOnly) {
+                open = false
+                actions.onFinishedOnly(!state.finishedOnly)
+            }
             CheckedMenuItem(stringResource(R.string.show_hidden_items), state.showHidden) {
                 open = false
                 actions.onShowHidden(!state.showHidden)
@@ -211,22 +233,18 @@ private fun LibraryMenu(state: LibraryUiState, actions: LibraryActions) {
                     sorting = true
                 },
             ) { Text(stringResource(R.string.library_sort_by)) }
+            if (state.canGroup) {
+                DropdownMenuItem(
+                    onClick = {
+                        open = false
+                        grouping = true
+                    },
+                ) { Text(stringResource(R.string.library_group_by)) }
+            }
         }
     }
-    if (sorting) {
-        ChoiceDialog(
-            title = stringResource(R.string.library_sort_by),
-            choices = listOf(
-                Choice(SortOption.TITLE, stringResource(R.string.library_sort_title)),
-                Choice(SortOption.AUTHOR, stringResource(R.string.library_sort_author)),
-                Choice(SortOption.DATE_ADDED, stringResource(R.string.library_sort_date_added)),
-                Choice(SortOption.LAST_PLAYED, stringResource(R.string.library_sort_last_played)),
-            ),
-            selected = state.sort,
-            onSelect = actions.onSort,
-            onDismiss = { sorting = false },
-        )
-    }
+    if (sorting) SortDialog(state.sort, actions.onSort) { sorting = false }
+    if (grouping) GroupDialog(state.groupBy, actions.onGroupBy) { grouping = false }
 }
 
 /** A menu item that switches something on or off; the item is what toggles, so it says whether it's on. */
@@ -261,7 +279,13 @@ private fun LibraryContent(state: LibraryUiState, actions: LibraryActions) {
                 waitingIds = state.waitingIds,
                 // Another folder, sort, filter or search is a different list; at the root (no folder)
                 // the title tells the folder view from All Audiobooks
-                scrollKey = "${state.folderId}|${state.title}|${state.sort}|${state.downloadedOnly}|${state.showHidden}|${state.query}",
+                scrollKey = "${state.folderId}|${state.title}|${state.sort}|${state.downloadedOnly}|" +
+                    "${state.finishedOnly}|${state.showHidden}|${state.query}",
+                header = state.continueListening.takeIf { it.isNotEmpty() }?.let { books ->
+                    {
+                        ContinueListeningRow(books, actions)
+                    }
+                },
             )
         }
         PullRefreshIndicator(
@@ -286,6 +310,8 @@ internal fun LibraryList(
     actions: LibraryActions,
     scrollKey: String = "",
     waitingIds: Set<String> = emptySet(),
+    /** Shown above the items, scrolling with them; none by default. */
+    header: (@Composable () -> Unit)? = null,
     row: @Composable (item: LibraryItem, download: RowDownload, hidden: Boolean) -> Unit = { item, download, hidden ->
         LibraryRow(item, download, hidden, actions)
     },
@@ -298,14 +324,55 @@ internal fun LibraryList(
         if (listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(VaultTestTags.LIBRARY_LIST)) {
+        if (header != null) item(key = LIST_HEADER_KEY) { header() }
         items(items, key = { it.id }) { item ->
             row(item, item.downloadIn(downloadedIds, waitingIds), item.id.toString() in hiddenIds)
         }
     }
 }
 
+/** Books started and not finished, as covers in a row with how far through each is; tapping one plays it. */
+@Composable
+private fun ContinueListeningRow(books: List<LibraryItem>, actions: LibraryActions) {
+    Column(modifier = Modifier.padding(bottom = VaultSpacing.Small)) {
+        SectionTitle(stringResource(R.string.continue_listening))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = VaultSpacing.Large),
+            horizontalArrangement = Arrangement.spacedBy(VaultSpacing.Medium),
+            modifier = Modifier.testTag(VaultTestTags.CONTINUE_LISTENING),
+        ) {
+            items(books, key = { it.id }) { book ->
+                MediaGridCard(
+                    title = book.displayName,
+                    subtitle = book.description.takeIf { it.isNotBlank() },
+                    cover = {
+                        Column {
+                            CoverArt(
+                                url = book.imageItemId?.let(actions.coverUrl),
+                                placeholder = Icons.Filled.Headphones,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            LinearProgressIndicator(
+                                progress = (book.progressPercent ?: 0f) / PERCENT,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    },
+                    onClick = { actions.onOpen(book) },
+                    onLongClick = { actions.onLongPress(book) },
+                    modifier = Modifier.width(CONTINUE_CARD_WIDTH),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun LibraryRow(item: LibraryItem, download: RowDownload, hidden: Boolean, actions: LibraryActions) {
+    if (item is LibraryItem.Group) {
+        GroupRow(item, actions)
+        return
+    }
     val progress = item.progressPercent?.takeIf { it > 0f }
     val runtime = item.runTimeTicks?.let { ticks ->
         val length = formatRuntime(ticks)
@@ -337,6 +404,21 @@ private fun LibraryRow(item: LibraryItem, download: RowDownload, hidden: Boolean
             // Shown only with "show hidden items" on, so dimmed to read as hidden-but-visible
             .alpha(if (hidden) HIDDEN_ITEM_ALPHA else 1f)
             .combinedClickable(onClick = { actions.onOpen(item) }, onLongClick = { actions.onLongPress(item) }),
+    )
+}
+
+/** A group of books (an author's, a series'): its name, how many books, and its first book's cover. */
+@Composable
+private fun GroupRow(group: LibraryItem.Group, actions: LibraryActions) {
+    MediaListRow(
+        title = group.displayName.ifBlank { stringResource(R.string.unknown_author) },
+        subtitle = pluralStringResource(R.plurals.books_count, group.count, group.count),
+        cover = {
+            CoverArt(url = group.imageItemId?.let(actions.coverUrl), placeholder = Icons.Filled.Folder)
+        },
+        modifier = Modifier
+            .testTag(VaultTestTags.LIBRARY_ITEM)
+            .combinedClickable(onClick = { actions.onOpen(group) }, onLongClick = { actions.onLongPress(group) }),
     )
 }
 
@@ -404,3 +486,8 @@ private const val HIDDEN_ITEM_ALPHA = 0.5f
 private const val TICKS_PER_SECOND = 10_000_000L
 private const val SECONDS_PER_HOUR = 3600L
 private const val SECONDS_PER_MINUTE = 60L
+
+/** The list's own key for its header, which no item's id can be. */
+private const val LIST_HEADER_KEY = "library_list_header"
+
+private val CONTINUE_CARD_WIDTH = 120.dp

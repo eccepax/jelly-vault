@@ -2,7 +2,6 @@ package org.jellyfin.mobile.player.deviceprofile
 
 import android.media.MediaCodecInfo.CodecProfileLevel
 import android.media.MediaFormat
-import androidx.media3.common.MimeTypes
 
 @Suppress("TooManyFunctions", "CyclomaticComplexMethod")
 object CodecHelpers {
@@ -232,25 +231,6 @@ object CodecHelpers {
         CodecProfileLevel.VP9Level61 -> "61"
         CodecProfileLevel.VP9Level62 -> "62"
         else -> null
-    }
-
-    /**
-     * Get the mimeType for a subtitle codec if supported.
-     *
-     * @param codec Subtitle codec given by Jellyfin.
-     * @return The mimeType or null if not supported.
-     */
-    fun getSubtitleMimeType(codec: String?): String? {
-        return when (codec) {
-            "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-            "ssa", "ass" -> MimeTypes.TEXT_SSA
-            "ttml" -> MimeTypes.APPLICATION_TTML
-            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-            "idx", "sub" -> MimeTypes.APPLICATION_VOBSUB
-            "pgs", "pgssub" -> MimeTypes.APPLICATION_PGS
-            "smi", "smil" -> "application/smil+xml"
-            else -> null
-        }
     }
 
     fun getAudioProfile(codec: String, profile: Int): String? = when (codec) {

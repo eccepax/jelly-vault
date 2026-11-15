@@ -94,8 +94,6 @@ class PlayerRouteTest {
         mediaSourceId = null,
         startIndex = 0,
         startPosition = null,
-        audioStreamIndex = null,
-        subtitleStreamIndex = null,
         playFromDownloads = false,
     )
 
@@ -346,29 +344,41 @@ class PlayerRouteTest {
     }
 
     @Test
-    fun `turning off a running sleep timer cancels it and says so`() {
+    fun `choosing a length starts the sleep timer, shown counting down`() {
+        controller.playing(book)
+        val viewModel = show()
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_30)).performClick()
+
+        viewModel.sleepTimer.value shouldBe SleepTimerState.Counting(30 * 60_000L)
+    }
+
+    @Test
+    fun `a running sleep timer can be extended and turned off`() {
         controller.playing(book)
         val viewModel = playerViewModel(controller)
         viewModel.startSleepTimer(minutes = 15)
         show(viewModel)
 
-        tap(R.string.menu_sleep_timer)
-        composeRule.onNodeWithText(string(R.string.sleep_timer_turn_off)).performClick()
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_extend)).performClick()
+        viewModel.sleepTimer.value shouldBe SleepTimerState.Counting(30 * 60_000L)
 
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_off)).performClick()
         viewModel.sleepTimer.value shouldBe SleepTimerState.Off
-        ShadowToast.getTextOfLatestToast() shouldBe string(R.string.sleep_timer_off)
     }
 
     @Test
-    fun `choosing end of chapter starts the timer and says so`() {
+    fun `choosing the end of the chapter sleeps there`() {
         controller.playing(book)
         val viewModel = show()
 
-        tap(R.string.menu_sleep_timer)
-        composeRule.onNodeWithText(string(R.string.sleep_timer_end_of_chapter)).performClick()
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(R.string.sleep_end_of_chapter)).performClick()
 
         viewModel.sleepTimer.value shouldBe SleepTimerState.EndOfSegment
-        ShadowToast.getTextOfLatestToast() shouldBe string(R.string.sleep_timer_set_end_of_chapter)
     }
 
     @Test

@@ -10,12 +10,14 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.filterToOne
 import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -55,6 +57,8 @@ class LibraryScreenTest {
         onSort = { events += "sort $it" },
         onDownloadedOnly = { events += "downloadedOnly $it" },
         onShowHidden = { events += "showHidden $it" },
+        onFinishedOnly = { events += "finishedOnly $it" },
+        onGroupBy = { events += "groupBy $it" },
         onSettings = { events += "settings" },
         onRefresh = { events += "refresh" },
         onOpen = { events += "open ${it.displayName}" },
@@ -98,6 +102,8 @@ class LibraryScreenTest {
     private fun show(state: LibraryUiState = defaults) {
         composeRule.setContent { AppTheme(VaultBrand.AudioVault) { LibraryScreen(state, actions) } }
     }
+
+    private val context get() = ApplicationProvider.getApplicationContext<Application>()
 
     private fun string(resId: Int) = ApplicationProvider.getApplicationContext<Application>().getString(resId)
 
@@ -368,6 +374,89 @@ class LibraryScreenTest {
         show()
 
         composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertDoesNotExist()
+    }
+
+    // --- continue listening --------------------------------------------------------------------------
+
+    @Test
+    fun `books started show above the list, under continue listening, and play when tapped`() {
+        show(defaults.copy(continueListening = listOf(dune)))
+
+        composeRule.onNodeWithText(string(R.string.continue_listening)).assertExists()
+        composeRule.onNodeWithTag(
+            VaultTestTags.CONTINUE_LISTENING,
+        ).onChildren().filterToOne(hasText("Dune")).performClick()
+
+        events shouldBe listOf("open Dune")
+    }
+
+    @Test
+    fun `with nothing started there's no continue listening`() {
+        show()
+
+        composeRule.onNodeWithText(string(R.string.continue_listening)).assertDoesNotExist()
+    }
+
+    // --- finished -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finished only says whether it's on, and switches`() {
+        show(defaults.copy(finishedOnly = true))
+
+        openMenu()
+        composeRule.onNodeWithText(string(R.string.filter_finished_only)).assertIsOn()
+        composeRule.onNodeWithText(string(R.string.filter_finished_only)).performClick()
+
+        events shouldBe listOf("finishedOnly false")
+    }
+
+    // --- grouping ----------------------------------------------------------------------------------
+
+    private fun group(name: String, count: Int) =
+        LibraryItem.Group(
+            id = UUID.nameUUIDFromBytes(name.toByteArray()),
+            displayName = name,
+            count = count,
+            imageItemId = null,
+        )
+
+    @Test
+    fun `a group shows its name and how many books are in it, and opens when tapped`() {
+        show(defaults.copy(items = listOf(group("Isabel Wilkerson", 2))))
+
+        composeRule.onNodeWithText("Isabel Wilkerson").assertExists()
+        composeRule.onNodeWithText(context.resources.getQuantityString(R.plurals.books_count, 2, 2)).assertExists()
+        composeRule.onNodeWithText("Isabel Wilkerson").performClick()
+
+        events shouldBe listOf("open Isabel Wilkerson")
+    }
+
+    @Test
+    fun `the books with no author are grouped as such`() {
+        show(defaults.copy(items = listOf(group("", 1))))
+
+        composeRule.onNodeWithText(string(R.string.unknown_author)).assertExists()
+    }
+
+    @Test
+    fun `group by offers each way with the current one selected`() {
+        // No folder named "Series" in the list to be mistaken for the choice
+        show(defaults.copy(items = listOf(dune), canGroup = true, groupBy = GroupBy.AUTHOR))
+
+        openMenu()
+        composeRule.onNodeWithText(string(R.string.library_group_by)).performClick()
+        composeRule.onNodeWithText(string(R.string.library_group_series)).performClick()
+
+        events shouldBe listOf("groupBy SERIES")
+    }
+
+    @Test
+    fun `browsing by folder there's no group by`() {
+        show(defaults.copy(canGroup = false))
+
+        openMenu()
+
+        composeRule.onNodeWithText(string(R.string.library_group_by)).assertDoesNotExist()
     }
 
     private companion object {

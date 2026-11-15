@@ -92,8 +92,6 @@ class AudiobookQueueLoaderTest {
         mediaSourceId = null,
         startIndex = startIndex,
         startPosition = startPositionMs?.milliseconds,
-        audioStreamIndex = null,
-        subtitleStreamIndex = null,
         playFromDownloads = fromDownloads,
         trackNames = names,
     )

@@ -1,6 +1,5 @@
 package org.jellyfin.mobile.player.ui
 
-import android.content.Context
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -23,7 +22,7 @@ import org.jellyfin.mobile.R
 import org.jellyfin.mobile.cast.CastButton
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.cast.NoCasting
-import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerPresence
@@ -60,6 +59,8 @@ fun PlayerRoute(
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
+    val nextInSeries by viewModel.nextInSeries.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
     val castDevice by casting.castDevice.collectAsState()
     val connectingTo by casting.connectingTo.collectAsState()
     val progress = rememberProgress(viewModel)
@@ -83,25 +84,14 @@ fun PlayerRoute(
     val state = playerUiState(playback, progress, playbackInfo).copy(
         speed = speed,
         holdToSpeedUp = holdToSpeedUp,
-        sleepTimerActive = sleepTimer != SleepTimerState.Off,
+        sleepTimer = sleepTimer,
         skipSegment = skipSegment != null,
+        nextInSeries = nextInSeries?.title,
+        bookmarks = bookmarks.map { BookmarkUi(it.id, it.label, it.note, it.createdAt) },
     )
     PlayerScreen(
         state,
-        PlayerActions(
-            onBack = leave,
-            onPlayPause = viewModel::togglePlayPause,
-            onRewind = viewModel::rewind,
-            onFastForward = viewModel::fastForward,
-            onHoldSpeedUp = viewModel::holdSpeedUp,
-            onPreviousChapter = viewModel::previousChapter,
-            onNextChapter = viewModel::nextChapter,
-            onSeek = viewModel::seekTo,
-            onSpeed = viewModel::setSpeed,
-            onSleepTimer = { choice -> chooseSleepTimer(context, viewModel, choice) },
-            onTrack = viewModel::skipToTrack,
-            onSkipSegment = viewModel::skipOfferedSegment,
-        ),
+        playerActions(viewModel, leave),
         castDevice = castDevice,
         connectingTo = connectingTo,
         onStopCasting = casting::stopCasting,
@@ -228,27 +218,31 @@ internal fun playerUiState(
     )
 }
 
-private fun chooseSleepTimer(context: Context, viewModel: AudiobookPlayerViewModel, choice: SleepTimerChoice) {
-    when (choice) {
-        SleepTimerChoice.TurnOff -> {
-            viewModel.cancelSleepTimer()
-            context.toast(R.string.sleep_timer_off)
-        }
-        SleepTimerChoice.EndOfChapter -> {
-            viewModel.sleepAtEndOfChapter()
-            context.toast(R.string.sleep_timer_set_end_of_chapter)
-        }
-        is SleepTimerChoice.For -> {
-            viewModel.startSleepTimer(choice.duration.minutes)
-            val length = context.getString(
-                when (choice.duration) {
-                    SleepTimerDuration.FIFTEEN_MINUTES -> R.string.sleep_timer_15_min
-                    SleepTimerDuration.THIRTY_MINUTES -> R.string.sleep_timer_30_min
-                    SleepTimerDuration.FORTY_FIVE_MINUTES -> R.string.sleep_timer_45_min
-                    SleepTimerDuration.SIXTY_MINUTES -> R.string.sleep_timer_60_min
-                },
-            )
-            context.toast(context.getString(R.string.sleep_timer_set, length))
-        }
-    }
-}
+/** What the player screen's controls do, through [viewModel]. */
+private fun playerActions(
+    viewModel: AudiobookPlayerViewModel,
+    leave: () -> Unit,
+) = PlayerActions(
+    onBack = leave,
+    onPlayPause = viewModel::togglePlayPause,
+    onRewind = viewModel::rewind,
+    onFastForward = viewModel::fastForward,
+    onHoldSpeedUp = viewModel::holdSpeedUp,
+    onPreviousChapter = viewModel::previousChapter,
+    onNextChapter = viewModel::nextChapter,
+    onSeek = viewModel::seekTo,
+    onSpeed = viewModel::setSpeed,
+    onStartSleepTimer = { durationMs -> viewModel.startSleepTimer((durationMs / MINUTE_MS).toInt()) },
+    onSleepAtEndOfChapter = viewModel::sleepAtEndOfChapter,
+    onExtendSleepTimer = viewModel::extendSleepTimer,
+    onCancelSleepTimer = viewModel::cancelSleepTimer,
+    onTrack = viewModel::skipToTrack,
+    onSkipSegment = viewModel::skipOfferedSegment,
+    onPlayNextInSeries = viewModel::playNextInSeries,
+    onAddBookmark = viewModel::addBookmark,
+    onOpenBookmark = viewModel::openBookmark,
+    onDeleteBookmark = viewModel::deleteBookmark,
+    onEditBookmarkNote = viewModel::editBookmarkNote,
+)
+
+private const val MINUTE_MS = 60_000L

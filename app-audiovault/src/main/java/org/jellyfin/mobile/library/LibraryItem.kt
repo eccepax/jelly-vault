@@ -17,6 +17,9 @@ sealed class LibraryItem {
     abstract val runTimeTicks: Long?
     abstract val progressPercent: Float?
 
+    /** Listened to the end: the server has it played (every file of a book of several). */
+    abstract val isFinished: Boolean
+
     /**
      * The item ID to use when loading cover art, or null for items that show a generic icon.
      * For [Album] this is the MusicAlbum's own ID so album art is loaded.
@@ -36,10 +39,13 @@ sealed class LibraryItem {
         override val id: UUID get() = dto.id!!
         override val displayName: String
             get() = folderNameFromPath(dto.path) ?: dto.name ?: "Unknown"
+
+        // The writer: Jellyfin keeps audiobook narrators as the album artist
         override val description: String
-            get() = dto.albumArtist ?: dto.artists?.firstOrNull() ?: ""
+            get() = dto.artists?.firstOrNull() ?: dto.albumArtist ?: ""
         override val runTimeTicks: Long? get() = dto.runTimeTicks
         override val progressPercent: Float? get() = dto.userData?.playedPercentage?.toFloat()?.takeIf { it > 0f }
+        override val isFinished: Boolean get() = dto.userData?.played == true
         override val imageItemId: UUID? get() = dto.id // load the album's own cover art
     }
 
@@ -51,9 +57,10 @@ sealed class LibraryItem {
         override val id: UUID get() = dto.id!!
         override val displayName: String get() = dto.name ?: "Unknown"
         override val description: String
-            get() = dto.albumArtist ?: dto.artists?.firstOrNull() ?: dto.album ?: ""
+            get() = dto.artists?.firstOrNull() ?: dto.albumArtist ?: dto.album ?: ""
         override val runTimeTicks: Long? get() = dto.runTimeTicks
         override val progressPercent: Float? get() = dto.userData?.playedPercentage?.toFloat()?.takeIf { it > 0f }
+        override val isFinished: Boolean get() = dto.userData?.played == true
         override val imageItemId: UUID? get() = dto.id
     }
 
@@ -67,6 +74,7 @@ sealed class LibraryItem {
         override val description: String get() = ""
         override val runTimeTicks: Long? get() = null
         override val progressPercent: Float? get() = null
+        override val isFinished: Boolean get() = false
         override val imageItemId: UUID? get() = null
     }
 
@@ -93,7 +101,33 @@ sealed class LibraryItem {
         val isBundle: Boolean,
         /** Jellyfin folder UUID for the parent directory, when available. Used for resume via the album queue API. */
         val parentFolderId: UUID?,
-    ) : LibraryItem()
+        /** Its library entry's id: for a book of several files, the key to show it as separate books. */
+        val entryId: String = "",
+        /** The series it's in, when a book of several files is shown as separate books (see AudiobookEntryEntity). */
+        val series: String? = null,
+        val seriesIndex: Float? = null,
+        /** The entry id of the one book its series is otherwise, to show it so again; null outside a series. */
+        val seriesKey: String? = null,
+    ) : LibraryItem() {
+        // Its progress runs to where it resumes (see AudiobookProgress): full once every file was played
+        override val isFinished: Boolean get() = (progressPercent ?: 0f) >= FINISHED_PERCENT
+    }
+
+    /**
+     * Books grouped together (see [groupItems]): an author's, or a series'. Opening it shows them;
+     * its [displayName] is the author or series, blank for books with no author.
+     */
+    data class Group(
+        override val id: UUID,
+        override val displayName: String,
+        val count: Int,
+        override val imageItemId: UUID?,
+    ) : LibraryItem() {
+        override val description: String get() = ""
+        override val runTimeTicks: Long? get() = null
+        override val progressPercent: Float? get() = null
+        override val isFinished: Boolean get() = false
+    }
 
     // -------------------------------------------------------------------------
     // Factory
@@ -118,3 +152,6 @@ sealed class LibraryItem {
                 ?.takeIf { it.isNotEmpty() }
     }
 }
+
+/** A book's progress once it's listened to the end. */
+internal const val FINISHED_PERCENT = 100f

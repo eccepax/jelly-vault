@@ -28,7 +28,11 @@ import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.playback.AccelerometerShakeSensor
+import org.jellyfin.mobile.common.playback.ShakeToExtend
 import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.buzzOnce
+import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.downloads.AudiobookDownloads
@@ -36,7 +40,9 @@ import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.downloads.OfflineListeningSync
 import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.library.LibraryViewModel
+import org.jellyfin.mobile.library.ListeningUpdates
 import org.jellyfin.mobile.library.jellyfinCoverUrl
+import org.jellyfin.mobile.library.nextInSeries
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
@@ -56,6 +62,9 @@ import org.jellyfin.mobile.player.playback.PlayerAudiobookController
 import org.jellyfin.mobile.player.playback.audioExtractorsFactory
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.settings.SettingsViewModel
+import org.jellyfin.mobile.stats.DatabaseListeningStore
+import org.jellyfin.mobile.stats.ListeningLog
+import org.jellyfin.mobile.stats.StatsViewModel
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.isLowRamDevice
 import org.jellyfin.sdk.api.client.ApiClient
@@ -93,11 +102,25 @@ val applicationModule = module {
             downloads.downloadedIds,
             get(),
             downloads::playable,
-            get<OfflineListeningSync>()::sync,
+            ListeningUpdates(get<OfflineListeningSync>()::sync, get<AudiobookProgressReporter>()::listeningReported),
             downloads.waitingIds,
         )
     }
-    viewModel { AudiobookPlayerViewModel(get(), get(), get(), get(), get()) }
+    viewModel {
+        val entries = get<AudiobookEntryDao>()
+        val preferences = get<AudioVaultAppPreferences>()
+        AudiobookPlayerViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            preferences,
+            get(),
+            findNextInSeries = { trackId ->
+                preferences.currentServerId?.let { server -> nextInSeries(entries.getAll(server), trackId) }
+            },
+        )
+    }
     viewModel {
         val signOut = get<SignOut>()
         SettingsViewModel(get(), get(), get(), signOut = { signOut() }, app = get())
@@ -157,6 +180,18 @@ val applicationModule = module {
         AudiobookProgressReporter(get(), JellyfinAudiobookProgress(get()), onDevice, mainScope())
     }
     single { SleepTimer(AudiobookSleepTimerTarget(get()), mainScope()) }
+    single { ListeningLog(get(), DatabaseListeningStore(get(), get())) }
+    viewModel { StatsViewModel(get(), get()) }
+    single {
+        val context = androidApplication()
+        val preferences = get<AudioVaultAppPreferences>()
+        ShakeToExtend(
+            get(),
+            AccelerometerShakeSensor(context),
+            enabled = { preferences.shakeToExtendSleepTimer },
+            buzz = { buzzOnce(context) },
+        )
+    }
     single {
         val repository = get<MediaSegmentRepository>()
         MediaSegmentSkipper(get(), repository::getSegmentsForItem, repository::getMediaSegmentAction, mainScope())

@@ -15,16 +15,21 @@ class LibraryItemFilterTest {
         downloadedIds: Set<String> = emptySet(),
         showHidden: Boolean = false,
         hiddenIds: Set<String> = emptySet(),
-    ) = LibraryFilterState(downloadedOnly, downloadedIds, showHidden, hiddenIds)
+        finishedOnly: Boolean = false,
+    ) = LibraryFilterState(downloadedOnly, downloadedIds, showHidden, hiddenIds, finishedOnly)
 
-    private fun bundle(name: String, trackIds: List<UUID> = listOf(UUID.randomUUID())) = LibraryItem.AudiobookBundle(
+    private fun bundle(
+        name: String,
+        trackIds: List<UUID> = listOf(UUID.randomUUID()),
+        progressPercent: Float? = null,
+    ) = LibraryItem.AudiobookBundle(
         id = UUID.randomUUID(),
         displayName = name,
         description = "",
         imageItemId = null,
         imageTag = null,
         runTimeTicks = null,
-        progressPercent = null,
+        progressPercent = progressPercent,
         trackIds = trackIds,
         isBundle = true,
         parentFolderId = null,
@@ -129,5 +134,17 @@ class LibraryItemFilterTest {
             ),
         )
         result shouldBe emptyList()
+    }
+
+    @Test
+    fun `finished only keeps the books listened to the end`() {
+        val finished = bundle("Finished", progressPercent = 100f)
+        val started = bundle("Started", progressPercent = 40f)
+        val result = filterLibraryItems(
+            listOf(finished, started, bundle("Not started")),
+            query = "",
+            filter = filterState(finishedOnly = true),
+        )
+        result shouldContainExactly listOf(finished)
     }
 }

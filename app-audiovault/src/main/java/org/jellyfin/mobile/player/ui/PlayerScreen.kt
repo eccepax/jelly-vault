@@ -22,17 +22,15 @@ import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
-import androidx.compose.material.LocalContentAlpha
-import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Slider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
@@ -62,12 +60,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.cast.PlayingOnLabel
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.components.AddBookmarkDialog
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
+import org.jellyfin.mobile.common.ui.components.BookmarksDialog
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.CoverArt
 import org.jellyfin.mobile.common.ui.components.PlayPauseButton
 import org.jellyfin.mobile.common.ui.components.SecondaryText
+import org.jellyfin.mobile.common.ui.components.SleepTimerButton
+import org.jellyfin.mobile.common.ui.components.SleepTimerLabel
+import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
@@ -90,29 +95,18 @@ data class PlayerUiState(
     val speed: Float = 1f,
     /** Whether holding fast-forward speeds playback up (the "Hold to speed up" setting). */
     val holdToSpeedUp: Boolean = true,
-    val sleepTimerActive: Boolean = false,
+    val sleepTimer: SleepTimerState = SleepTimerState.Off,
     /** The queue's track names, and which is playing. */
     val tracks: List<String> = emptyList(),
     val currentTrack: Int = 0,
     val playbackInfo: String = "",
     /** Whether a skippable segment (an intro, an outro) is playing. */
     val skipSegment: Boolean = false,
+    /** Once a book of a series has ended, the next one's title, offered to play; null otherwise. */
+    val nextInSeries: String? = null,
+    /** The book's bookmarks, the newest first. */
+    val bookmarks: List<BookmarkUi> = emptyList(),
 )
-
-/** How long the sleep timer can run for. */
-enum class SleepTimerDuration(val minutes: Int) {
-    FIFTEEN_MINUTES(minutes = 15),
-    THIRTY_MINUTES(minutes = 30),
-    FORTY_FIVE_MINUTES(minutes = 45),
-    SIXTY_MINUTES(minutes = 60),
-}
-
-/** A choice from the sleep timer: a length, the end of the chapter, or off. */
-sealed interface SleepTimerChoice {
-    data class For(val duration: SleepTimerDuration) : SleepTimerChoice
-    data object EndOfChapter : SleepTimerChoice
-    data object TurnOff : SleepTimerChoice
-}
 
 /** What the player can do. */
 data class PlayerActions(
@@ -126,9 +120,18 @@ data class PlayerActions(
     val onNextChapter: () -> Unit = {},
     val onSeek: (Long) -> Unit = {},
     val onSpeed: (Float) -> Unit = {},
-    val onSleepTimer: (SleepTimerChoice) -> Unit = {},
+    val onStartSleepTimer: (durationMs: Long) -> Unit = {},
+    val onSleepAtEndOfChapter: () -> Unit = {},
+    val onExtendSleepTimer: () -> Unit = {},
+    val onCancelSleepTimer: () -> Unit = {},
     val onTrack: (Int) -> Unit = {},
     val onSkipSegment: () -> Unit = {},
+    val onPlayNextInSeries: () -> Unit = {},
+    /** Bookmarks the place playing, with a note (empty for none). */
+    val onAddBookmark: (note: String) -> Unit = {},
+    val onOpenBookmark: (id: Long) -> Unit = {},
+    val onDeleteBookmark: (id: Long) -> Unit = {},
+    val onEditBookmarkNote: (id: Long, note: String) -> Unit = { _, _ -> },
 )
 
 /** Test tags for the player's parts that are read rather than tapped. */
@@ -154,19 +157,17 @@ fun PlayerScreen(
     castButton: @Composable () -> Unit = {},
 ) {
     var showingInfo by rememberSaveable { mutableStateOf(false) }
-    var choosingSpeed by rememberSaveable { mutableStateOf(false) }
-    var choosingSleepTimer by rememberSaveable { mutableStateOf(false) }
-    var choosingTrack by rememberSaveable { mutableStateOf(false) }
+    var dialog by rememberSaveable { mutableStateOf<PlayerDialog?>(null) }
 
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
             PlayerTopBar(
                 state = state,
                 onBack = actions.onBack,
-                onSleepTimer = { choosingSleepTimer = true },
-                onTracklist = { choosingTrack = true },
+                onDialog = { dialog = it },
                 onPlaybackInfo = { showingInfo = !showingInfo },
                 castButton = castButton,
+                sleepTimer = sleepTimerUi(state, actions),
             )
             CoverArea(
                 state = state,
@@ -185,8 +186,14 @@ fun PlayerScreen(
                     .padding(horizontal = VaultSpacing.XLarge, vertical = VaultSpacing.Large)
                     .basicMarquee(),
             )
+            state.nextInSeries?.let { NextInSeries(it, actions.onPlayNextInSeries) }
             ChapterSeekBar(state, actions.onSeek)
             PlayerControls(state, actions)
+            SleepTimerLabel(
+                state.sleepTimer,
+                stringResource(R.string.sleeps_after_chapter),
+                Modifier.align(Alignment.CenterHorizontally).padding(bottom = VaultSpacing.Small),
+            )
             PlayingOnLabel(
                 castDevice,
                 onStopCasting,
@@ -197,16 +204,82 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = VaultSpacing.Large),
                 contentAlignment = Alignment.Center,
             ) {
-                OutlinedButton(onClick = { choosingSpeed = true }) { Text(speedLabel(state.speed)) }
+                OutlinedButton(onClick = { dialog = PlayerDialog.SPEED }) { Text(speedLabel(state.speed)) }
             }
         }
     }
 
-    if (choosingSpeed) SpeedDialog(state.speed, actions.onSpeed) { choosingSpeed = false }
-    if (choosingSleepTimer) {
-        SleepTimerDialog(state.sleepTimerActive, actions.onSleepTimer) { choosingSleepTimer = false }
+    dialog?.let { PlayerDialogs(it, state, actions) { dialog = null } }
+}
+
+/** The top bar's "more" menu: the tracklist (with more than one track), bookmarks, playback info. */
+@Composable
+private fun PlayerMenu(showTracklist: Boolean, onDialog: (PlayerDialog) -> Unit, onPlaybackInfo: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+
+    @Composable
+    fun item(label: String, onClick: () -> Unit) = DropdownMenuItem(
+        onClick = {
+            menuOpen = false
+            onClick()
+        },
+    ) { Text(label) }
+    Box {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (showTracklist) item(stringResource(R.string.player_tracklist)) { onDialog(PlayerDialog.TRACKS) }
+            item(stringResource(CommonR.string.add_bookmark_action)) { onDialog(PlayerDialog.ADD_BOOKMARK) }
+            item(stringResource(CommonR.string.bookmarks_title)) { onDialog(PlayerDialog.BOOKMARKS) }
+            item(stringResource(R.string.menu_playback_info), onPlaybackInfo)
+        }
     }
-    if (choosingTrack) TracklistDialog(state, actions.onTrack) { choosingTrack = false }
+}
+
+/** The sleep timer as its button shows and changes it. */
+private fun sleepTimerUi(state: PlayerUiState, actions: PlayerActions) = SleepTimerUi(
+    state = state.sleepTimer,
+    onStart = actions.onStartSleepTimer,
+    onEndOfSegment = actions.onSleepAtEndOfChapter,
+    onExtend = actions.onExtendSleepTimer,
+    onCancel = actions.onCancelSleepTimer,
+)
+
+/** The player's dialogs, one open at a time. */
+private enum class PlayerDialog { SPEED, TRACKS, ADD_BOOKMARK, BOOKMARKS }
+
+@Composable
+private fun PlayerDialogs(dialog: PlayerDialog, state: PlayerUiState, actions: PlayerActions, onDismiss: () -> Unit) {
+    when (dialog) {
+        PlayerDialog.SPEED -> SpeedDialog(state.speed, actions.onSpeed, onDismiss)
+        PlayerDialog.TRACKS -> TracklistDialog(state, actions.onTrack, onDismiss)
+        PlayerDialog.ADD_BOOKMARK -> AddBookmarkDialog(onSave = actions.onAddBookmark, onDismiss = onDismiss)
+        PlayerDialog.BOOKMARKS -> BookmarksDialog(
+            bookmarks = state.bookmarks,
+            onOpen = actions.onOpenBookmark,
+            onDelete = actions.onDeleteBookmark,
+            onDismiss = onDismiss,
+            onEditNote = actions.onEditBookmarkNote,
+        )
+    }
+}
+
+/** The next book of the series the one that ended is in, and a button to play it. */
+@Composable
+private fun NextInSeries(title: String, onPlay: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = VaultSpacing.XLarge),
+    ) {
+        Text(
+            text = stringResource(R.string.next_in_series, title),
+            style = MaterialTheme.typography.body2,
+            maxLines = 2,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onPlay) { Text(stringResource(R.string.play_next_in_series)) }
+    }
 }
 
 /** The cover, with what goes over it: buffering progress, playback info, and the skip button. */
@@ -264,12 +337,11 @@ private fun TracklistDialog(state: PlayerUiState, onTrack: (Int) -> Unit, onDism
 private fun PlayerTopBar(
     state: PlayerUiState,
     onBack: () -> Unit,
-    onSleepTimer: () -> Unit,
-    onTracklist: () -> Unit,
+    onDialog: (PlayerDialog) -> Unit,
     onPlaybackInfo: () -> Unit,
     castButton: @Composable () -> Unit,
+    sleepTimer: SleepTimerUi,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     VaultTopBar(
         title = "",
         navigationIcon = {
@@ -282,39 +354,8 @@ private fun PlayerTopBar(
         },
         actions = {
             castButton()
-            IconButton(onClick = onSleepTimer) {
-                Icon(
-                    Icons.Filled.Bedtime,
-                    contentDescription = stringResource(R.string.menu_sleep_timer),
-                    // In the accent while a timer runs
-                    tint = if (state.sleepTimerActive) {
-                        MaterialTheme.colors.primary
-                    } else {
-                        LocalContentColor.current.copy(alpha = LocalContentAlpha.current)
-                    },
-                )
-            }
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (state.tracks.size > 1) {
-                        DropdownMenuItem(
-                            onClick = {
-                                menuOpen = false
-                                onTracklist()
-                            },
-                        ) { Text(stringResource(R.string.player_tracklist)) }
-                    }
-                    DropdownMenuItem(
-                        onClick = {
-                            menuOpen = false
-                            onPlaybackInfo()
-                        },
-                    ) { Text(stringResource(R.string.menu_playback_info)) }
-                }
-            }
+            SleepTimerButton(sleepTimer, stringResource(R.string.sleep_end_of_chapter))
+            PlayerMenu(showTracklist = state.tracks.size > 1, onDialog = onDialog, onPlaybackInfo = onPlaybackInfo)
         },
     )
 }
@@ -470,40 +511,6 @@ private fun FastForwardButton(holdToSpeedUp: Boolean, actions: PlayerActions) {
     ) {
         Icon(Icons.Filled.Forward30, contentDescription = null, modifier = Modifier.size(SKIP_ICON_SIZE))
     }
-}
-
-@Composable
-private fun SleepTimerDialog(active: Boolean, onChoose: (SleepTimerChoice) -> Unit, onDismiss: () -> Unit) {
-    val choices = buildList<Choice<SleepTimerChoice>> {
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.FIFTEEN_MINUTES),
-                stringResource(R.string.sleep_timer_15_min),
-            ),
-        )
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.THIRTY_MINUTES),
-                stringResource(R.string.sleep_timer_30_min),
-            ),
-        )
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.FORTY_FIVE_MINUTES),
-                stringResource(R.string.sleep_timer_45_min),
-            ),
-        )
-        add(Choice(SleepTimerChoice.For(SleepTimerDuration.SIXTY_MINUTES), stringResource(R.string.sleep_timer_60_min)))
-        add(Choice(SleepTimerChoice.EndOfChapter, stringResource(R.string.sleep_timer_end_of_chapter)))
-        if (active) add(Choice(SleepTimerChoice.TurnOff, stringResource(R.string.sleep_timer_turn_off)))
-    }
-    ChoiceDialog<SleepTimerChoice>(
-        title = stringResource(CommonR.string.sleep_timer),
-        choices = choices,
-        selected = null,
-        onSelect = onChoose,
-        onDismiss = onDismiss,
-    )
 }
 
 private fun speedLabel(speed: Float) = "${speed}x"

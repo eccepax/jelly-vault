@@ -70,7 +70,7 @@ class DownloadsRouteTest {
         // As the server gives it: the track's id, without its dashes
         every { mediaSource.id } returns itemId.toString().replace("-", "")
         every { mediaSource.item } returns item
-        every { mediaSource.getName(any()) } returns name
+        every { mediaSource.name } returns name
         return DownloadEntity(mediaSource)
     }
 

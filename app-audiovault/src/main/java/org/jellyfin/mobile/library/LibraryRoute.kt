@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.library
 
 import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +14,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -71,7 +73,9 @@ fun LibraryRoute(
             onUp = { viewModel.goUp() },
             onQueryChange = viewModel::setFilterQuery,
             onSort = viewModel::setSortOption,
+            onGroupBy = viewModel::setGroupBy,
             onDownloadedOnly = { viewModel.showDownloadedOnly.value = it },
+            onFinishedOnly = { viewModel.showFinishedOnly.value = it },
             onShowHidden = { viewModel.showHiddenItems.value = it },
             onSettings = { openSettings() },
             onRefresh = { viewModel.refresh(force = true) },
@@ -83,6 +87,11 @@ fun LibraryRoute(
             onStop = playerViewModel::stop,
             coverUrl = cover,
         )
+    }
+    LaunchedEffect(viewModel, context) {
+        viewModel.finishFailures.collect {
+            Toast.makeText(context, R.string.mark_finished_failed, Toast.LENGTH_LONG).show()
+        }
     }
     LibraryScreen(state = libraryState(viewModel, playerViewModel, canGoUp, itemMenu, cover), actions = actions)
 }
@@ -104,13 +113,18 @@ private fun libraryState(
     val waitingIds by viewModel.waitingIds.collectAsState()
     val hiddenIds by viewModel.hiddenIds.collectAsState()
     val sort by viewModel.sortOption.collectAsState()
+    val groupBy by viewModel.groupBy.collectAsState()
+    val canGroup by viewModel.canGroup.collectAsState()
     val downloadedOnly by viewModel.showDownloadedOnly.collectAsState()
+    val finishedOnly by viewModel.showFinishedOnly.collectAsState()
+    val continueListening by viewModel.continueListening.collectAsState()
     val showHidden by viewModel.showHiddenItems.collectAsState()
     // The ViewModel's, so it outlives a rotation and empties when a folder change clears it
     val query by viewModel.filterQuery.collectAsState()
     val playback by playerViewModel.state.collectAsState()
     return LibraryUiState(
-        title = title,
+        // A group opened is named after its author, and the books with none after that
+        title = title.ifBlank { stringResource(R.string.unknown_author) },
         folderId = folderId?.toString(),
         canGoUp = canGoUp,
         items = items,
@@ -121,8 +135,12 @@ private fun libraryState(
         hiddenIds = hiddenIds,
         query = query,
         sort = sort,
+        groupBy = groupBy,
+        canGroup = canGroup,
         downloadedOnly = downloadedOnly,
+        finishedOnly = finishedOnly,
         showHidden = showHidden,
+        continueListening = continueListening,
         itemMenu = itemMenu,
         nowPlaying = playback.currentTrack?.let { track ->
             NowPlayingBar(track.title, track.id.toUUIDOrNull()?.let(coverUrl), playback.playWhenReady)
@@ -159,13 +177,14 @@ private class ItemOpener(
             is LibraryItem.BrowseFolder -> viewModel.openFolder(item.id, item.displayName)
             is LibraryItem.AudioFile -> scope.launch { play(viewModel.getAudioQueueWithResume(item.id)) }
             is LibraryItem.AudiobookBundle -> scope.launch { viewModel.fetchBundleQueue(item)?.let(play) }
+            is LibraryItem.Group -> viewModel.openGroup(item.displayName)
         }
     }
 }
 
 /**
  * Holding an item: a folder opens; anything playable offers to download (or remove the download
- * of) its tracks, and to hide (or unhide) it.
+ * of) its tracks, to mark it finished (or not), and to hide (or unhide) it.
  */
 private class ItemMenus(
     private val context: Context,
@@ -177,17 +196,19 @@ private class ItemMenus(
     fun open(item: LibraryItem) {
         when (item) {
             is LibraryItem.BrowseFolder -> viewModel.openFolder(item.id, item.displayName)
-            is LibraryItem.AudioFile -> show(item.id, item.displayName, listOf(item.id))
-            is LibraryItem.AudiobookBundle -> show(item.id, item.displayName, item.trackIds)
+            is LibraryItem.Group -> viewModel.openGroup(item.displayName)
+            is LibraryItem.AudioFile -> show(item, listOf(item.id))
+            is LibraryItem.AudiobookBundle -> show(item, item.trackIds)
             is LibraryItem.Album -> scope.launch {
                 val trackIds = viewModel.fetchAlbumQueue(item.id)?.ids
-                if (!trackIds.isNullOrEmpty()) show(item.id, item.displayName, trackIds)
+                if (!trackIds.isNullOrEmpty()) show(item, trackIds)
             }
         }
     }
 
-    /** A download toggle (only when [trackIds] isn't empty), then a hide toggle, which is always offered. */
-    private fun show(itemId: UUID, title: String, trackIds: List<UUID>) {
+    /** A download toggle and a finished toggle (only when [trackIds] isn't empty), then a hide toggle, always offered. */
+    private fun show(item: LibraryItem, trackIds: List<UUID>) {
+        val itemId = item.id
         val actions = buildList {
             if (trackIds.isNotEmpty()) {
                 val ids = trackIds.map(UUID::toString)
@@ -196,6 +217,15 @@ private class ItemMenus(
                 } else {
                     add(ItemAction(context.getString(R.string.download_action)) { downloads.download(ids) })
                 }
+                if (item is LibraryItem.AudiobookBundle) addSeriesToggle(item)
+                val finished = item.isFinished
+                add(
+                    ItemAction(
+                        context.getString(
+                            if (finished) R.string.mark_unfinished_action else R.string.mark_finished_action,
+                        ),
+                    ) { viewModel.setFinished(trackIds, finished = !finished) },
+                )
             }
             val isHidden = itemId.toString() in viewModel.hiddenIds.value
             add(
@@ -204,7 +234,22 @@ private class ItemMenus(
                 },
             )
         }
-        show(ItemMenu(title, actions))
+        show(ItemMenu(item.displayName, actions))
+    }
+
+    /** A book of several files can be shown as separate books, a series; a series as one book again. */
+    private fun MutableList<ItemAction>.addSeriesToggle(item: LibraryItem.AudiobookBundle) {
+        val seriesKey = item.seriesKey
+        when {
+            seriesKey != null -> add(
+                ItemAction(context.getString(R.string.show_as_one_book)) { viewModel.showAsOneBook(seriesKey) },
+            )
+            item.isBundle && item.trackIds.size > 1 -> add(
+                ItemAction(
+                    context.getString(R.string.show_as_separate_books),
+                ) { viewModel.showAsSeparateBooks(item.entryId) },
+            )
+        }
     }
 }
 
@@ -213,8 +258,6 @@ private fun LibraryViewModel.AudioQueue.toPlayOptions() = PlayOptions(
     mediaSourceId = null,
     startIndex = startIndex,
     startPosition = startPosition,
-    audioStreamIndex = null,
-    subtitleStreamIndex = null,
     playFromDownloads = false,
     trackNames = trackNames,
 )

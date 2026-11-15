@@ -14,6 +14,9 @@ object VaultTestTags {
     /** One item in [LIBRARY_LIST] or [LIBRARY_GRID]. */
     const val LIBRARY_ITEM = "library_item"
 
+    /** The row of books started and not finished, above a library's list. */
+    const val CONTINUE_LISTENING = "continue_listening"
+
     /** The mark on an item that's downloaded to the device. */
     const val DOWNLOADED_MARK = "downloaded_mark"
 

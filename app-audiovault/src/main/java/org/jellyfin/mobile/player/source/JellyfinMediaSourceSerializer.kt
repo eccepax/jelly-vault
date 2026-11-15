@@ -87,7 +87,7 @@ class JellyfinMediaSourceSerializer : KSerializer<LocalJellyfinMediaSource> {
                 item = item,
                 sourceInfo = requireNotNull(sourceInfo) { "Media source has no source info" },
                 playSessionId = requireNotNull(playSessionId) { "Media source has no play session id" },
-                playbackDetails = PlaybackDetails(startTime, audioStreamIndex = null, subtitleStreamIndex = null),
+                startTime = startTime,
                 localDirectoryUri = requireNotNull(downloadFolderUri) { "Media source has no download folder uri" },
                 remoteFileUri = requireNotNull(downloadedFileUri) { "Media source has no downloaded file uri" },
                 downloadSize = requireNotNull(downloadSize) { "Media source has no download size" },

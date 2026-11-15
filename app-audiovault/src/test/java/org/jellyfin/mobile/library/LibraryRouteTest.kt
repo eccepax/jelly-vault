@@ -23,7 +23,9 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.theme.AppTheme
@@ -35,11 +37,13 @@ import org.jellyfin.mobile.player.playback.FakeAudiobookController
 import org.jellyfin.mobile.robolectric.playerViewModel
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.UserItemDataDto
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.util.UUID
 import org.jellyfin.mobile.common.R as CommonR
 
@@ -60,6 +64,7 @@ class LibraryRouteTest {
     private val hiddenIdsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val filterQueryFlow = MutableStateFlow("")
     private val canGoUpFlow = MutableStateFlow(false)
+    private val finishFailures = Channel<Unit>(Channel.BUFFERED)
 
     private val played = mutableListOf<PlayOptions>()
     private val downloaded = mutableListOf<List<String>>()
@@ -91,6 +96,11 @@ class LibraryRouteTest {
         every { libraryViewModel.sortOption } returns MutableStateFlow(SortOption.TITLE)
         every { libraryViewModel.showDownloadedOnly } returns MutableStateFlow(false)
         every { libraryViewModel.showHiddenItems } returns MutableStateFlow(false)
+        every { libraryViewModel.showFinishedOnly } returns MutableStateFlow(false)
+        every { libraryViewModel.continueListening } returns MutableStateFlow(emptyList())
+        every { libraryViewModel.finishFailures } returns finishFailures.receiveAsFlow()
+        every { libraryViewModel.groupBy } returns MutableStateFlow(GroupBy.NONE)
+        every { libraryViewModel.canGroup } returns MutableStateFlow(true)
     }
 
     @Composable
@@ -110,8 +120,22 @@ class LibraryRouteTest {
 
     private fun show() = composeRule.setContent { Library() }
 
-    private fun audioFile(id: UUID = UUID.randomUUID(), name: String = "Track") =
-        LibraryItem.AudioFile(BaseItemDto(id = id, type = BaseItemKind.AUDIO_BOOK, name = name))
+    private fun audioFile(id: UUID = UUID.randomUUID(), name: String = "Track", played: Boolean = false) =
+        LibraryItem.AudioFile(
+            BaseItemDto(
+                id = id,
+                type = BaseItemKind.AUDIO_BOOK,
+                name = name,
+                userData = UserItemDataDto(
+                    playbackPositionTicks = 0L,
+                    playCount = 0,
+                    isFavorite = false,
+                    played = played,
+                    key = "",
+                    itemId = id,
+                ),
+            ),
+        )
 
     private fun string(resId: Int): String = ApplicationProvider.getApplicationContext<Application>().getString(resId)
 
@@ -221,6 +245,103 @@ class LibraryRouteTest {
         composeRule.onNodeWithText(string(R.string.hide_action)).performClick()
 
         verify { libraryViewModel.toggleHidden(item.id) }
+    }
+
+    @Test
+    fun `holding a book not finished offers to mark it finished`() {
+        val item = audioFile(name = "Dune")
+        itemsFlow.value = listOf(item)
+        show()
+
+        holdDown("Dune")
+        composeRule.onNodeWithText(string(R.string.mark_unfinished_action)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.mark_finished_action)).performClick()
+
+        verify { libraryViewModel.setFinished(listOf(item.id), finished = true) }
+    }
+
+    @Test
+    fun `holding a finished book offers to mark it not finished`() {
+        val item = audioFile(name = "Dune", played = true)
+        itemsFlow.value = listOf(item)
+        show()
+
+        holdDown("Dune")
+        composeRule.onNodeWithText(string(R.string.mark_unfinished_action)).performClick()
+
+        verify { libraryViewModel.setFinished(listOf(item.id), finished = false) }
+    }
+
+    @Test
+    fun `a book that couldn't be marked says so`() {
+        show()
+
+        finishFailures.trySend(Unit)
+        composeRule.waitForIdle()
+
+        ShadowToast.getTextOfLatestToast() shouldBe string(R.string.mark_finished_failed)
+    }
+
+    private fun bundle(name: String, trackIds: List<UUID>, entryId: String = "B:$name", seriesKey: String? = null) =
+        LibraryItem.AudiobookBundle(
+            id = UUID.randomUUID(), displayName = name, description = "", imageItemId = null, imageTag = null,
+            runTimeTicks = null, progressPercent = null, trackIds = trackIds, isBundle = trackIds.size > 1,
+            parentFolderId = null, entryId = entryId, seriesKey = seriesKey,
+        )
+
+    @Test
+    fun `tapping a group opens it, and so does holding it`() {
+        itemsFlow.value = listOf(LibraryItem.Group(UUID.randomUUID(), "Isabel Wilkerson", count = 2, imageItemId = null))
+        show()
+
+        composeRule.onNodeWithText("Isabel Wilkerson").performClick()
+        holdDown("Isabel Wilkerson")
+
+        verify(exactly = 2) { libraryViewModel.openGroup("Isabel Wilkerson") }
+    }
+
+    @Test
+    fun `choosing how to group goes to the library`() {
+        show()
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.library_group_by)).performClick()
+        composeRule.onNodeWithText(string(R.string.library_group_author)).performClick()
+
+        verify { libraryViewModel.setGroupBy(GroupBy.AUTHOR) }
+    }
+
+    @Test
+    fun `holding a book of several files offers to show it as separate books`() {
+        itemsFlow.value = listOf(bundle("Harry Potter", listOf(UUID.randomUUID(), UUID.randomUUID()), entryId = "B:hp"))
+        show()
+
+        holdDown("Harry Potter")
+        composeRule.onNodeWithText(string(R.string.show_as_one_book)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.show_as_separate_books)).performClick()
+
+        verify { libraryViewModel.showAsSeparateBooks("B:hp") }
+    }
+
+    @Test
+    fun `holding a book of one file doesn't offer separate books`() {
+        itemsFlow.value = listOf(bundle("Caste", listOf(UUID.randomUUID())))
+        show()
+
+        holdDown("Caste")
+
+        composeRule.onNodeWithText(string(R.string.show_as_separate_books)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `holding a book of a series offers to show the series as one book again`() {
+        itemsFlow.value = listOf(bundle("HP1", listOf(UUID.randomUUID()), seriesKey = "B:hp"))
+        show()
+
+        holdDown("HP1")
+        composeRule.onNodeWithText(string(R.string.show_as_one_book)).performClick()
+
+        verify { libraryViewModel.showAsOneBook("B:hp") }
     }
 
     @Test

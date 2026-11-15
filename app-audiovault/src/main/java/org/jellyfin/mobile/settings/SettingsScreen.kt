@@ -24,6 +24,7 @@ import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.RemoveDownloadsFailures
+import org.jellyfin.mobile.common.ui.components.SettingsActionRow
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutFailures
@@ -37,6 +38,7 @@ import org.jellyfin.mobile.common.R as CommonR
 data class SettingsUiState(
     val holdToSpeedUp: Boolean,
     val skipSilence: Boolean,
+    val shakeToExtend: Boolean = true,
     val flatLibrary: Boolean,
     val downloadOnWifiOnly: Boolean,
     val removeDownloadsOnSignOut: Boolean,
@@ -52,11 +54,13 @@ data class SettingsActions(
     val onBack: () -> Unit = {},
     val onHoldToSpeedUp: (Boolean) -> Unit = {},
     val onSkipSilence: (Boolean) -> Unit = {},
+    val onShakeToExtend: (Boolean) -> Unit = {},
     val onFlatLibrary: (Boolean) -> Unit = {},
     val onWifiOnly: (Boolean) -> Unit = {},
     val onRemoveDownloadsOnSignOut: (Boolean) -> Unit = {},
     val onRemoveAllDownloads: () -> Unit = {},
     val onSignOut: () -> Unit = {},
+    val onListeningStats: () -> Unit = {},
 )
 
 @Composable
@@ -82,6 +86,11 @@ fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                 PlaybackSection(state, actions)
                 Divider()
                 LibrarySection(state, actions)
+                SettingsActionRow(
+                    label = stringResource(R.string.listening_stats),
+                    summary = stringResource(R.string.listening_stats_summary),
+                    onClick = actions.onListeningStats,
+                )
                 Divider()
                 DownloadsSection(state, actions)
                 Divider()
@@ -107,6 +116,12 @@ private fun PlaybackSection(state: SettingsUiState, actions: SettingsActions) {
         summary = stringResource(R.string.pref_skip_silence_summary),
         checked = state.skipSilence,
         onCheckedChange = actions.onSkipSilence,
+    )
+    SettingsSwitchRow(
+        label = stringResource(CommonR.string.shake_to_extend),
+        summary = stringResource(CommonR.string.shake_to_extend_summary),
+        checked = state.shakeToExtend,
+        onCheckedChange = actions.onShakeToExtend,
     )
 }
 
@@ -161,7 +176,12 @@ private fun AccountSection(state: SettingsUiState, actions: SettingsActions) {
 
 /** Settings, saved through [viewModel]; [onSignedOut] once signing out is done, to start the app over. */
 @Composable
-fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
+fun SettingsRoute(
+    onBack: () -> Unit,
+    onSignedOut: () -> Unit,
+    onListeningStats: () -> Unit = {},
+    viewModel: SettingsViewModel = koinViewModel(),
+) {
     val state by viewModel.state.collectAsState()
     val downloadSpace by viewModel.downloadSpace.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
@@ -175,11 +195,13 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
             onBack = onBack,
             onHoldToSpeedUp = viewModel::setHoldToSpeedUp,
             onSkipSilence = viewModel::setSkipSilence,
+            onShakeToExtend = viewModel::setShakeToExtend,
             onFlatLibrary = viewModel::setFlatLibrary,
             onWifiOnly = viewModel::setWifiOnly,
             onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
             onRemoveAllDownloads = viewModel::removeAllDownloads,
             onSignOut = viewModel::signOut,
+            onListeningStats = onListeningStats,
         ),
     )
 }

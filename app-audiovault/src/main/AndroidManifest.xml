@@ -4,6 +4,8 @@
 
     <!-- What playback needs; what downloads need comes from common-downloads' manifest -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- A short buzz when a shake extends the sleep timer -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -45,6 +47,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The home-screen widget: the book playing, back 10 seconds and play/pause -->
+
+        <receiver
+
+            android:name=".widget.AudiobookWidgetReceiver"
+
+            android:exported="true"
+
+            android:label="@string/widget_name">
+
+            <intent-filter>
+
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+
+            </intent-filter>
+
+            <meta-data
+
+                android:name="android.appwidget.provider"
+
+                android:resource="@xml/audiobook_widget_info" />
+
+        </receiver>
+
 
         <service
             android:name=".player.playback.AudiobookPlaybackService"

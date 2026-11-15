@@ -1,7 +1,6 @@
 package org.jellyfin.mobile.books.reader
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,7 +23,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ViewDay
@@ -43,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.books.app.EpubFontFamily
 import org.jellyfin.mobile.books.data.entity.BookBookmarkEntity
+import org.jellyfin.mobile.common.ui.components.AddBookmarkDialog
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
+import org.jellyfin.mobile.common.ui.components.BookmarksDialog
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.ListDialog
@@ -53,8 +54,6 @@ import org.jellyfin.mobile.common.ui.components.TextFieldDialog
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
-import java.text.DateFormat
-import java.util.Date
 import org.jellyfin.mobile.common.R as CommonR
 
 /** Everything the reader shows around the pages themselves. */
@@ -118,14 +117,13 @@ fun BookReaderScreen(state: BookReaderUiState, actions: BookReaderActions, pages
             textSetting = it
         }
         ReaderDialog.CONTENTS -> ContentsDialog(state, actions, dismiss)
-        ReaderDialog.ADD_BOOKMARK -> TextFieldDialog(
-            title = stringResource(R.string.add_bookmark_title),
-            label = stringResource(R.string.add_bookmark_note_hint),
-            confirmLabel = stringResource(R.string.bookmark_save),
-            onConfirm = actions.onAddBookmark,
+        ReaderDialog.ADD_BOOKMARK -> AddBookmarkDialog(onSave = actions.onAddBookmark, onDismiss = dismiss)
+        ReaderDialog.BOOKMARKS -> BookmarksDialog(
+            bookmarks = state.bookmarks.map { BookmarkUi(it.id, it.label, it.note, it.createdAt) },
+            onOpen = { id -> state.bookmarks.firstOrNull { it.id == id }?.let(actions.onOpenBookmark) },
+            onDelete = actions.onDeleteBookmark,
             onDismiss = dismiss,
         )
-        ReaderDialog.BOOKMARKS -> BookmarksDialog(state.bookmarks, actions, dismiss)
         null -> Unit
     }
     textSetting?.let {
@@ -191,8 +189,8 @@ private fun ReaderMenu(bookType: BookType, onDialog: (ReaderDialog) -> Unit) {
             }
             if (bookType == BookType.EPUB) item(R.string.text_settings_title, ReaderDialog.TEXT_SETTINGS, true)
             item(R.string.contents_title, ReaderDialog.CONTENTS, bookType != BookType.UNKNOWN)
-            item(R.string.add_bookmark_action, ReaderDialog.ADD_BOOKMARK, true)
-            item(R.string.bookmarks_title, ReaderDialog.BOOKMARKS, true)
+            item(CommonR.string.add_bookmark_action, ReaderDialog.ADD_BOOKMARK, true)
+            item(CommonR.string.bookmarks_title, ReaderDialog.BOOKMARKS, true)
         }
     }
 }
@@ -277,53 +275,6 @@ private fun ContentsDialog(state: BookReaderUiState, actions: BookReaderActions,
             keyboardType = KeyboardType.Number,
         )
         BookType.UNKNOWN -> Unit
-    }
-}
-
-/** The saved bookmarks: tapping one goes to it, and each can be deleted. */
-@Composable
-private fun BookmarksDialog(bookmarks: List<BookBookmarkEntity>, actions: BookReaderActions, onDismiss: () -> Unit) {
-    if (bookmarks.isEmpty()) {
-        NoticeDialog(
-            title = stringResource(R.string.bookmarks_title),
-            message = stringResource(R.string.no_bookmarks_yet),
-            onDismiss = onDismiss,
-        )
-        return
-    }
-    ListDialog(title = stringResource(R.string.bookmarks_title), onDismiss = onDismiss) {
-        bookmarks.forEach { bookmark ->
-            BookmarkRow(
-                bookmark,
-                onOpen = {
-                    onDismiss()
-                    actions.onOpenBookmark(bookmark)
-                },
-                onDelete = { actions.onDeleteBookmark(bookmark.id) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun BookmarkRow(bookmark: BookBookmarkEntity, onOpen: () -> Unit, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(
-            onClick = onOpen,
-        ).padding(start = VaultSpacing.Large, top = VaultSpacing.Small, bottom = VaultSpacing.Small),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(bookmark.label, style = MaterialTheme.typography.body1)
-            val saved = DateFormat.getDateTimeInstance(
-                DateFormat.SHORT,
-                DateFormat.SHORT,
-            ).format(Date(bookmark.createdAt))
-            SecondaryText(listOfNotNull(saved, bookmark.note?.takeIf { it.isNotBlank() }).joinToString(" — "))
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_bookmark, bookmark.label))
-        }
     }
 }
 

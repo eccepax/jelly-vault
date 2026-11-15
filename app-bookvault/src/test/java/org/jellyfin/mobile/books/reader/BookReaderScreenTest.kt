@@ -257,7 +257,7 @@ class BookReaderScreenTest {
         show(BookReaderUiState(bookType = BookType.PDF, chapterCount = 3))
 
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
-        composeRule.onNodeWithText(string(R.string.bookmarks_title)).assertExists()
+        composeRule.onNodeWithText(string(CommonR.string.bookmarks_title)).assertExists()
         composeRule.onNodeWithText(string(R.string.text_settings_title)).assertDoesNotExist()
     }
 
@@ -266,7 +266,7 @@ class BookReaderScreenTest {
         show(BookReaderUiState(bookType = BookType.UNKNOWN))
 
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
-        composeRule.onNodeWithText(string(R.string.bookmarks_title)).assertExists()
+        composeRule.onNodeWithText(string(CommonR.string.bookmarks_title)).assertExists()
         composeRule.onNodeWithText(string(R.string.text_settings_title)).assertDoesNotExist()
     }
 
@@ -277,9 +277,9 @@ class BookReaderScreenTest {
         var note: String? = null
         show(epub, BookReaderActions(onAddBookmark = { note = it }))
 
-        openMenuItem(R.string.add_bookmark_action)
-        composeRule.onNodeWithText(string(R.string.add_bookmark_note_hint)).performTextInput("Great line here")
-        composeRule.onNodeWithText(string(R.string.bookmark_save)).performClick()
+        openMenuItem(CommonR.string.add_bookmark_action)
+        composeRule.onNodeWithText(string(CommonR.string.add_bookmark_note_hint)).performTextInput("Great line here")
+        composeRule.onNodeWithText(string(CommonR.string.bookmark_save)).performClick()
 
         note shouldBe "Great line here"
     }
@@ -288,9 +288,9 @@ class BookReaderScreenTest {
     fun `with no bookmarks, the list says so`() {
         show(epub)
 
-        openMenuItem(R.string.bookmarks_title)
+        openMenuItem(CommonR.string.bookmarks_title)
 
-        composeRule.onNodeWithText(string(R.string.no_bookmarks_yet)).assertExists()
+        composeRule.onNodeWithText(string(CommonR.string.no_bookmarks_yet)).assertExists()
     }
 
     @Test
@@ -298,7 +298,7 @@ class BookReaderScreenTest {
         var opened: BookBookmarkEntity? = null
         show(epub.copy(bookmarks = listOf(bookmark)), BookReaderActions(onOpenBookmark = { opened = it }))
 
-        openMenuItem(R.string.bookmarks_title)
+        openMenuItem(CommonR.string.bookmarks_title)
         composeRule.onNodeWithText("Chapter 3").performClick()
 
         opened shouldBe bookmark
@@ -309,8 +309,8 @@ class BookReaderScreenTest {
         var deleted: Long? = null
         show(epub.copy(bookmarks = listOf(bookmark)), BookReaderActions(onDeleteBookmark = { deleted = it }))
 
-        openMenuItem(R.string.bookmarks_title)
-        composeRule.onNodeWithContentDescription(string(R.string.delete_bookmark, "Chapter 3")).performClick()
+        openMenuItem(CommonR.string.bookmarks_title)
+        composeRule.onNodeWithContentDescription(string(CommonR.string.delete_bookmark, "Chapter 3")).performClick()
 
         deleted shouldBe 1L
     }
@@ -319,7 +319,7 @@ class BookReaderScreenTest {
     fun `a bookmark shows its note`() {
         show(epub.copy(bookmarks = listOf(bookmark.copy(note = "Great line"))))
 
-        openMenuItem(R.string.bookmarks_title)
+        openMenuItem(CommonR.string.bookmarks_title)
 
         composeRule.onNodeWithText("Great line", substring = true).assertExists()
     }

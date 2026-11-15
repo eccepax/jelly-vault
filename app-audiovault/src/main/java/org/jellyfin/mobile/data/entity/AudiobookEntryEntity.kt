@@ -21,4 +21,10 @@ data class AudiobookEntryEntity(
     ) val dateAdded: String, // ISO-8601 string; lexicographic comparison works for sorting
     @ColumnInfo(name = "last_played") val lastPlayed: String, // ISO-8601 string; empty if never played
     @ColumnInfo(name = "played_percentage", defaultValue = "0") val playedPercentage: Float,
+    /** The series the book is in, for a book of several files shown as separate books; else null. */
+    val series: String? = null,
+    /** Its place in [series] (the file's track number). */
+    @ColumnInfo(name = "series_index") val seriesIndex: Float? = null,
+    /** The id of the one book the series' books are shown as otherwise, to show them so again. */
+    @ColumnInfo(name = "series_key") val seriesKey: String? = null,
 )
