@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.components.ConfirmDialog
@@ -52,14 +51,13 @@ fun DownloadsRoute(
 
 @Composable
 private fun rows(downloads: List<DownloadEntity>, coverUrl: CoverUrl): List<DownloadRow> {
-    val context = LocalContext.current
     val coverSize = listCoverSizePx()
     return remember(downloads, coverSize) {
         downloads.map { download ->
             val item = download.mediaSource.item
             DownloadRow(
                 download = download,
-                title = download.mediaSource.getName(context),
+                title = download.mediaSource.name,
                 subtitle = listOfNotNull(item?.albumArtist, download.fileSize).joinToString(" · "),
                 coverUrl = coverUrl(download.mediaSource.itemId, coverSize),
             )
@@ -75,8 +73,6 @@ private fun playOptions(download: DownloadEntity, downloads: List<DownloadEntity
         mediaSourceId = download.mediaSource.id,
         startIndex = book.indexOf(download).coerceAtLeast(0),
         startPosition = null,
-        audioStreamIndex = 1,
-        subtitleStreamIndex = -1,
         playFromDownloads = true,
     )
 }

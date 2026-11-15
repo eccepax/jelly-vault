@@ -4,16 +4,16 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.PlayMethod
 import java.util.UUID
+import kotlin.time.Duration
 
 class RemoteJellyfinMediaSource(
     itemId: UUID,
     item: BaseItemDto?,
     sourceInfo: MediaSourceInfo,
     playSessionId: String,
-    val liveStreamId: String?,
     val maxStreamingBitrate: Int?,
-    playbackDetails: PlaybackDetails?,
-) : JellyfinMediaSource(itemId, item, sourceInfo, playSessionId, playbackDetails) {
+    startTime: Duration?,
+) : JellyfinMediaSource(itemId, item, sourceInfo, playSessionId, startTime) {
     override val playMethod: PlayMethod = when {
         sourceInfo.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
         sourceInfo.supportsDirectStream -> PlayMethod.DIRECT_STREAM

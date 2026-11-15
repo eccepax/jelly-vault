@@ -2,7 +2,6 @@ package org.jellyfin.mobile.player.deviceprofile
 
 import android.media.MediaCodecInfo.CodecProfileLevel
 import android.media.MediaFormat
-import androidx.media3.common.MimeTypes
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
@@ -75,14 +74,5 @@ class CodecHelpersTest {
     @Test
     fun `audio profile lookup for a non-aac codec returns null`() {
         CodecHelpers.getAudioProfile("mp3", CodecProfileLevel.AACObjectLC) shouldBe null
-    }
-
-    @Test
-    fun `subtitle codec to mime type mapping, including unknown codecs`() {
-        CodecHelpers.getSubtitleMimeType("srt") shouldBe MimeTypes.APPLICATION_SUBRIP
-        CodecHelpers.getSubtitleMimeType("ass") shouldBe MimeTypes.TEXT_SSA
-        CodecHelpers.getSubtitleMimeType("ssa") shouldBe MimeTypes.TEXT_SSA
-        CodecHelpers.getSubtitleMimeType("unknown-codec") shouldBe null
-        CodecHelpers.getSubtitleMimeType(null) shouldBe null
     }
 }

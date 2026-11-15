@@ -94,8 +94,6 @@ class PlayerRouteTest {
         mediaSourceId = null,
         startIndex = 0,
         startPosition = null,
-        audioStreamIndex = null,
-        subtitleStreamIndex = null,
         playFromDownloads = false,
     )
 

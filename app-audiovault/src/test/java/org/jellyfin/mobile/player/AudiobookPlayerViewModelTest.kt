@@ -79,8 +79,6 @@ class AudiobookPlayerViewModelTest {
         mediaSourceId = null,
         startIndex = 0,
         startPosition = startPositionMs?.milliseconds,
-        audioStreamIndex = null,
-        subtitleStreamIndex = null,
         playFromDownloads = false,
     )
 
