@@ -23,8 +23,6 @@ class AudiobookVoiceSearch(
             mediaSourceId = null,
             startIndex = 0,
             startPosition = null,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
             playFromDownloads = false,
         )
         return loader.load(options).getOrNull()

@@ -258,8 +258,6 @@ private fun LibraryViewModel.AudioQueue.toPlayOptions() = PlayOptions(
     mediaSourceId = null,
     startIndex = startIndex,
     startPosition = startPosition,
-    audioStreamIndex = null,
-    subtitleStreamIndex = null,
     playFromDownloads = false,
     trackNames = trackNames,
 )

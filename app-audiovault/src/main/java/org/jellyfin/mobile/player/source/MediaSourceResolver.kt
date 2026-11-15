@@ -30,9 +30,6 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
         deviceProfile: DeviceProfile? = null,
         maxStreamingBitrate: Int? = null,
         startTime: Duration? = null,
-        audioStreamIndex: Int? = null,
-        subtitleStreamIndex: Int? = null,
-        autoOpenLiveStream: Boolean = true,
     ): Result<RemoteJellyfinMediaSource> {
         // Load item info first so we can use the stored resume position
         val item = try {
@@ -54,16 +51,11 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
                 mediaInfoApi.getPostedPlaybackInfo(
                     itemId = itemId,
                     data = PlaybackInfoDto(
-                        // We need to remove the dashes so that the server can find the correct media source.
-                        // And if we didn't pass the mediaSourceId, our stream indices would silently get ignored.
-                        // https://github.com/jellyfin/jellyfin/blob/9a35fd673203cfaf0098138b2768750f4818b3ab/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L196-L201
+                        // Without the dashes, or the server doesn't find the media source
                         mediaSourceId = mediaSourceId ?: itemId.toString().replace("-", ""),
                         deviceProfile = deviceProfile,
                         maxStreamingBitrate = maxStreamingBitrate,
                         startTimeTicks = effectiveStartTime?.inWholeTicks,
-                        audioStreamIndex = audioStreamIndex,
-                        subtitleStreamIndex = subtitleStreamIndex,
-                        autoOpenLiveStream = autoOpenLiveStream,
                     ),
                 ).content
             }
@@ -85,9 +77,8 @@ class MediaSourceResolver(private val apiClient: ApiClient) {
                 item = item,
                 sourceInfo = mediaSourceInfo,
                 playSessionId = playSessionId,
-                liveStreamId = mediaSourceInfo.liveStreamId,
                 maxStreamingBitrate = maxStreamingBitrate,
-                playbackDetails = PlaybackDetails(effectiveStartTime, audioStreamIndex, subtitleStreamIndex),
+                startTime = effectiveStartTime,
             )
             Result.success(source)
         } catch (e: IllegalArgumentException) {

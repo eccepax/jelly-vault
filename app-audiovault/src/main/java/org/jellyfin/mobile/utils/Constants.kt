@@ -19,7 +19,6 @@ object Constants {
     const val PREF_SKIP_SILENCE = "pref_skip_silence"
 
     // Player constants
-    const val LANGUAGE_UNDEFINED = "und"
     const val HOLD_SPEEDUP_MULTIPLIER = 3f
 
     // Video player intent extras

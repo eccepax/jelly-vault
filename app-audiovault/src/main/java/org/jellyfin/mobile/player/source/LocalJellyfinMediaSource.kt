@@ -6,6 +6,7 @@ import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.PlayMethod
 import java.time.Instant
 import java.util.UUID
+import kotlin.time.Duration
 
 @Serializable(with = JellyfinMediaSourceSerializer::class)
 class LocalJellyfinMediaSource(
@@ -13,11 +14,11 @@ class LocalJellyfinMediaSource(
     item: BaseItemDto?,
     sourceInfo: MediaSourceInfo,
     playSessionId: String,
-    playbackDetails: PlaybackDetails? = null,
+    startTime: Duration? = null,
     val localDirectoryUri: String,
     val remoteFileUri: String,
     val downloadSize: Long,
-) : JellyfinMediaSource(itemId, item, sourceInfo, playSessionId, playbackDetails) {
+) : JellyfinMediaSource(itemId, item, sourceInfo, playSessionId, startTime) {
     override val playMethod: PlayMethod = PlayMethod.DIRECT_PLAY
 
     /**
@@ -34,7 +35,7 @@ class LocalJellyfinMediaSource(
         source.item,
         source.sourceInfo,
         source.playSessionId,
-        PlaybackDetails(source.startTime, source.selectedAudioStreamIndex, source.selectedSubtitleStreamIndex),
+        source.startTime,
         downloadFolder,
         downloadUrl,
         downloadSize,

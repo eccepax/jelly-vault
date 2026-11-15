@@ -73,7 +73,6 @@
     <string name="show_as_one_book">Show as one book</string>
     <string name="mark_finished_failed">Can\'t reach the server to mark the book. Try again when you\'re online.</string>
     <string name="show_hidden_items">Show hidden items</string>
-    <string name="special_episode">Special</string>
     <string name="sleep_timer_set">Sleep timer set for %1$s</string>
     <string name="sleep_timer_15_min">15 minutes</string>
     <string name="sleep_timer_30_min">30 minutes</string>

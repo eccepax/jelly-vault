@@ -29,31 +29,9 @@ data class DownloadEntity(
     @ColumnInfo(name = MEDIA_SOURCE)
     val mediaSource: LocalJellyfinMediaSource,
 ) {
-    /**
-     * Converts the [mediaSource] string to a [LocalJellyfinMediaSource] object.
-     *
-     * @param startTime The start time as a [Duration]. If null, the default start time is used.
-     * @param audioStreamIndex The index of the audio stream to select. If null, the default audio stream is used.
-     * @param subtitleStreamIndex The index of the subtitle stream to select. If -1, subtitles are disabled. If null, the default subtitle stream is used.
-     */
-    fun asMediaSource(
-        startTime: Duration? = null,
-        audioStreamIndex: Int? = null,
-        subtitleStreamIndex: Int? = null,
-    ): LocalJellyfinMediaSource = mediaSource
-        .also { localJellyfinMediaSource ->
-            startTime
-                ?.let { localJellyfinMediaSource.startTime = it }
-            audioStreamIndex
-                ?.let { localJellyfinMediaSource.mediaStreams[it] }
-                ?.let(localJellyfinMediaSource::selectAudioStream)
-            subtitleStreamIndex
-                ?.run {
-                    takeUnless { it == -1 }
-                        ?.let { localJellyfinMediaSource.mediaStreams[it] }
-                        ?: localJellyfinMediaSource.selectSubtitleStream(null)
-                }
-        }
+    /** The download to play, from [startTime] when given, else from where the listener left it. */
+    fun asMediaSource(startTime: Duration? = null): LocalJellyfinMediaSource =
+        mediaSource.also { source -> startTime?.let { source.startTime = it } }
 
     constructor(mediaSource: LocalJellyfinMediaSource) :
         this(mediaSource.id, mediaSource)
