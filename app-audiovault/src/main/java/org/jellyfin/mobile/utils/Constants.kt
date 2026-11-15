@@ -17,6 +17,7 @@ object Constants {
     const val PREF_ASKED_NOTIFICATIONS = "pref_asked_notifications"
     const val PREF_PLAYBACK_SPEED = "pref_playback_speed"
     const val PREF_SKIP_SILENCE = "pref_skip_silence"
+    const val PREF_SHAKE_TO_EXTEND = "pref_shake_to_extend"
 
     // Player constants
     const val HOLD_SPEEDUP_MULTIPLIER = 3f

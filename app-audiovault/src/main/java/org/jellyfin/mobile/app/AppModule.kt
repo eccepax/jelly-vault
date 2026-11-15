@@ -28,7 +28,10 @@ import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
+import org.jellyfin.mobile.common.playback.AccelerometerShakeSensor
+import org.jellyfin.mobile.common.playback.ShakeToExtend
 import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.buzzOnce
 import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
@@ -166,6 +169,16 @@ val applicationModule = module {
         AudiobookProgressReporter(get(), JellyfinAudiobookProgress(get()), onDevice, mainScope())
     }
     single { SleepTimer(AudiobookSleepTimerTarget(get()), mainScope()) }
+    single {
+        val context = androidApplication()
+        val preferences = get<AudioVaultAppPreferences>()
+        ShakeToExtend(
+            get(),
+            AccelerometerShakeSensor(context),
+            enabled = { preferences.shakeToExtendSleepTimer },
+            buzz = { buzzOnce(context) },
+        )
+    }
     single {
         val repository = get<MediaSegmentRepository>()
         MediaSegmentSkipper(get(), repository::getSegmentsForItem, repository::getMediaSegmentAction, mainScope())

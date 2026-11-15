@@ -3,8 +3,10 @@ package org.jellyfin.mobile
 import android.app.Application
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.MainScope
 import org.jellyfin.mobile.app.applicationModule
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.playback.ShakeToExtend
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.data.databaseModule
 import org.jellyfin.mobile.downloads.audioDownloadsModule
@@ -45,5 +47,6 @@ class JellyfinApplication : Application() {
         // App-wide, like the player in the playback service: they follow a book wherever it plays
         koin.get<AudiobookProgressReporter>().start()
         koin.get<MediaSegmentSkipper>().start()
+        koin.get<ShakeToExtend>().start(MainScope())
     }
 }

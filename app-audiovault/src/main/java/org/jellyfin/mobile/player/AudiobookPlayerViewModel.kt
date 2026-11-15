@@ -277,6 +277,9 @@ class AudiobookPlayerViewModel(
 
     fun cancelSleepTimer() = sleepTimerEngine.cancel()
 
+    /** Gives a running sleep timer 15 more minutes. */
+    fun extendSleepTimer() = sleepTimerEngine.extend()
+
     fun skipOfferedSegment() = segments.skipOffered()
 
     /** The mini player's stop: nothing left to sleep after either. */

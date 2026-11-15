@@ -58,6 +58,8 @@ class SettingsViewModel(
         playback.setSkipSilence(enabled)
     }
 
+    fun setShakeToExtend(enabled: Boolean) = save { preferences.shakeToExtendSleepTimer = enabled }
+
     fun setFlatLibrary(flat: Boolean) = save { preferences.libraryGlobalFlattened = flat }
 
     /** Saved, and applied to downloads already waiting too, by the download settings. */
@@ -77,6 +79,7 @@ class SettingsViewModel(
     private fun read() = SettingsUiState(
         holdToSpeedUp = preferences.exoPlayerAllowPressSpeedUp,
         skipSilence = preferences.skipSilenceEnabled,
+        shakeToExtend = preferences.shakeToExtendSleepTimer,
         flatLibrary = preferences.libraryGlobalFlattened,
         downloadOnWifiOnly = downloads.wifiOnly,
         removeDownloadsOnSignOut = preferences.removeDownloadsOnSignOut,

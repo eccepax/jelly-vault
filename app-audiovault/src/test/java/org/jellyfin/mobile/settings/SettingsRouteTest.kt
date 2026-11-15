@@ -78,6 +78,18 @@ class SettingsRouteTest {
     }
 
     @Test
+    fun `shaking to extend the sleep timer is on, and turning it off saves it`() {
+        show()
+
+        composeRule.onNodeWithText(
+            context.getString(CommonR.string.shake_to_extend),
+        ).performScrollTo().assertIsOn().performClick()
+        composeRule.waitForIdle()
+
+        appPreferences.shakeToExtendSleepTimer shouldBe false
+    }
+
+    @Test
     fun `turning on skip silence saves it, shows it, and the book playing skips silence at once`() {
         show()
 

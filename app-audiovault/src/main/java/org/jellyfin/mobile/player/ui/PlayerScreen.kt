@@ -22,8 +22,6 @@ import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
-import androidx.compose.material.LocalContentAlpha
-import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Slider
@@ -33,7 +31,6 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
@@ -63,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.cast.PlayingOnLabel
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.components.AddBookmarkDialog
 import org.jellyfin.mobile.common.ui.components.BookmarkUi
@@ -72,6 +70,9 @@ import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.CoverArt
 import org.jellyfin.mobile.common.ui.components.PlayPauseButton
 import org.jellyfin.mobile.common.ui.components.SecondaryText
+import org.jellyfin.mobile.common.ui.components.SleepTimerButton
+import org.jellyfin.mobile.common.ui.components.SleepTimerLabel
+import org.jellyfin.mobile.common.ui.components.SleepTimerUi
 import org.jellyfin.mobile.common.ui.components.VaultTopBar
 import org.jellyfin.mobile.common.ui.theme.VaultAlpha
 import org.jellyfin.mobile.common.ui.theme.VaultSpacing
@@ -94,7 +95,7 @@ data class PlayerUiState(
     val speed: Float = 1f,
     /** Whether holding fast-forward speeds playback up (the "Hold to speed up" setting). */
     val holdToSpeedUp: Boolean = true,
-    val sleepTimerActive: Boolean = false,
+    val sleepTimer: SleepTimerState = SleepTimerState.Off,
     /** The queue's track names, and which is playing. */
     val tracks: List<String> = emptyList(),
     val currentTrack: Int = 0,
@@ -106,21 +107,6 @@ data class PlayerUiState(
     /** The book's bookmarks, the newest first. */
     val bookmarks: List<BookmarkUi> = emptyList(),
 )
-
-/** How long the sleep timer can run for. */
-enum class SleepTimerDuration(val minutes: Int) {
-    FIFTEEN_MINUTES(minutes = 15),
-    THIRTY_MINUTES(minutes = 30),
-    FORTY_FIVE_MINUTES(minutes = 45),
-    SIXTY_MINUTES(minutes = 60),
-}
-
-/** A choice from the sleep timer: a length, the end of the chapter, or off. */
-sealed interface SleepTimerChoice {
-    data class For(val duration: SleepTimerDuration) : SleepTimerChoice
-    data object EndOfChapter : SleepTimerChoice
-    data object TurnOff : SleepTimerChoice
-}
 
 /** What the player can do. */
 data class PlayerActions(
@@ -134,7 +120,10 @@ data class PlayerActions(
     val onNextChapter: () -> Unit = {},
     val onSeek: (Long) -> Unit = {},
     val onSpeed: (Float) -> Unit = {},
-    val onSleepTimer: (SleepTimerChoice) -> Unit = {},
+    val onStartSleepTimer: (durationMs: Long) -> Unit = {},
+    val onSleepAtEndOfChapter: () -> Unit = {},
+    val onExtendSleepTimer: () -> Unit = {},
+    val onCancelSleepTimer: () -> Unit = {},
     val onTrack: (Int) -> Unit = {},
     val onSkipSegment: () -> Unit = {},
     val onPlayNextInSeries: () -> Unit = {},
@@ -178,6 +167,7 @@ fun PlayerScreen(
                 onDialog = { dialog = it },
                 onPlaybackInfo = { showingInfo = !showingInfo },
                 castButton = castButton,
+                sleepTimer = sleepTimerUi(state, actions),
             )
             CoverArea(
                 state = state,
@@ -199,6 +189,11 @@ fun PlayerScreen(
             state.nextInSeries?.let { NextInSeries(it, actions.onPlayNextInSeries) }
             ChapterSeekBar(state, actions.onSeek)
             PlayerControls(state, actions)
+            SleepTimerLabel(
+                state.sleepTimer,
+                stringResource(R.string.sleeps_after_chapter),
+                Modifier.align(Alignment.CenterHorizontally).padding(bottom = VaultSpacing.Small),
+            )
             PlayingOnLabel(
                 castDevice,
                 onStopCasting,
@@ -242,14 +237,22 @@ private fun PlayerMenu(showTracklist: Boolean, onDialog: (PlayerDialog) -> Unit,
     }
 }
 
+/** The sleep timer as its button shows and changes it. */
+private fun sleepTimerUi(state: PlayerUiState, actions: PlayerActions) = SleepTimerUi(
+    state = state.sleepTimer,
+    onStart = actions.onStartSleepTimer,
+    onEndOfSegment = actions.onSleepAtEndOfChapter,
+    onExtend = actions.onExtendSleepTimer,
+    onCancel = actions.onCancelSleepTimer,
+)
+
 /** The player's dialogs, one open at a time. */
-private enum class PlayerDialog { SPEED, SLEEP_TIMER, TRACKS, ADD_BOOKMARK, BOOKMARKS }
+private enum class PlayerDialog { SPEED, TRACKS, ADD_BOOKMARK, BOOKMARKS }
 
 @Composable
 private fun PlayerDialogs(dialog: PlayerDialog, state: PlayerUiState, actions: PlayerActions, onDismiss: () -> Unit) {
     when (dialog) {
         PlayerDialog.SPEED -> SpeedDialog(state.speed, actions.onSpeed, onDismiss)
-        PlayerDialog.SLEEP_TIMER -> SleepTimerDialog(state.sleepTimerActive, actions.onSleepTimer, onDismiss)
         PlayerDialog.TRACKS -> TracklistDialog(state, actions.onTrack, onDismiss)
         PlayerDialog.ADD_BOOKMARK -> AddBookmarkDialog(onSave = actions.onAddBookmark, onDismiss = onDismiss)
         PlayerDialog.BOOKMARKS -> BookmarksDialog(
@@ -337,6 +340,7 @@ private fun PlayerTopBar(
     onDialog: (PlayerDialog) -> Unit,
     onPlaybackInfo: () -> Unit,
     castButton: @Composable () -> Unit,
+    sleepTimer: SleepTimerUi,
 ) {
     VaultTopBar(
         title = "",
@@ -350,18 +354,7 @@ private fun PlayerTopBar(
         },
         actions = {
             castButton()
-            IconButton(onClick = { onDialog(PlayerDialog.SLEEP_TIMER) }) {
-                Icon(
-                    Icons.Filled.Bedtime,
-                    contentDescription = stringResource(R.string.menu_sleep_timer),
-                    // In the accent while a timer runs
-                    tint = if (state.sleepTimerActive) {
-                        MaterialTheme.colors.primary
-                    } else {
-                        LocalContentColor.current.copy(alpha = LocalContentAlpha.current)
-                    },
-                )
-            }
+            SleepTimerButton(sleepTimer, stringResource(R.string.sleep_end_of_chapter))
             PlayerMenu(showTracklist = state.tracks.size > 1, onDialog = onDialog, onPlaybackInfo = onPlaybackInfo)
         },
     )
@@ -518,40 +511,6 @@ private fun FastForwardButton(holdToSpeedUp: Boolean, actions: PlayerActions) {
     ) {
         Icon(Icons.Filled.Forward30, contentDescription = null, modifier = Modifier.size(SKIP_ICON_SIZE))
     }
-}
-
-@Composable
-private fun SleepTimerDialog(active: Boolean, onChoose: (SleepTimerChoice) -> Unit, onDismiss: () -> Unit) {
-    val choices = buildList<Choice<SleepTimerChoice>> {
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.FIFTEEN_MINUTES),
-                stringResource(R.string.sleep_timer_15_min),
-            ),
-        )
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.THIRTY_MINUTES),
-                stringResource(R.string.sleep_timer_30_min),
-            ),
-        )
-        add(
-            Choice(
-                SleepTimerChoice.For(SleepTimerDuration.FORTY_FIVE_MINUTES),
-                stringResource(R.string.sleep_timer_45_min),
-            ),
-        )
-        add(Choice(SleepTimerChoice.For(SleepTimerDuration.SIXTY_MINUTES), stringResource(R.string.sleep_timer_60_min)))
-        add(Choice(SleepTimerChoice.EndOfChapter, stringResource(R.string.sleep_timer_end_of_chapter)))
-        if (active) add(Choice(SleepTimerChoice.TurnOff, stringResource(R.string.sleep_timer_turn_off)))
-    }
-    ChoiceDialog<SleepTimerChoice>(
-        title = stringResource(CommonR.string.sleep_timer),
-        choices = choices,
-        selected = null,
-        onSelect = onChoose,
-        onDismiss = onDismiss,
-    )
 }
 
 private fun speedLabel(speed: Float) = "${speed}x"

@@ -19,6 +19,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.R
+import org.jellyfin.mobile.common.playback.SleepTimerState
 import org.jellyfin.mobile.common.ui.VaultTestTags
 import org.jellyfin.mobile.common.ui.components.BookmarkUi
 import org.jellyfin.mobile.common.ui.theme.AppTheme
@@ -49,7 +50,10 @@ class PlayerScreenTest {
         onNextChapter = { events += "nextChapter" },
         onSeek = { events += "seek $it" },
         onSpeed = { events += "speed $it" },
-        onSleepTimer = { events += "sleepTimer $it" },
+        onStartSleepTimer = { events += "startSleepTimer $it" },
+        onSleepAtEndOfChapter = { events += "sleepAtEndOfChapter" },
+        onExtendSleepTimer = { events += "extendSleepTimer" },
+        onCancelSleepTimer = { events += "cancelSleepTimer" },
         onTrack = { events += "track $it" },
         onSkipSegment = { events += "skipSegment" },
         onPlayNextInSeries = { events += "playNext" },
@@ -72,10 +76,44 @@ class PlayerScreenTest {
         composeRule.setContent { AppTheme(VaultBrand.AudioVault) { PlayerScreen(state, actions) } }
     }
 
-    private fun string(resId: Int) = ApplicationProvider.getApplicationContext<Application>().getString(resId)
+    private fun string(resId: Int, vararg args: Any) =
+        ApplicationProvider.getApplicationContext<Application>().getString(resId, *args)
 
     private fun openMenu() =
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+
+    // --- Sleep timer ----------------------------------------------------------------------------------
+
+    @Test
+    fun `the sleep timer offers lengths and the end of the chapter`() {
+        show()
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(R.string.sleep_end_of_chapter)).assertExists()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_15)).performClick()
+
+        events shouldBe listOf("startSleepTimer 900000")
+    }
+
+    @Test
+    fun `a running sleep timer says how long is left, and can be extended or turned off`() {
+        show(playing.copy(sleepTimer = SleepTimerState.Counting(remainingMs = 29 * 60_000L + 41_000L)))
+
+        composeRule.onNodeWithText(string(CommonR.string.sleeps_in, "29:41")).assertExists()
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_extend)).performClick()
+        composeRule.onNodeWithContentDescription(string(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.sleep_off)).performClick()
+
+        events shouldBe listOf("extendSleepTimer", "cancelSleepTimer")
+    }
+
+    @Test
+    fun `sleeping at the end of the chapter says so`() {
+        show(playing.copy(sleepTimer = SleepTimerState.EndOfSegment))
+
+        composeRule.onNodeWithText(string(R.string.sleeps_after_chapter)).assertExists()
+    }
 
     // --- Bookmarks ------------------------------------------------------------------------------------
 
@@ -237,27 +275,6 @@ class PlayerScreenTest {
         composeRule.onNodeWithText("2.0x").performClick()
 
         events shouldBe listOf("speed 2.0")
-    }
-
-    @Test
-    fun `the sleep timer offers each length, and only offers turning off while one runs`() {
-        show()
-
-        composeRule.onNodeWithContentDescription(string(R.string.menu_sleep_timer)).performClick()
-        composeRule.onNodeWithText(string(R.string.sleep_timer_turn_off)).assertDoesNotExist()
-        composeRule.onNodeWithText(string(R.string.sleep_timer_15_min)).performClick()
-
-        events shouldBe listOf("sleepTimer ${SleepTimerChoice.For(SleepTimerDuration.FIFTEEN_MINUTES)}")
-    }
-
-    @Test
-    fun `a running sleep timer can be turned off`() {
-        show(playing.copy(sleepTimerActive = true))
-
-        composeRule.onNodeWithContentDescription(string(R.string.menu_sleep_timer)).performClick()
-        composeRule.onNodeWithText(string(R.string.sleep_timer_turn_off)).performClick()
-
-        events shouldBe listOf("sleepTimer ${SleepTimerChoice.TurnOff}")
     }
 
     @Test

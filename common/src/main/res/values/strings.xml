@@ -67,6 +67,11 @@
     <string name="sleep_extend">+15 minutes</string>
     <string name="sleep_off">Turn off</string>
     <string name="sleeps_in">Sleeps in %1$s</string>
+    <string name="sleep_custom">Other length…</string>
+    <string name="sleep_minutes">Minutes</string>
+    <string name="sleep_start">Start</string>
+    <string name="shake_to_extend">Shake to extend the sleep timer</string>
+    <string name="shake_to_extend_summary">While it counts down, shake the phone for 15 more minutes</string>
     <string name="bookmarks_title">Bookmarks</string>
     <string name="add_bookmark_title">Add bookmark</string>
     <string name="add_bookmark_note_hint">Note (optional)</string>

@@ -72,6 +72,7 @@ fun SettingsScreen(
     onStreamingQuality: (StreamingQuality) -> Unit,
     onSignOut: () -> Unit,
     onShowSleepTimer: (Boolean) -> Unit = {},
+    onShakeToExtend: (Boolean) -> Unit = {},
     onVolumeLevelling: (Boolean) -> Unit = {},
     downloads: DownloadSettingsActions = DownloadSettingsActions(),
 ) {
@@ -92,6 +93,7 @@ fun SettingsScreen(
                 Divider()
                 SectionHeader(R.string.settings_now_playing)
                 SwitchRow(R.string.show_sleep_timer, state.showSleepTimer, onShowSleepTimer)
+                SwitchRow(CommonR.string.shake_to_extend, state.shakeToExtend, onShakeToExtend)
                 Divider()
                 DownloadsSection(state, downloads)
                 Divider()
@@ -215,6 +217,7 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
         onStreamingQuality = viewModel::setStreamingQuality,
         onSignOut = viewModel::signOut,
         onShowSleepTimer = viewModel::setShowSleepTimer,
+        onShakeToExtend = viewModel::setShakeToExtend,
         onVolumeLevelling = viewModel::setVolumeLevelling,
         downloads = DownloadSettingsActions(
             onQuality = viewModel::setDownloadQuality,

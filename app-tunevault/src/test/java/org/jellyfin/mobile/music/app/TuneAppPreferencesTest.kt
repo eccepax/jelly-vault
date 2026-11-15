@@ -80,6 +80,15 @@ class TuneAppPreferencesTest {
     }
 
     @Test
+    fun `shaking extends the sleep timer until that's turned off`() {
+        TuneAppPreferences(context).shakeToExtendSleepTimer shouldBe true
+
+        TuneAppPreferences(context).shakeToExtendSleepTimer = false
+
+        TuneAppPreferences(context).shakeToExtendSleepTimer shouldBe false
+    }
+
+    @Test
     fun `the sleep timer is shown until hidden`() {
         TuneAppPreferences(context).showSleepTimer shouldBe true
 

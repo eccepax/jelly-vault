@@ -75,18 +75,8 @@
     <string name="show_as_one_book">Show as one book</string>
     <string name="mark_finished_failed">Can\'t reach the server to mark the book. Try again when you\'re online.</string>
     <string name="show_hidden_items">Show hidden items</string>
-    <string name="sleep_timer_set">Sleep timer set for %1$s</string>
-    <string name="sleep_timer_15_min">15 minutes</string>
-    <string name="sleep_timer_30_min">30 minutes</string>
-    <string name="sleep_timer_45_min">45 minutes</string>
-    <string name="sleep_timer_60_min">60 minutes</string>
-    <string name="sleep_timer_end_of_chapter">End of chapter</string>
-    <string name="sleep_timer_turn_off">Turn off timer</string>
-    <string name="sleep_timer_off">Sleep timer off</string>
-    <string name="sleep_timer_set_end_of_chapter">Sleep timer set for the end of the chapter</string>
 
     <string name="menu_speed">Playback speed</string>
-    <string name="menu_sleep_timer">Sleep timer</string>
     <string name="menu_playback_info">Playback info</string>
 
     <string name="pref_category_account">Account</string>
@@ -95,4 +85,6 @@
     <string name="sign_out_keeps_downloads">Your downloaded audiobooks stay on this device.</string>
     <string name="sign_out_removes_downloads">Your downloaded audiobooks will be removed from this device.</string>
     <string name="sign_out_yes">Yes, sign out</string>
+    <string name="sleep_end_of_chapter">End of this chapter</string>
+    <string name="sleeps_after_chapter">Sleeps after this chapter</string>
 </resources>

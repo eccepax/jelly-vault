@@ -16,7 +16,10 @@ import org.jellyfin.mobile.common.account.DownloadsOnSignOut
 import org.jellyfin.mobile.common.account.SignOut
 import org.jellyfin.mobile.common.app.ApiClientController
 import org.jellyfin.mobile.common.app.AppPreferences
+import org.jellyfin.mobile.common.playback.AccelerometerShakeSensor
+import org.jellyfin.mobile.common.playback.ShakeToExtend
 import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.common.playback.buzzOnce
 import org.jellyfin.mobile.music.account.SettingsViewModel
 import org.jellyfin.mobile.music.account.tuneVaultSignOut
 import org.jellyfin.mobile.music.catalog.AccountInfo
@@ -72,6 +75,7 @@ import org.jellyfin.mobile.music.search.SearchViewModel
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.systemApi
 import org.koin.android.ext.koin.androidApplication
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.scope.Scope
 import org.koin.dsl.module
@@ -137,6 +141,16 @@ val tuneAppModule = module {
     single { PlaybackReportingTracker(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main)) }
     single { PlaybackVolume(get()) }
     single { SleepTimer(PlaybackSleepTimerTarget(get(), get()), CoroutineScope(SupervisorJob() + Dispatchers.Main)) }
+    single {
+        val context = androidContext()
+        val preferences = get<PlaybackPreferences>()
+        ShakeToExtend(
+            get(),
+            AccelerometerShakeSensor(context),
+            enabled = { preferences.shakeToExtendSleepTimer },
+            buzz = { buzzOnce(context) },
+        )
+    }
     single { VolumeLevellingSetting(get()) }
     single {
         VolumeLeveller(

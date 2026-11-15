@@ -7,6 +7,7 @@ class FakePlaybackPreferences : PlaybackPreferences {
     override var downloadQuality = StreamingQuality.ORIGINAL
     override var downloadOnWifiOnly = true
     override var showSleepTimer = true
+    override var shakeToExtendSleepTimer = true
     override var volumeLevelling = true
     override var removeDownloadsOnSignOut = false
 }

@@ -62,6 +62,11 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         get() = sharedPreferences.getFloat(Constants.PREF_PLAYBACK_SPEED, 1f)
         set(value) = sharedPreferences.edit { putFloat(Constants.PREF_PLAYBACK_SPEED, value) }
 
+    /** Whether shaking the phone gives a running sleep timer 15 more minutes (see common ShakeToExtend). */
+    var shakeToExtendSleepTimer: Boolean
+        get() = sharedPreferences.getBoolean(Constants.PREF_SHAKE_TO_EXTEND, true)
+        set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_SHAKE_TO_EXTEND, value) }
+
     var skipSilenceEnabled: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_SKIP_SILENCE, false)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_SKIP_SILENCE, value) }
