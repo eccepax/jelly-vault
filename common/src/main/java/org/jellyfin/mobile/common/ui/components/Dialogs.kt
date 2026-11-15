@@ -137,8 +137,10 @@ fun TextFieldDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** What the field starts with, such as the text being changed. */
+    initialText: String = "",
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf(initialText) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

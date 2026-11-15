@@ -60,7 +60,15 @@ class AudiobookPlayerViewModelTest {
         )
         val sleepTimer = SleepTimer(AudiobookSleepTimerTarget(controller), backgroundScope)
         val segments = MediaSegmentSkipper(controller, { emptyList() }, { mockk() }, backgroundScope)
-        return AudiobookPlayerViewModel(controller, loader, sleepTimer, segments, preferences, nextInSeries)
+        return AudiobookPlayerViewModel(
+            controller,
+            loader,
+            sleepTimer,
+            segments,
+            preferences,
+            FakeBookmarks(),
+            nextInSeries,
+        )
             .also { runCurrent() }
     }
 

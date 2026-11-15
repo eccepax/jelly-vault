@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import org.jellyfin.mobile.books.R
 import org.jellyfin.mobile.testing.VaultFixtures.Books
 import org.junit.Test
+import org.jellyfin.mobile.common.R as CommonR
 
 /** A bookmark saved in one chapter is listed, goes back to that chapter, and can be deleted. */
 @ReadingArea
@@ -24,20 +25,20 @@ class BookmarksE2ETest : LoggedInE2ETest() {
         nextChapter()
         waitForChapter(BOOKMARKED)
 
-        readerMenu(R.string.add_bookmark_action)
-        composeRule.onNodeWithText(context.getString(R.string.bookmark_save)).performClick()
+        readerMenu(CommonR.string.add_bookmark_action)
+        composeRule.onNodeWithText(context.getString(CommonR.string.bookmark_save)).performClick()
         nextChapter()
         waitForChapter(BOOKMARKED + 1)
 
         // Listed under its chapter's name, and opening it goes back there
-        readerMenu(R.string.bookmarks_title)
+        readerMenu(CommonR.string.bookmarks_title)
         val label = bookmarkLabel()
         composeRule.onNode(hasText(label) and hasClickAction()).performClick()
         waitForChapter(BOOKMARKED)
 
-        readerMenu(R.string.bookmarks_title)
-        composeRule.onNodeWithContentDescription(context.getString(R.string.delete_bookmark, label)).performClick()
-        waitForComposeText(context.getString(R.string.no_bookmarks_yet))
+        readerMenu(CommonR.string.bookmarks_title)
+        composeRule.onNodeWithContentDescription(context.getString(CommonR.string.delete_bookmark, label)).performClick()
+        waitForComposeText(context.getString(CommonR.string.no_bookmarks_yet))
     }
 
     private fun nextChapter() {
@@ -46,7 +47,7 @@ class BookmarksE2ETest : LoggedInE2ETest() {
 
     /** The one bookmark's label, read off its delete button ("Delete bookmark <label>"). */
     private fun bookmarkLabel(): String {
-        val delete = context.getString(R.string.delete_bookmark, "")
+        val delete = context.getString(CommonR.string.delete_bookmark, "")
         composeRule.waitUntil { composeRule.onAllNodes(deleteButton(delete)).fetchSemanticsNodes().isNotEmpty() }
         return composeRule.onAllNodes(deleteButton(delete)).fetchSemanticsNodes().single()
             .config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single().removePrefix(delete)

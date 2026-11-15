@@ -99,7 +99,7 @@ class PdfZoomE2ETest : LoggedInE2ETest() {
 
         val context = instrumentation.targetContext
         composeRule.onNodeWithContentDescription(context.getString(CommonR.string.vault_more_options)).performClick()
-        composeRule.onNodeWithText(context.getString(R.string.bookmarks_title)).assertExists()
+        composeRule.onNodeWithText(context.getString(CommonR.string.bookmarks_title)).assertExists()
         composeRule.onNodeWithText(context.getString(R.string.text_settings_title)).assertDoesNotExist()
     }
 

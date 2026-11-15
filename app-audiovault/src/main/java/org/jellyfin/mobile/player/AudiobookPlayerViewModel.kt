@@ -7,27 +7,34 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.data.dao.AudiobookBookmarkDao
+import org.jellyfin.mobile.data.entity.AudiobookBookmarkEntity
 import org.jellyfin.mobile.library.NextBook
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackState
 import org.jellyfin.mobile.player.playback.AudiobookQueueLoader
 import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
+import org.jellyfin.mobile.player.ui.formatTime
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.model.api.MediaSegmentDto
 
@@ -43,8 +50,10 @@ class AudiobookPlayerViewModel(
     private val sleepTimerEngine: SleepTimer,
     private val segments: MediaSegmentSkipper,
     private val preferences: AudioVaultAppPreferences,
+    private val savedBookmarks: AudiobookBookmarkDao,
     /** The book after the one a track is in, when that's a book of a series (see library.nextInSeries). */
     private val findNextInSeries: suspend (trackId: String) -> NextBook? = { null },
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
     val state: StateFlow<AudiobookPlaybackState> = playback.state
@@ -175,6 +184,49 @@ class AudiobookPlayerViewModel(
                 .distinctUntilChanged()
                 .collectLatest { ended -> _nextInSeries.value = ended?.let { findNextInSeries(it) } }
         }
+    }
+
+    /** The bookmarks in the book playing (its tracks), the newest first. */
+    val bookmarks: StateFlow<List<AudiobookBookmarkEntity>> = playback.state
+        .map { state -> state.tracks.map { it.id } }
+        .distinctUntilChanged()
+        .flatMapLatest { tracks -> if (tracks.isEmpty()) flowOf(emptyList()) else savedBookmarks.forTracks(tracks) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Bookmarks the place playing, named after its chapter (or its track, with none) and time, with
+     * [note] (none when blank).
+     */
+    fun addBookmark(note: String) {
+        val state = playback.state.value
+        val track = state.currentTrack ?: return
+        val positionMs = playback.positionMs
+        val chapter = track.chapters.lastOrNull { it.startMs <= positionMs }?.name
+        val bookmark = AudiobookBookmarkEntity(
+            trackId = track.id,
+            positionMs = positionMs,
+            label = "${chapter ?: track.title} · ${formatTime(positionMs)}",
+            note = note.takeIf { it.isNotBlank() }?.trim(),
+            createdAt = now(),
+        )
+        viewModelScope.launch { savedBookmarks.insert(bookmark) }
+    }
+
+    /** Goes to the bookmark [id]: to its track, if another is playing, then to its place. */
+    fun openBookmark(id: Long) {
+        val bookmark = bookmarks.value.firstOrNull { it.id == id } ?: return
+        val state = playback.state.value
+        val index = state.tracks.indexOfFirst { it.id == bookmark.trackId }.takeIf { it >= 0 } ?: return
+        if (index != state.currentIndex) playback.skipTo(index)
+        playback.seekTo(bookmark.positionMs)
+    }
+
+    fun editBookmarkNote(id: Long, note: String) {
+        viewModelScope.launch { savedBookmarks.updateNote(id, note.takeIf { it.isNotBlank() }?.trim()) }
+    }
+
+    fun deleteBookmark(id: Long) {
+        viewModelScope.launch { savedBookmarks.delete(id) }
     }
 
     /** Plays the book offered as next in its series, from where it was left. */

@@ -61,13 +61,6 @@
     <string name="go">Go</string>
 
     <!-- Bookmarks -->
-    <string name="bookmarks_title">Bookmarks</string>
-    <string name="add_bookmark_title">Add bookmark</string>
-    <string name="add_bookmark_note_hint">Note (optional)</string>
-    <string name="add_bookmark_action">Add bookmark</string>
-    <string name="no_bookmarks_yet">No bookmarks yet</string>
-    <string name="bookmark_save">Save</string>
-    <string name="delete_bookmark">Delete bookmark %1$s</string>
 
     <!-- Reader top bar: each button says what tapping it does -->
     <string name="reader_page_mode">Read page by page</string>

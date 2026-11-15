@@ -88,6 +88,22 @@ class JellyfinDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `bookmarks come in empty, the library kept`() {
+        appHelper.createDatabase(DB, 9).use { db ->
+            db.execSQL("INSERT INTO hidden_item (itemId) VALUES ('h1')")
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 10, true).use { db ->
+            listOf("hidden_item", "audiobook_bookmark").map { table ->
+                db.query("SELECT COUNT(*) FROM $table").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+            } shouldBe listOf(1L, 0L)
+        }
+    }
+
     private fun SQLiteConnection.count(table: String): Long =
         prepare("SELECT COUNT(*) FROM $table").use {
             it.step()

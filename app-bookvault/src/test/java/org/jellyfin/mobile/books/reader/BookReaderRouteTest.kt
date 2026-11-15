@@ -390,9 +390,9 @@ class BookReaderRouteTest {
     @Test
     fun `adding a bookmark saves it with the note`() {
         show()
-        openMenuItem(R.string.add_bookmark_action)
-        composeRule.onNodeWithText(string(R.string.add_bookmark_note_hint)).performTextInput("Great line here")
-        composeRule.onNodeWithText(string(R.string.bookmark_save)).performClick()
+        openMenuItem(CommonR.string.add_bookmark_action)
+        composeRule.onNodeWithText(string(CommonR.string.add_bookmark_note_hint)).performTextInput("Great line here")
+        composeRule.onNodeWithText(string(CommonR.string.bookmark_save)).performClick()
 
         verify { readerViewModel.addBookmark("Great line here") }
     }
@@ -402,7 +402,7 @@ class BookReaderRouteTest {
         every { readerViewModel.bookmarks } returns MutableStateFlow(listOf(bookmark))
 
         show()
-        openMenuItem(R.string.bookmarks_title)
+        openMenuItem(CommonR.string.bookmarks_title)
         composeRule.onNodeWithText("Chapter 3").performClick()
 
         verify { readerViewModel.jumpToBookmark(bookmark) }
@@ -413,9 +413,12 @@ class BookReaderRouteTest {
         every { readerViewModel.bookmarks } returns MutableStateFlow(listOf(bookmark))
 
         show()
-        openMenuItem(R.string.bookmarks_title)
+        openMenuItem(CommonR.string.bookmarks_title)
         composeRule.onNodeWithContentDescription(
-            ApplicationProvider.getApplicationContext<Application>().getString(R.string.delete_bookmark, "Chapter 3"),
+            ApplicationProvider.getApplicationContext<Application>().getString(
+                CommonR.string.delete_bookmark,
+                "Chapter 3",
+            ),
         ).performClick()
 
         verify { readerViewModel.deleteBookmark(1L) }
