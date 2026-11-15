@@ -107,7 +107,11 @@ class AudiobookPlaybackService : MediaSessionService() {
                     local,
                     casting,
                     // Chapters wherever it plays
-                    wrap = { cast -> AudiobookPlayer(cast, preferences::speedFor, preferences::setSpeedFor).also { widget.follow(it, ::isSessionPlayer) } },
+                    wrap = { cast ->
+                        AudiobookPlayer(cast, preferences::speedFor, preferences::setSpeedFor).also {
+                            widget.follow(it, ::isSessionPlayer)
+                        }
+                    },
                     castStream = ::castStream,
                     // Only for an item with no track id: this device's stream may have restarted part way
                     castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },
