@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -95,12 +96,32 @@ class LibraryViewModel(
         LibraryFilterState(downloadedOnly, downloadedIds, showHidden, hiddenIds, finishedOnly)
     }
 
+    private val _groupBy = MutableStateFlow(GroupBy.fromName(appPreferences.libraryGroupBy))
+
+    /** How the whole library's books are grouped (see [groupItems]). */
+    val groupBy: StateFlow<GroupBy> = _groupBy.asStateFlow()
+
+    /** The group (an author, a series) opened, showing its books; null showing the groups. */
+    private val openedGroup = MutableStateFlow<String?>(null)
+
+    private val showingWholeLibrary = MutableStateFlow(false)
+
+    /** Whether the books can be grouped: only the whole library's, not a folder's. */
+    val canGroup: StateFlow<Boolean> = showingWholeLibrary.asStateFlow()
+
+    private val grouping = combine(_groupBy, openedGroup, showingWholeLibrary) { by, open, whole ->
+        if (whole) by to open else GroupBy.NONE to null
+    }
+
     val items: StateFlow<List<LibraryItem>> = combine(
         _rawItems,
         _filterQuery,
         filterState,
-    ) { items, query, filter ->
-        filterLibraryItems(items, query, filter)
+        grouping,
+    ) { items, query, filter, (by, open) ->
+        val shown = filterLibraryItems(items, query, filter)
+        // A search finds books wherever they're grouped
+        if (query.isNotBlank()) shown else groupItems(shown, by, open)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _isLoading = MutableStateFlow(false)
@@ -145,8 +166,9 @@ class LibraryViewModel(
         shownFlatEntries,
         _filterQuery,
         filterState,
-    ) { entries, query, filter ->
-        val narrowed = query.isNotBlank() || filter.downloadedOnly || filter.finishedOnly
+        openedGroup,
+    ) { entries, query, filter, group ->
+        val narrowed = query.isNotBlank() || filter.downloadedOnly || filter.finishedOnly || group != null
         if (narrowed) emptyList() else continueListening(entries, filter.hiddenIds)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -255,6 +277,44 @@ class LibraryViewModel(
                 _finishFailures.send(Unit)
                 return@launch
             }
+            refresh(force = true)
+        }
+    }
+
+    /** Groups the whole library's books [by] author or series (or not), from now on. */
+    fun setGroupBy(by: GroupBy) {
+        appPreferences.libraryGroupBy = by.name
+        _groupBy.value = by
+        closeGroup()
+    }
+
+    /** Opens the group (an author, a series) named [name], showing its books under its name. */
+    fun openGroup(name: String) {
+        _filterQuery.update { "" }
+        openedGroup.value = name
+        _title.update { name }
+        _canGoUp.update { true }
+    }
+
+    private fun closeGroup() {
+        if (openedGroup.value == null) return
+        openedGroup.value = null
+        _title.update { WHOLE_LIBRARY_TITLE }
+        _canGoUp.update { folderStack.isNotEmpty() }
+    }
+
+    /** Shows the book of several files [bookKey] (its entry id) as separate books, a series, from now on. */
+    fun showAsSeparateBooks(bookKey: String) {
+        viewModelScope.launch {
+            audiobookEntryDao.showAsSeparateBooks(bookKey)
+            refresh(force = true)
+        }
+    }
+
+    /** Shows the series [seriesKey] (see LibraryItem.AudiobookBundle.seriesKey) as one book again. */
+    fun showAsOneBook(seriesKey: String) {
+        viewModelScope.launch {
+            audiobookEntryDao.showAsOneBook(seriesKey)
             refresh(force = true)
         }
     }
@@ -404,6 +464,8 @@ class LibraryViewModel(
         }
 
         shownFlatEntries.value = emptyList()
+        showingWholeLibrary.value = false
+        openedGroup.value = null
         viewModelScope.launch {
             _isLoading.update { true }
             _error.update { null }
@@ -463,8 +525,10 @@ class LibraryViewModel(
             _isLoading.update { true }
             _error.update { null }
             folderStack.clear()
-            _canGoUp.update { false }
-            _title.update { "All Audiobooks" }
+            // A group opened stays open as the books load again (after a book stops, say)
+            _canGoUp.update { openedGroup.value != null }
+            showingWholeLibrary.value = true
+            if (openedGroup.value == null) _title.update { WHOLE_LIBRARY_TITLE }
             _folderId.update { null }
 
             // Serve from cache immediately for a snappy paint, but fall through to a live
@@ -536,7 +600,8 @@ class LibraryViewModel(
             allItems.addAll(result.items.orEmpty())
         }
 
-        val entries = AudiobookEntryBuilder.build(allItems, serverId ?: -1L)
+        val separateBooks = audiobookEntryDao.separateBooks().first().toSet()
+        val entries = AudiobookEntryBuilder.build(allItems, serverId ?: -1L, separateBooks)
 
         if (serverId != null) {
             withContext(Dispatchers.IO) {
@@ -593,6 +658,11 @@ class LibraryViewModel(
      * Navigate up (back) in the folder stack.
      */
     fun goUp(): Boolean {
+        if (openedGroup.value != null) {
+            _filterQuery.update { "" }
+            closeGroup()
+            return true
+        }
         if (folderStack.isEmpty()) return false
         _filterQuery.update { "" }
         folderStack.removeLast()
@@ -756,6 +826,10 @@ internal fun AudiobookEntryEntity.toLibraryItem(): LibraryItem.AudiobookBundle {
         trackIds = trackUUIDs,
         isBundle = isBundle,
         parentFolderId = folderUUID,
+        entryId = id,
+        series = series,
+        seriesIndex = seriesIndex,
+        seriesKey = seriesKey,
     )
 }
 
@@ -772,3 +846,6 @@ class ListeningUpdates(
      */
     val stoppedBookReported: suspend () -> Unit = {},
 )
+
+/** The whole library's title (see LibraryRoute, which shows it). */
+private const val WHOLE_LIBRARY_TITLE = "All Audiobooks"

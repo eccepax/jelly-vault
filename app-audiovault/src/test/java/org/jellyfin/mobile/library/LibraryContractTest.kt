@@ -70,7 +70,7 @@ class LibraryContractTest {
                 every { currentUserId } returns 1L
             },
             userDao = mockk<UserDao> { every { getServerUser(1L, 1L) } returns user },
-            audiobookEntryDao = mockk<AudiobookEntryDao>(relaxed = true),
+            audiobookEntryDao = mockk<AudiobookEntryDao>(relaxed = true) { every { separateBooks() } returns flowOf(emptyList()) },
             downloadedTrackIds = MutableStateFlow(emptySet()),
             hiddenItemDao = mockk<HiddenItemDao>(relaxed = true) { every { getAll() } returns flowOf(emptyList()) },
             downloadedTrack = { null },

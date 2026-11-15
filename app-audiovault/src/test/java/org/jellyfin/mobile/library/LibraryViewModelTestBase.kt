@@ -8,6 +8,10 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.job
+import kotlinx.coroutines.cancelAndJoin
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -87,18 +91,23 @@ abstract class LibraryViewModelTestBase {
         every { appPreferences.libraryGlobalFlattened } returns false
 
         every { hiddenItemDao.getAll() } returns flowOf(emptyList())
+        every { audiobookEntryDao.separateBooks() } returns flowOf(emptyList())
 
         stubItems(emptyList())
         coEvery { userViewsApi.getUserViews(userId = any(), includeHidden = any()) } returns queryResult(emptyList())
     }
 
+    /** The view models made, stopped after each test: a load still going would call the API unmocked. */
+    private val created = mutableListOf<LibraryViewModel>()
+
     @AfterEach
     fun tearDown() {
+        runBlocking { created.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() } }
         Dispatchers.resetMain()
         unmockkStatic("org.jellyfin.sdk.api.client.extensions.ApiClientExtensionsKt")
     }
 
-    protected fun createViewModel() = LibraryViewModel(
+    protected fun createViewModel(): LibraryViewModel = LibraryViewModel(
         apiClient = apiClient,
         appPreferences = appPreferences,
         userDao = userDao,
@@ -110,7 +119,7 @@ abstract class LibraryViewModelTestBase {
             sendSavedOnDevice = { events += "sync" },
             stoppedBookReported = { listeningReported() },
         ),
-    )
+    ).also { created += it }
 
     /**
      * The loads run in a detached coroutine with real `Dispatchers.IO` hops, which

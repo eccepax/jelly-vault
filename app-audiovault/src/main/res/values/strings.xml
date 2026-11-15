@@ -14,6 +14,15 @@
     <string name="library_sort_author">Author</string>
     <string name="library_sort_date_added">Date added</string>
     <string name="library_sort_last_played">Recently listened</string>
+    <string name="library_group_by">Group by</string>
+    <string name="library_group_none">Nothing</string>
+    <string name="library_group_author">Author</string>
+    <string name="library_group_series">Series</string>
+    <string name="unknown_author">Unknown author</string>
+    <plurals name="books_count">
+        <item quantity="one">%d book</item>
+        <item quantity="other">%d books</item>
+    </plurals>
     <string name="pref_category_library">Library</string>
     <string name="pref_library_global_flatten_title">Flat audiobook list</string>
     <string name="pref_library_global_flatten_summary_off">Browse by library folders</string>
@@ -60,6 +69,8 @@
     <string name="continue_listening">Continue listening</string>
     <string name="mark_finished_action">Mark as finished</string>
     <string name="mark_unfinished_action">Mark as not finished</string>
+    <string name="show_as_separate_books">Show as separate books</string>
+    <string name="show_as_one_book">Show as one book</string>
     <string name="mark_finished_failed">Can\'t reach the server to mark the book. Try again when you\'re online.</string>
     <string name="show_hidden_items">Show hidden items</string>
     <string name="special_episode">Special</string>

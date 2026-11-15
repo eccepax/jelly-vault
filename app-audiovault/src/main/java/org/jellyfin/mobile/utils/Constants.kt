@@ -12,6 +12,7 @@ object Constants {
     const val PREF_EXOPLAYER_ALLOW_PRESS_SPEED_UP = "pref_exoplayer_allow_press_speed_up"
     const val PREF_MEDIA_SEGMENT_ACTIONS = "pref_media_segment_actions"
     const val PREF_LIBRARY_SORT_OPTION = "pref_library_sort_option"
+    const val PREF_LIBRARY_GROUP_BY = "pref_library_group_by"
     const val PREF_LIBRARY_GLOBAL_FLATTEN = "pref_library_global_flatten"
     const val PREF_ASKED_NOTIFICATIONS = "pref_asked_notifications"
     const val PREF_PLAYBACK_SPEED = "pref_playback_speed"

@@ -16,6 +16,7 @@ import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.downloads.DownloadRequests
+import org.jellyfin.mobile.library.GroupBy
 import org.jellyfin.mobile.library.LibraryItem
 import org.jellyfin.mobile.library.LibraryRoute
 import org.jellyfin.mobile.library.LibraryViewModel
@@ -107,6 +108,8 @@ class AudioVaultScreenshotTest {
                 },
             )
             every { finishFailures } returns emptyFlow()
+            every { groupBy } returns MutableStateFlow(GroupBy.NONE)
+            every { canGroup } returns MutableStateFlow(true)
         }
         // A relaxed ApiClient's cached-API lookup returns the wrong type; covers come from a real ImageApi
         mockkStatic(API_CLIENT_EXTENSIONS)
