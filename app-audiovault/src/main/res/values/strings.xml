@@ -90,4 +90,12 @@
     <string name="widget_name">Now playing</string>
     <string name="widget_description">The book playing, with back 10 seconds and play/pause</string>
     <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="listening_stats">Listening stats</string>
+    <string name="listening_stats_summary">How long you listen, and the books you finish, on this phone</string>
+    <string name="stats_nothing_yet">Nothing listened to yet</string>
+    <string name="stats_today">Today</string>
+    <string name="stats_last_seven_days">Last 7 days</string>
+    <string name="stats_all_time">All time</string>
+    <string name="stats_books_finished">Books finished</string>
+    <string name="stats_recently_finished">Recently finished</string>
 </resources>

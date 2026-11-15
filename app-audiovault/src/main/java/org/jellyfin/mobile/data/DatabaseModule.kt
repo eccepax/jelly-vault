@@ -17,4 +17,6 @@ val databaseModule = module {
     single { get<JellyfinDatabase>().audiobookEntryDao }
     single { get<JellyfinDatabase>().hiddenItemDao }
     single { get<JellyfinDatabase>().audiobookBookmarkDao }
+    single { get<JellyfinDatabase>().listeningDao }
+    single { get<JellyfinDatabase>().finishedBookDao }
 }

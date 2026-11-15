@@ -24,6 +24,7 @@ import org.jellyfin.mobile.common.downloads.DownloadSpace
 import org.jellyfin.mobile.common.ui.components.AboutSettings
 import org.jellyfin.mobile.common.ui.components.DownloadsSpaceSetting
 import org.jellyfin.mobile.common.ui.components.RemoveDownloadsFailures
+import org.jellyfin.mobile.common.ui.components.SettingsActionRow
 import org.jellyfin.mobile.common.ui.components.SettingsSectionHeader
 import org.jellyfin.mobile.common.ui.components.SettingsSwitchRow
 import org.jellyfin.mobile.common.ui.components.SignOutFailures
@@ -59,6 +60,7 @@ data class SettingsActions(
     val onRemoveDownloadsOnSignOut: (Boolean) -> Unit = {},
     val onRemoveAllDownloads: () -> Unit = {},
     val onSignOut: () -> Unit = {},
+    val onListeningStats: () -> Unit = {},
 )
 
 @Composable
@@ -84,6 +86,11 @@ fun SettingsScreen(state: SettingsUiState, actions: SettingsActions) {
                 PlaybackSection(state, actions)
                 Divider()
                 LibrarySection(state, actions)
+                SettingsActionRow(
+                    label = stringResource(R.string.listening_stats),
+                    summary = stringResource(R.string.listening_stats_summary),
+                    onClick = actions.onListeningStats,
+                )
                 Divider()
                 DownloadsSection(state, actions)
                 Divider()
@@ -169,7 +176,12 @@ private fun AccountSection(state: SettingsUiState, actions: SettingsActions) {
 
 /** Settings, saved through [viewModel]; [onSignedOut] once signing out is done, to start the app over. */
 @Composable
-fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: SettingsViewModel = koinViewModel()) {
+fun SettingsRoute(
+    onBack: () -> Unit,
+    onSignedOut: () -> Unit,
+    onListeningStats: () -> Unit = {},
+    viewModel: SettingsViewModel = koinViewModel(),
+) {
     val state by viewModel.state.collectAsState()
     val downloadSpace by viewModel.downloadSpace.collectAsState()
     val signedOut by viewModel.signedOut.collectAsState()
@@ -189,6 +201,7 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
             onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
             onRemoveAllDownloads = viewModel::removeAllDownloads,
             onSignOut = viewModel::signOut,
+            onListeningStats = onListeningStats,
         ),
     )
 }

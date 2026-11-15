@@ -62,6 +62,9 @@ import org.jellyfin.mobile.player.playback.PlayerAudiobookController
 import org.jellyfin.mobile.player.playback.audioExtractorsFactory
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.settings.SettingsViewModel
+import org.jellyfin.mobile.stats.DatabaseListeningStore
+import org.jellyfin.mobile.stats.ListeningLog
+import org.jellyfin.mobile.stats.StatsViewModel
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.isLowRamDevice
 import org.jellyfin.sdk.api.client.ApiClient
@@ -169,6 +172,8 @@ val applicationModule = module {
         AudiobookProgressReporter(get(), JellyfinAudiobookProgress(get()), onDevice, mainScope())
     }
     single { SleepTimer(AudiobookSleepTimerTarget(get()), mainScope()) }
+    single { ListeningLog(get(), DatabaseListeningStore(get(), get())) }
+    viewModel { StatsViewModel(get(), get()) }
     single {
         val context = androidApplication()
         val preferences = get<AudioVaultAppPreferences>()

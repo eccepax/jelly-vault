@@ -18,11 +18,15 @@ import org.jellyfin.mobile.common.downloads.DownloadGroupItemEntity
 import org.jellyfin.mobile.data.dao.AudiobookBookmarkDao
 import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.DownloadDao
+import org.jellyfin.mobile.data.dao.FinishedBookDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
+import org.jellyfin.mobile.data.dao.ListeningDao
 import org.jellyfin.mobile.data.entity.AudiobookBookmarkEntity
 import org.jellyfin.mobile.data.entity.AudiobookEntryEntity
 import org.jellyfin.mobile.data.entity.DownloadEntity
+import org.jellyfin.mobile.data.entity.FinishedBookEntity
 import org.jellyfin.mobile.data.entity.HiddenItemEntity
+import org.jellyfin.mobile.data.entity.ListeningDayEntity
 import org.jellyfin.mobile.data.entity.SeparateBookEntity
 
 @Database(
@@ -34,10 +38,12 @@ import org.jellyfin.mobile.data.entity.SeparateBookEntity
         HiddenItemEntity::class,
         SeparateBookEntity::class,
         AudiobookBookmarkEntity::class,
+        ListeningDayEntity::class,
+        FinishedBookEntity::class,
         DownloadGroupEntity::class,
         DownloadGroupItemEntity::class,
     ],
-    version = 10,
+    version = 11,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
@@ -47,6 +53,7 @@ import org.jellyfin.mobile.data.entity.SeparateBookEntity
         AutoMigration(from = 7, to = 8, spec = JellyfinDatabase.SharedDownloads::class),
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 abstract class JellyfinDatabase : RoomDatabase() {
@@ -56,6 +63,8 @@ abstract class JellyfinDatabase : RoomDatabase() {
     abstract val audiobookEntryDao: AudiobookEntryDao
     abstract val hiddenItemDao: HiddenItemDao
     abstract val audiobookBookmarkDao: AudiobookBookmarkDao
+    abstract val listeningDao: ListeningDao
+    abstract val finishedBookDao: FinishedBookDao
     abstract val downloadGroupDao: DownloadGroupDao
 
     /**

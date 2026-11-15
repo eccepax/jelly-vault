@@ -13,6 +13,7 @@ import org.jellyfin.mobile.downloads.audioDownloadsModule
 import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
 import org.jellyfin.mobile.player.playback.MediaSegmentSkipper
 import org.jellyfin.mobile.player.playback.removeRetiredNotificationChannels
+import org.jellyfin.mobile.stats.ListeningLog
 import org.jellyfin.mobile.utils.JellyTree
 import org.jellyfin.sdk.model.ClientInfo
 import org.koin.android.ext.koin.androidContext
@@ -48,5 +49,6 @@ class JellyfinApplication : Application() {
         koin.get<AudiobookProgressReporter>().start()
         koin.get<MediaSegmentSkipper>().start()
         koin.get<ShakeToExtend>().start(MainScope())
+        koin.get<ListeningLog>().start(MainScope())
     }
 }
