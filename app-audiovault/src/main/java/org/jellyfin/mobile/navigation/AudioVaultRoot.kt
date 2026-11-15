@@ -21,6 +21,7 @@ import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.ui.PlayerRoute
 import org.jellyfin.mobile.settings.SettingsRoute
+import org.jellyfin.mobile.stats.StatsRoute
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -62,7 +63,14 @@ fun AudioVaultRoot(mainViewModel: MainViewModel, appPreferences: AppPreferences)
         },
         player = { onBack -> PlayerRoute(onBack = onBack, viewModel = playerViewModel, casting = koinInject()) },
         downloads = { onBack, navigator -> DownloadsRoute(onBack = onBack, onPlay = play(navigator)) },
-        settings = { onBack -> SettingsRoute(onBack = onBack, onSignedOut = { activity?.startOver() }) },
+        settings = { onBack, navigator ->
+            SettingsRoute(
+                onBack = onBack,
+                onSignedOut = { activity?.startOver() },
+                onListeningStats = navigator.openStats,
+            )
+        },
+        stats = { onBack -> StatsRoute(onBack = onBack) },
     )
 }
 

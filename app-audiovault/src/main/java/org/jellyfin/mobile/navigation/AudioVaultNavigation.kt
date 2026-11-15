@@ -10,17 +10,20 @@ import org.jellyfin.mobile.common.ui.navigation.rememberVaultBackStack
 private const val PLAYER = "player"
 private const val DOWNLOADS = "downloads"
 private const val SETTINGS = "settings"
+private const val STATS = "stats"
 
 /** What a screen can open on top of itself. */
 class Navigator(
     val openPlayer: () -> Unit,
     val openDownloads: () -> Unit,
     val openSettings: () -> Unit,
+    val openStats: () -> Unit = {},
 )
 
 /**
  * AudioVault's back stack ([VaultBackStack], as TuneVault's library has): [home] with the player,
- * downloads and settings opened on top of it, e.g. home → downloads → player. Back pops one level.
+ * downloads and settings opened on top of it, e.g. home → downloads → player, and the listening
+ * [stats] on the settings. Back pops one level.
  *
  * The settings belong to whoever's signed in ([rootScreen], as home shows it): they wait while
  * that's still being read (restored after the app's process went), and close once there's no one.
@@ -32,7 +35,8 @@ fun AudioVaultNavigation(
     home: @Composable (navigator: Navigator) -> Unit,
     player: @Composable (onBack: () -> Unit) -> Unit,
     downloads: @Composable (onBack: () -> Unit, navigator: Navigator) -> Unit,
-    settings: @Composable (onBack: () -> Unit) -> Unit,
+    settings: @Composable (onBack: () -> Unit, navigator: Navigator) -> Unit,
+    stats: @Composable (onBack: () -> Unit) -> Unit,
 ) {
     val backStack = rememberVaultBackStack()
     val navigator = remember(backStack) {
@@ -44,6 +48,7 @@ fun AudioVaultNavigation(
             openPlayer = { open(PLAYER) },
             openDownloads = { open(DOWNLOADS) },
             openSettings = { open(SETTINGS) },
+            openStats = { open(STATS) },
         )
     }
 
@@ -62,7 +67,8 @@ fun AudioVaultNavigation(
             null -> home(navigator)
             PLAYER -> player(close)
             DOWNLOADS -> downloads(close, navigator)
-            else -> settings(close)
+            STATS -> stats(close)
+            else -> settings(close, navigator)
         }
     }
 }

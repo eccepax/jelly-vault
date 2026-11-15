@@ -104,6 +104,25 @@ class JellyfinDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `listening stats come in empty, the bookmarks kept`() {
+        appHelper.createDatabase(DB, 10).use { db ->
+            db.execSQL(
+                "INSERT INTO audiobook_bookmark (track_id, position_ms, label, note, created_at) " +
+                    "VALUES ('t1', 1000, 'One · 0:01', NULL, 1)",
+            )
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 11, true).use { db ->
+            listOf("audiobook_bookmark", "listening_day", "finished_book").map { table ->
+                db.query("SELECT COUNT(*) FROM $table").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+            } shouldBe listOf(1L, 0L, 0L)
+        }
+    }
+
     private fun SQLiteConnection.count(table: String): Long =
         prepare("SELECT COUNT(*) FROM $table").use {
             it.step()
