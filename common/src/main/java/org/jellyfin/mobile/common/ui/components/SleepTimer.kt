@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import org.jellyfin.mobile.common.R
 import org.jellyfin.mobile.common.playback.SleepTimerState
 import java.util.Locale
@@ -55,6 +56,7 @@ data class SleepTimerUi(
 @Composable
 fun SleepTimerButton(ui: SleepTimerUi, endOfSegment: String, modifier: Modifier = Modifier) {
     var menuOpen by remember { mutableStateOf(false) }
+    var typingLength by remember { mutableStateOf(false) }
     fun choose(action: () -> Unit) {
         menuOpen = false
         action()
@@ -76,6 +78,9 @@ fun SleepTimerButton(ui: SleepTimerUi, endOfSegment: String, modifier: Modifier 
                         onClick = { choose { ui.onStart(minutes * MINUTE_MS) } },
                     ) { Text(stringResource(label)) }
                 }
+                DropdownMenuItem(onClick = { choose { typingLength = true } }) {
+                    Text(stringResource(R.string.sleep_custom))
+                }
             }
             if (ui.state != SleepTimerState.EndOfSegment) {
                 DropdownMenuItem(onClick = { choose(ui.onEndOfSegment) }) { Text(endOfSegment) }
@@ -84,6 +89,16 @@ fun SleepTimerButton(ui: SleepTimerUi, endOfSegment: String, modifier: Modifier 
                 DropdownMenuItem(onClick = { choose(ui.onCancel) }) { Text(stringResource(R.string.sleep_off)) }
             }
         }
+    }
+    if (typingLength) {
+        TextFieldDialog(
+            title = stringResource(R.string.sleep_timer),
+            label = stringResource(R.string.sleep_minutes),
+            confirmLabel = stringResource(R.string.sleep_start),
+            onConfirm = { typed -> minutesOf(typed)?.let { ui.onStart(it * MINUTE_MS) } },
+            onDismiss = { typingLength = false },
+            keyboardType = KeyboardType.Number,
+        )
     }
 }
 
@@ -113,3 +128,9 @@ internal fun formatRemaining(remainingMs: Long): String {
         String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
     }
 }
+
+/** The minutes typed for a timer of its own length; null when that isn't a whole number in range. */
+internal fun minutesOf(typed: String): Int? = typed.trim().toIntOrNull()?.takeIf { it in 1..MAX_MINUTES }
+
+/** The longest timer that can be typed in: 12 hours. */
+private const val MAX_MINUTES = 720

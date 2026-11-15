@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.player.ui.PlayerTags
 import org.junit.Test
+import org.jellyfin.mobile.common.R as CommonR
 
 /**
  * Player -> Sleep timer -> pick a length. No on-screen player UI shows the running timer's time,
@@ -23,10 +24,10 @@ class SleepTimerE2ETest : LoggedInE2ETest() {
         startPlaybackFromFirstLibraryItem()
 
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        composeRule.onNodeWithContentDescription(context.getString(R.string.menu_sleep_timer)).performClick()
-        composeRule.onNodeWithText(context.getString(R.string.sleep_timer_15_min)).performClick()
+        composeRule.onNodeWithContentDescription(context.getString(CommonR.string.sleep_timer)).performClick()
+        composeRule.onNodeWithText(context.getString(CommonR.string.sleep_15)).performClick()
 
-        composeRule.onNodeWithText(context.getString(R.string.sleep_timer_15_min)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(CommonR.string.sleep_15)).assertDoesNotExist()
         composeRule.onNodeWithTag(PlayerTags.PLAY_PAUSE).assertExists()
     }
 }

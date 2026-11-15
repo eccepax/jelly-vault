@@ -36,6 +36,7 @@ data class SettingsUiState(
     /** The space downloads take; null until known, and then nothing is said about it. */
     val downloadSpace: DownloadSpace? = null,
     val showSleepTimer: Boolean = true,
+    val shakeToExtend: Boolean = true,
     val volumeLevelling: Boolean = true,
 )
 
@@ -58,6 +59,7 @@ class SettingsViewModel(
             downloadOnWifiOnly = downloads.wifiOnly,
             removeDownloadsOnSignOut = preferences.removeDownloadsOnSignOut,
             showSleepTimer = preferences.showSleepTimer,
+            shakeToExtend = preferences.shakeToExtendSleepTimer,
             volumeLevelling = preferences.volumeLevelling,
         ),
     )
@@ -113,6 +115,11 @@ class SettingsViewModel(
     fun setDownloadOnWifiOnly(wifiOnly: Boolean) {
         downloads.wifiOnly = wifiOnly
         _state.update { it.copy(downloadOnWifiOnly = wifiOnly) }
+    }
+
+    fun setShakeToExtend(on: Boolean) {
+        preferences.shakeToExtendSleepTimer = on
+        _state.update { it.copy(shakeToExtend = on) }
     }
 
     fun setShowSleepTimer(shown: Boolean) {

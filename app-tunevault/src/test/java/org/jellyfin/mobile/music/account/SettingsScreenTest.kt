@@ -44,6 +44,7 @@ class SettingsScreenTest {
                 onStreamingQuality = { events += "quality $it" },
                 onSignOut = { events += "signOut" },
                 onShowSleepTimer = { events += "showSleepTimer $it" },
+                onShakeToExtend = { events += "shakeToExtend $it" },
                 onVolumeLevelling = { events += "levelling $it" },
                 downloads = DownloadSettingsActions(
                     onQuality = { events += "download quality $it" },
@@ -189,6 +190,15 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Show sleep timer").performScrollTo().performClick()
 
         events shouldBe listOf("showSleepTimer false")
+    }
+
+    @Test
+    fun `shaking to extend the sleep timer can be turned off`() {
+        show(signedIn.copy(shakeToExtend = true))
+
+        composeRule.onNodeWithText("Shake to extend the sleep timer").performScrollTo().performClick()
+
+        events shouldBe listOf("shakeToExtend false")
     }
 
     @Test

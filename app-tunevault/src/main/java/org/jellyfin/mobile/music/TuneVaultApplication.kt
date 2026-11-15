@@ -1,7 +1,9 @@
 package org.jellyfin.mobile.music
 
 import android.app.Application
+import kotlinx.coroutines.MainScope
 import org.jellyfin.mobile.common.app.apiModule
+import org.jellyfin.mobile.common.playback.ShakeToExtend
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.jellyfin.mobile.music.app.tuneAppModule
 import org.jellyfin.mobile.music.data.tuneDatabaseModule
@@ -38,5 +40,6 @@ class TuneVaultApplication : Application() {
         // service keeps alive while music plays), independent of any screen.
         koin.get<PlaybackReportingTracker>().start()
         koin.get<VolumeLeveller>().start()
+        koin.get<ShakeToExtend>().start(MainScope())
     }
 }

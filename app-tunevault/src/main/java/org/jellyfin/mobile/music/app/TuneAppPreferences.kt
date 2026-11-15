@@ -22,6 +22,9 @@ interface PlaybackPreferences {
     /** Whether Now Playing offers the sleep timer. */
     var showSleepTimer: Boolean
 
+    /** Whether shaking the phone gives a running sleep timer 15 more minutes (see common ShakeToExtend). */
+    var shakeToExtendSleepTimer: Boolean
+
     /** Whether songs play at a similar loudness (see VolumeLeveller). */
     var volumeLevelling: Boolean
 
@@ -60,6 +63,10 @@ class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPre
         get() = sharedPreferences.getBoolean(PREF_SHOW_SLEEP_TIMER, true)
         set(value) = sharedPreferences.edit { putBoolean(PREF_SHOW_SLEEP_TIMER, value) }
 
+    override var shakeToExtendSleepTimer: Boolean
+        get() = sharedPreferences.getBoolean(PREF_SHAKE_TO_EXTEND, true)
+        set(value) = sharedPreferences.edit { putBoolean(PREF_SHAKE_TO_EXTEND, value) }
+
     /** Whether TuneVault has asked to show notifications (see common shouldAskForNotifications). */
     var askedForNotifications: Boolean
         get() = sharedPreferences.getBoolean(PREF_ASKED_NOTIFICATIONS, false)
@@ -68,6 +75,7 @@ class TuneAppPreferences(context: Context) : AppPreferences(context), LibraryPre
     private companion object {
         const val PREF_ASKED_NOTIFICATIONS = "asked_notifications"
         const val PREF_SHOW_SLEEP_TIMER = "show_sleep_timer"
+        const val PREF_SHAKE_TO_EXTEND = "shake_to_extend"
         const val PREF_VOLUME_LEVELLING = "volume_levelling"
         const val PREF_ALBUM_SORT = "album_sort"
         const val PREF_STREAMING_QUALITY = "streaming_quality"

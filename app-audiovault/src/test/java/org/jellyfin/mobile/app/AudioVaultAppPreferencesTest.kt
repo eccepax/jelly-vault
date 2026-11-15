@@ -130,6 +130,15 @@ class AudioVaultAppPreferencesTest {
     // --- librarySortOption / libraryGlobalFlattened / playbackSpeed ----------------------------
 
     @Test
+    fun `shaking extends the sleep timer until that's turned off`() {
+        preferences.shakeToExtendSleepTimer shouldBe true
+
+        preferences.shakeToExtendSleepTimer = false
+
+        AudioVaultAppPreferences(context).shakeToExtendSleepTimer shouldBe false
+    }
+
+    @Test
     fun `the library isn't grouped until it's asked to be, and remembers how`() {
         preferences.libraryGroupBy shouldBe "NONE"
 

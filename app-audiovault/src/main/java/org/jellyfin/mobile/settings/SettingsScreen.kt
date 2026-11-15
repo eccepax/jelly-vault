@@ -37,6 +37,7 @@ import org.jellyfin.mobile.common.R as CommonR
 data class SettingsUiState(
     val holdToSpeedUp: Boolean,
     val skipSilence: Boolean,
+    val shakeToExtend: Boolean = true,
     val flatLibrary: Boolean,
     val downloadOnWifiOnly: Boolean,
     val removeDownloadsOnSignOut: Boolean,
@@ -52,6 +53,7 @@ data class SettingsActions(
     val onBack: () -> Unit = {},
     val onHoldToSpeedUp: (Boolean) -> Unit = {},
     val onSkipSilence: (Boolean) -> Unit = {},
+    val onShakeToExtend: (Boolean) -> Unit = {},
     val onFlatLibrary: (Boolean) -> Unit = {},
     val onWifiOnly: (Boolean) -> Unit = {},
     val onRemoveDownloadsOnSignOut: (Boolean) -> Unit = {},
@@ -107,6 +109,12 @@ private fun PlaybackSection(state: SettingsUiState, actions: SettingsActions) {
         summary = stringResource(R.string.pref_skip_silence_summary),
         checked = state.skipSilence,
         onCheckedChange = actions.onSkipSilence,
+    )
+    SettingsSwitchRow(
+        label = stringResource(CommonR.string.shake_to_extend),
+        summary = stringResource(CommonR.string.shake_to_extend_summary),
+        checked = state.shakeToExtend,
+        onCheckedChange = actions.onShakeToExtend,
     )
 }
 
@@ -175,6 +183,7 @@ fun SettingsRoute(onBack: () -> Unit, onSignedOut: () -> Unit, viewModel: Settin
             onBack = onBack,
             onHoldToSpeedUp = viewModel::setHoldToSpeedUp,
             onSkipSilence = viewModel::setSkipSilence,
+            onShakeToExtend = viewModel::setShakeToExtend,
             onFlatLibrary = viewModel::setFlatLibrary,
             onWifiOnly = viewModel::setWifiOnly,
             onRemoveDownloadsOnSignOut = viewModel::setRemoveDownloadsOnSignOut,
