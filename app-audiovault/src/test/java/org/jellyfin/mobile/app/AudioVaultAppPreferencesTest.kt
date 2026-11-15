@@ -38,6 +38,64 @@ class AudioVaultAppPreferencesTest {
         AudioVaultAppPreferences(context).askedForNotifications shouldBe true
     }
 
+    // --- speed per book ---------------------------------------------------------------------------
+
+    @Test
+    fun `a book with no speed of its own plays at the one chosen last`() {
+        preferences.playbackSpeed = 1.25f
+
+        preferences.speedFor("book") shouldBe 1.25f
+    }
+
+    @Test
+    fun `a speed chosen for a book is that book's, and remembered`() {
+        preferences.setSpeedFor("slow narrator", 1.5f)
+        preferences.setSpeedFor("fast narrator", 0.9f)
+
+        val reopened = AudioVaultAppPreferences(context)
+        reopened.speedFor("slow narrator") shouldBe 1.5f
+        reopened.speedFor("fast narrator") shouldBe 0.9f
+    }
+
+    @Test
+    fun `a speed chosen for a book is where books with none of their own start`() {
+        preferences.setSpeedFor("book", 1.5f)
+
+        preferences.speedFor("a new book") shouldBe 1.5f
+        preferences.playbackSpeed shouldBe 1.5f
+    }
+
+    @Test
+    fun `a saved speed that can't be played (a restored backup's 0) reads as the one chosen last`() {
+        preferences.playbackSpeed = 1.25f
+        fakeSharedPreferences.edit().putFloat("${Constants.PREF_PLAYBACK_SPEED}:book", 0f).apply()
+
+        preferences.speedFor("book") shouldBe 1.25f
+    }
+
+    @Test
+    fun `signing out forgets every book's own speed, not the one chosen last`() {
+        preferences.setSpeedFor("slow narrator", 1.5f)
+        preferences.setSpeedFor("fast narrator", 0.9f)
+        preferences.skipSilenceEnabled = true
+
+        preferences.forgetBookSpeeds()
+
+        // The next account's books start where books with none of their own do
+        preferences.speedFor("slow narrator") shouldBe 0.9f
+        preferences.playbackSpeed shouldBe 0.9f
+        preferences.skipSilenceEnabled shouldBe true
+        fakeSharedPreferences.all.keys.filter { it.startsWith("${Constants.PREF_PLAYBACK_SPEED}:") } shouldBe emptyList()
+    }
+
+    @Test
+    fun `a speed chosen last that can't be played reads as normal speed`() {
+        fakeSharedPreferences.edit().putFloat(Constants.PREF_PLAYBACK_SPEED, -1f).apply()
+
+        preferences.playbackSpeed shouldBe 1f
+        preferences.speedFor("book") shouldBe 1f
+    }
+
     // --- downloadOnWifiOnly ----------------------------------------------------------------------
 
     @Test

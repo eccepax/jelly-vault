@@ -83,6 +83,10 @@ class FakeAudiobookController : AudiobookPlaybackController {
         commands += "speed $speed"
     }
 
+    override fun holdSpeed(speed: Float) {
+        commands += "hold $speed"
+    }
+
     override fun setSkipSilence(enabled: Boolean) {
         commands += "skipSilence $enabled"
     }

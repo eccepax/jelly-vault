@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.player.playback
 
+import org.jellyfin.mobile.library.AudiobookEntryBuilder
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
@@ -74,6 +75,7 @@ class AudiobookQueueLoader(
         durationMs = runTimeTicks?.ticks?.inWholeMilliseconds ?: 0L,
         chapters = chapters.orEmpty().map { Chapter(it.startPositionTicks.ticks.inWholeMilliseconds, it.name) },
         fromDevice = fromDevice,
+        bookId = AudiobookEntryBuilder.bookKeyOf(this),
     )
 
     private fun LocalJellyfinMediaSource.toTrack(fallbackName: String?): AudiobookTrack {

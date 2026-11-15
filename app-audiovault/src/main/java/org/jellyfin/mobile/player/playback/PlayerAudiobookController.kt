@@ -23,6 +23,8 @@ class PlayerAudiobookController(
     private val streamUrl: (itemId: String) -> String,
     /** A MediaController can't skip silence itself: the service does it on request. */
     private val setSkipSilence: (Boolean) -> Unit,
+    /** Nor hold a speed without it being kept for the book: the service does that too. */
+    private val holdSpeed: (Float) -> Unit = player::setPlaybackSpeed,
 ) : AudiobookPlaybackController {
 
     private val _state = MutableStateFlow(AudiobookPlaybackState())
@@ -85,6 +87,8 @@ class PlayerAudiobookController(
 
     override fun setSpeed(speed: Float) = player.setPlaybackSpeed(speed)
 
+    override fun holdSpeed(speed: Float) = holdSpeed.invoke(speed)
+
     override fun setSkipSilence(enabled: Boolean) = setSkipSilence.invoke(enabled)
 
     /** While casting, it's the cast device's stream volume: Media3's cast player sets it there. */
@@ -131,6 +135,7 @@ class PlayerAudiobookController(
                 isEnded = player.playbackState == Player.STATE_ENDED && !anotherApps,
                 error = newError?.let { it.localizedMessage ?: it.errorCodeName } ?: kept,
                 isRemote = isRemote,
+                speed = player.playbackParameters.speed,
             )
         }
     }

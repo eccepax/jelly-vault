@@ -17,6 +17,8 @@ data class AudiobookPlaybackState(
     val error: String? = null,
     /** True while the session's player is a cast device's, not this device's. */
     val isRemote: Boolean = false,
+    /** The speed it plays at, whoever set it (a held one too). */
+    val speed: Float = 1f,
 ) {
     /** Whether sound is coming out of this device: playing, and not on a cast device. */
     val isPlayingHere: Boolean get() = isPlaying && !isRemote
@@ -58,7 +60,12 @@ interface AudiobookPlaybackController {
 
     /** Plays the track at [index] from its start. */
     fun skipTo(index: Int)
+
+    /** Plays at [speed], kept for the book playing. */
     fun setSpeed(speed: Float)
+
+    /** Plays at [speed] for now (holding fast-forward), not kept for the book. */
+    fun holdSpeed(speed: Float)
     fun setSkipSilence(enabled: Boolean)
     fun setVolume(volume: Float)
 

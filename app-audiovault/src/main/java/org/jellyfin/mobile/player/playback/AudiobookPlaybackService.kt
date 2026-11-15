@@ -86,7 +86,7 @@ class AudiobookPlaybackService : MediaSessionService() {
 
         // Transcode seeking is this device's: a cast device seeks in what it's sent itself
         val local = TranscodeSeekingPlayer(exoPlayer)
-        val player = AudiobookPlayer(local)
+        val player = AudiobookPlayer(local, preferences::speedFor, preferences::setSpeedFor)
         widget.follow(player, ::isSessionPlayer)
         return MediaSession.Builder(this, player)
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
@@ -107,7 +107,11 @@ class AudiobookPlaybackService : MediaSessionService() {
                     local,
                     casting,
                     // Chapters wherever it plays
-                    wrap = { cast -> AudiobookPlayer(cast).also { widget.follow(it, ::isSessionPlayer) } },
+                    wrap = { cast ->
+                        AudiobookPlayer(cast, preferences::speedFor, preferences::setSpeedFor).also {
+                            widget.follow(it, ::isSessionPlayer)
+                        }
+                    },
                     castStream = ::castStream,
                     // Only for an item with no track id: this device's stream may have restarted part way
                     castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },
@@ -215,7 +219,9 @@ class AudiobookSessionCallback(
     override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
         MediaSession.ConnectionResult.AcceptedResultBuilder(session)
             .setAvailableSessionCommands(
-                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(SET_SKIP_SILENCE).build(),
+                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(
+                    SET_SKIP_SILENCE,
+                ).add(HOLD_SPEED).build(),
             )
             .build()
 
@@ -277,12 +283,21 @@ class AudiobookSessionCallback(
         customCommand: SessionCommand,
         args: Bundle,
     ): ListenableFuture<SessionResult> {
-        if (customCommand.customAction != SET_SKIP_SILENCE.customAction) {
-            return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+        when (customCommand.customAction) {
+            // This device's player only, also while casting: the Default Media Receiver can't skip
+            // silence, so it plays a cast as it is, and the setting is this device's once playback is back
+            SET_SKIP_SILENCE.customAction -> exoPlayer.skipSilenceEnabled = args.getBoolean(KEY_ENABLED)
+            // Whichever player plays, this device's or a cast device's
+            HOLD_SPEED.customAction -> {
+                val speed = args.getFloat(KEY_SPEED).takeIf { it > 0f }
+                    ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                when (val player = session.player) {
+                    is AudiobookPlayer -> player.holdAt(speed)
+                    else -> player.setPlaybackSpeed(speed)
+                }
+            }
+            else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
         }
-        // This device's player only, also while casting: the Default Media Receiver can't skip silence,
-        // so it plays a cast as it is, and the setting is this device's once playback is back here
-        exoPlayer.skipSilenceEnabled = args.getBoolean(KEY_ENABLED)
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
 
@@ -290,6 +305,10 @@ class AudiobookSessionCallback(
         /** Turns skipping silent passages on or off, as [KEY_ENABLED] says. */
         val SET_SKIP_SILENCE = SessionCommand("org.jellyfin.mobile.SET_SKIP_SILENCE", Bundle.EMPTY)
         const val KEY_ENABLED = "enabled"
+
+        /** Plays at [KEY_SPEED] for now (holding fast-forward), without keeping it for the book. */
+        val HOLD_SPEED = SessionCommand("org.jellyfin.mobile.HOLD_SPEED", Bundle.EMPTY)
+        const val KEY_SPEED = "speed"
     }
 }
 

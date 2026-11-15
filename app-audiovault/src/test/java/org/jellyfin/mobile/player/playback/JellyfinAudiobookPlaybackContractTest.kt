@@ -4,11 +4,13 @@ import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.coroutines.runBlocking
+import org.jellyfin.mobile.library.AudiobookEntryBuilder
 import org.jellyfin.mobile.testing.VaultFixtures.Audiobooks
 import org.jellyfin.mobile.testing.VaultTestServer
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.SessionInfoDto
@@ -64,6 +66,21 @@ class JellyfinAudiobookPlaybackContractTest {
 
         item.name shouldBe Audiobooks.M4B
         (item.runTimeTicks ?: 0L) shouldBeGreaterThan 0L
+    }
+
+    @Test
+    fun `every part of a book is the same book, streamed or downloaded, and another book isn't`() = runBlocking<Unit> {
+        val parts = api.itemsApi.getItems(
+            includeItemTypes = listOf(BaseItemKind.AUDIO_BOOK, BaseItemKind.AUDIO),
+            recursive = true,
+        ).content.items.orEmpty().filter { it.album == Audiobooks.MULTI_PART }.map { it.id }
+        val streamed = audiobooks.items(parts).map(AudiobookEntryBuilder::bookKeyOf)
+        // A download keeps the item as the single-item endpoint gives it (MediaSourceResolver)
+        val downloaded = AudiobookEntryBuilder.bookKeyOf(api.userLibraryApi.getItem(parts.last()).content)
+
+        (parts.size > 1) shouldBe true
+        streamed.distinct() shouldBe listOf(downloaded)
+        (AudiobookEntryBuilder.bookKeyOf(audiobooks.items(listOf(m4b)).single()) == downloaded) shouldBe false
     }
 
     @Test

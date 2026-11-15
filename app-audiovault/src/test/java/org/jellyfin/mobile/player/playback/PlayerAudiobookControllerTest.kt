@@ -38,10 +38,12 @@ class PlayerAudiobookControllerTest {
         .setSeekForwardIncrementMs(30_000L)
         .build()
     private val skipSilence = mutableListOf<Boolean>()
+    private val held = mutableListOf<Float>()
     private val controller = PlayerAudiobookController(
         AudiobookPlayer(TranscodeSeekingPlayer(exoPlayer)),
         streamUrl = { "https://vault.test/Audio/$it/universal" },
         setSkipSilence = { skipSilence += it },
+        holdSpeed = { held += it },
     )
 
     private val chapters = listOf(Chapter(0L, "One"), Chapter(30_000L, "Two"), Chapter(60_000L, "Three"))
@@ -181,6 +183,23 @@ class PlayerAudiobookControllerTest {
         settle()
 
         exoPlayer.playbackParameters.speed shouldBe 1.75f
+    }
+
+    @Test
+    fun `the speed playing at is in the state, whoever set it`() {
+        playPaused(track("a"))
+
+        exoPlayer.setPlaybackSpeed(1.5f)
+        settle()
+
+        controller.state.value.speed shouldBe 1.5f
+    }
+
+    @Test
+    fun `holding a speed goes to the service, which plays it without keeping it for the book`() {
+        controller.holdSpeed(3f)
+
+        held shouldBe listOf(3f)
     }
 
     @Test

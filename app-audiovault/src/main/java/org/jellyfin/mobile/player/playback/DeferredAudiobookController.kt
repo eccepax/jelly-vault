@@ -67,6 +67,7 @@ class DeferredAudiobookController(
     override fun nextChapter() = send { it.nextChapter() }
     override fun skipTo(index: Int) = send { it.skipTo(index) }
     override fun setSpeed(speed: Float) = send { it.setSpeed(speed) }
+    override fun holdSpeed(speed: Float) = send { it.holdSpeed(speed) }
     override fun setSkipSilence(enabled: Boolean) = send { it.setSkipSilence(enabled) }
     override fun setVolume(volume: Float) = send { it.setVolume(volume) }
     override fun stop() = send { it.stop() }

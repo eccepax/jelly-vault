@@ -21,4 +21,9 @@ data class AudiobookTrack(
      * about it later (see OfflineListeningSync), rather than as it plays.
      */
     val fromDevice: Boolean = false,
+    /**
+     * Which book it's part of, the same however the book was started (see
+     * AudiobookEntryBuilder.bookKeyOf); null for a track from elsewhere.
+     */
+    val bookId: String? = null,
 )
