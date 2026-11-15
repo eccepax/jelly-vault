@@ -17,6 +17,9 @@ sealed class LibraryItem {
     abstract val runTimeTicks: Long?
     abstract val progressPercent: Float?
 
+    /** Listened to the end: the server has it played (every file of a book of several). */
+    abstract val isFinished: Boolean
+
     /**
      * The item ID to use when loading cover art, or null for items that show a generic icon.
      * For [Album] this is the MusicAlbum's own ID so album art is loaded.
@@ -40,6 +43,7 @@ sealed class LibraryItem {
             get() = dto.albumArtist ?: dto.artists?.firstOrNull() ?: ""
         override val runTimeTicks: Long? get() = dto.runTimeTicks
         override val progressPercent: Float? get() = dto.userData?.playedPercentage?.toFloat()?.takeIf { it > 0f }
+        override val isFinished: Boolean get() = dto.userData?.played == true
         override val imageItemId: UUID? get() = dto.id // load the album's own cover art
     }
 
@@ -54,6 +58,7 @@ sealed class LibraryItem {
             get() = dto.albumArtist ?: dto.artists?.firstOrNull() ?: dto.album ?: ""
         override val runTimeTicks: Long? get() = dto.runTimeTicks
         override val progressPercent: Float? get() = dto.userData?.playedPercentage?.toFloat()?.takeIf { it > 0f }
+        override val isFinished: Boolean get() = dto.userData?.played == true
         override val imageItemId: UUID? get() = dto.id
     }
 
@@ -67,6 +72,7 @@ sealed class LibraryItem {
         override val description: String get() = ""
         override val runTimeTicks: Long? get() = null
         override val progressPercent: Float? get() = null
+        override val isFinished: Boolean get() = false
         override val imageItemId: UUID? get() = null
     }
 
@@ -93,7 +99,10 @@ sealed class LibraryItem {
         val isBundle: Boolean,
         /** Jellyfin folder UUID for the parent directory, when available. Used for resume via the album queue API. */
         val parentFolderId: UUID?,
-    ) : LibraryItem()
+    ) : LibraryItem() {
+        // Its progress runs to where it resumes (see AudiobookProgress): full once every file was played
+        override val isFinished: Boolean get() = (progressPercent ?: 0f) >= FINISHED_PERCENT
+    }
 
     // -------------------------------------------------------------------------
     // Factory
@@ -118,3 +127,6 @@ sealed class LibraryItem {
                 ?.takeIf { it.isNotEmpty() }
     }
 }
+
+/** A book's progress once it's listened to the end. */
+internal const val FINISHED_PERCENT = 100f

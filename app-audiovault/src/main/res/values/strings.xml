@@ -56,6 +56,11 @@
     <string name="no">No</string>
     <string name="runtime_with_progress">%1$s · %2$d%% played</string>
     <string name="filter_downloaded_only">Downloaded only</string>
+    <string name="filter_finished_only">Finished only</string>
+    <string name="continue_listening">Continue listening</string>
+    <string name="mark_finished_action">Mark as finished</string>
+    <string name="mark_unfinished_action">Mark as not finished</string>
+    <string name="mark_finished_failed">Can\'t reach the server to mark the book. Try again when you\'re online.</string>
     <string name="show_hidden_items">Show hidden items</string>
     <string name="sleep_timer_set">Sleep timer set for %1$s</string>
     <string name="sleep_timer_15_min">15 minutes</string>

@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
@@ -61,6 +63,9 @@ class AudiobookProgressReporter(
     private val reports = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private var listen: Listen? = null
 
+    /** Whether a listen is going that hasn't been reported as over (stopped, finished) yet. */
+    private val listening = MutableStateFlow(false)
+
     /** The track (its index and id) signed out of, still playing until its stop comes through. */
     private var signedOutOf: Pair<Int, String>? = null
 
@@ -97,12 +102,30 @@ class AudiobookProgressReporter(
             end(ended)
         }
         listen = null
+        listening.value = false
     }
 
     private suspend fun awaitReports() {
+        withTimeoutOrNull(FINISH_TIMEOUT_MS) { reportsSoFarSent() }
+    }
+
+    private suspend fun reportsSoFarSent() {
         val sent = CompletableDeferred<Unit>()
         reports.trySend { sent.complete(Unit) }
-        withTimeoutOrNull(FINISH_TIMEOUT_MS) { sent.await() }
+        sent.await()
+    }
+
+    /**
+     * Waits (up to [FINISH_TIMEOUT_MS]) until a book that stopped has had where it got to reported:
+     * the server has it once this returns, so what's loaded from it next is up to date. Returns at
+     * once with nothing playing.
+     */
+    suspend fun listeningReported() {
+        withTimeoutOrNull(FINISH_TIMEOUT_MS) {
+            // The stop may not have reached the reporter yet: wait for the listen to end first
+            listening.first { !it }
+            reportsSoFarSent()
+        }
     }
 
     private fun onState(state: AudiobookPlaybackState) {
@@ -119,6 +142,7 @@ class AudiobookProgressReporter(
             }
             else -> onSameTrack(current, track, state)
         }
+        listening.value = listen?.over == false
     }
 
     /**
