@@ -74,7 +74,7 @@ class LibraryContractTest {
             downloadedTrackIds = MutableStateFlow(emptySet()),
             hiddenItemDao = mockk<HiddenItemDao>(relaxed = true) { every { getAll() } returns flowOf(emptyList()) },
             downloadedTrack = { null },
-            syncListening = {},
+            listening = ListeningUpdates(sendSavedOnDevice = {}),
         )
         withTimeout(30.seconds) { viewModel.items.first { it.isNotEmpty() } }
         Unit

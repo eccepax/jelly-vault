@@ -3,6 +3,8 @@ package org.jellyfin.mobile.player.playback
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -471,11 +473,71 @@ class AudiobookProgressReporterTest {
     }
 
     /** Records reports as text; [failing] makes each one throw, as when the server is out of reach. */
+    // --- Waiting for a stop to be reported --------------------------------------------------------
+
+    @Test
+    fun `once a book stops, waiting for its listening returns only after the stop reached the server`() = runTest {
+        val reporter = reporter()
+        controller.playing(streamed, positionMs = 0L)
+        runCurrent()
+        play(4_000L)
+        server.takesMs = 2_000L
+
+        controller.stop()
+        var reported = false
+        backgroundScope.launch {
+            reporter.listeningReported()
+            reported = true
+        }
+        wait(1_000L)
+        reported shouldBe false
+
+        wait(1_000L)
+        reported shouldBe true
+        server.reports.last() shouldBe "stopped streamed at 4000"
+    }
+
+    @Test
+    fun `with nothing playing, waiting for listening to be reported returns at once`() = runTest {
+        val reporter = reporter()
+        var reported = false
+
+        backgroundScope.launch {
+            reporter.listeningReported()
+            reported = true
+        }
+        runCurrent()
+
+        reported shouldBe true
+    }
+
+    @Test
+    fun `waiting for listening to be reported gives up after a while, a server that doesn't answer or not`() = runTest {
+        val reporter = reporter()
+        controller.playing(streamed, positionMs = 0L)
+        runCurrent()
+        server.takesMs = 60_000L
+
+        controller.stop()
+        var reported = false
+        backgroundScope.launch {
+            reporter.listeningReported()
+            reported = true
+        }
+        wait(AudiobookProgressReporter.FINISH_TIMEOUT_MS)
+
+        reported shouldBe true
+    }
+
     private class RecordingSink : AudiobookProgressSink {
         val reports = mutableListOf<String>()
         var failing = false
 
-        private fun record(report: String) {
+        /** How long each report takes to reach where it goes. */
+        var takesMs = 0L
+
+        private suspend fun record(report: String) {
+            if (takesMs > 0) delay(takesMs)
             if (failing) error("No route to host")
             reports += report
         }

@@ -36,6 +36,7 @@ import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.downloads.OfflineListeningSync
 import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.library.LibraryViewModel
+import org.jellyfin.mobile.library.ListeningUpdates
 import org.jellyfin.mobile.library.jellyfinCoverUrl
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
@@ -93,7 +94,7 @@ val applicationModule = module {
             downloads.downloadedIds,
             get(),
             downloads::playable,
-            get<OfflineListeningSync>()::sync,
+            ListeningUpdates(get<OfflineListeningSync>()::sync, get<AudiobookProgressReporter>()::listeningReported),
             downloads.waitingIds,
         )
     }

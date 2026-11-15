@@ -10,12 +10,14 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.filterToOne
 import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -55,6 +57,7 @@ class LibraryScreenTest {
         onSort = { events += "sort $it" },
         onDownloadedOnly = { events += "downloadedOnly $it" },
         onShowHidden = { events += "showHidden $it" },
+        onFinishedOnly = { events += "finishedOnly $it" },
         onSettings = { events += "settings" },
         onRefresh = { events += "refresh" },
         onOpen = { events += "open ${it.displayName}" },
@@ -368,6 +371,40 @@ class LibraryScreenTest {
         show()
 
         composeRule.onNodeWithTag(VaultTestTags.MINI_PLAYER).assertDoesNotExist()
+    }
+
+    // --- continue listening --------------------------------------------------------------------------
+
+    @Test
+    fun `books started show above the list, under continue listening, and play when tapped`() {
+        show(defaults.copy(continueListening = listOf(dune)))
+
+        composeRule.onNodeWithText(string(R.string.continue_listening)).assertExists()
+        composeRule.onNodeWithTag(
+            VaultTestTags.CONTINUE_LISTENING,
+        ).onChildren().filterToOne(hasText("Dune")).performClick()
+
+        events shouldBe listOf("open Dune")
+    }
+
+    @Test
+    fun `with nothing started there's no continue listening`() {
+        show()
+
+        composeRule.onNodeWithText(string(R.string.continue_listening)).assertDoesNotExist()
+    }
+
+    // --- finished -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finished only says whether it's on, and switches`() {
+        show(defaults.copy(finishedOnly = true))
+
+        openMenu()
+        composeRule.onNodeWithText(string(R.string.filter_finished_only)).assertIsOn()
+        composeRule.onNodeWithText(string(R.string.filter_finished_only)).performClick()
+
+        events shouldBe listOf("finishedOnly false")
     }
 
     private companion object {

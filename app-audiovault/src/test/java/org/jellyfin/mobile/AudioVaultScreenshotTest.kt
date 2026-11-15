@@ -10,6 +10,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.common.ui.theme.AppTheme
@@ -88,6 +89,24 @@ class AudioVaultScreenshotTest {
             every { showHiddenItems } returns MutableStateFlow(false)
             every { filterQuery } returns MutableStateFlow("")
             every { folderId } returns MutableStateFlow(null)
+            every { showFinishedOnly } returns MutableStateFlow(false)
+            every { continueListening } returns MutableStateFlow(
+                listOf("Project Hail Mary" to 62f, "Braiding Sweetgrass" to 18f, "Caste" to 4f).map { (name, played) ->
+                    LibraryItem.AudiobookBundle(
+                        id = UUID.nameUUIDFromBytes(name.toByteArray()),
+                        displayName = name,
+                        description = "",
+                        imageItemId = UUID.nameUUIDFromBytes(name.toByteArray()),
+                        imageTag = null,
+                        runTimeTicks = null,
+                        progressPercent = played,
+                        trackIds = emptyList(),
+                        isBundle = false,
+                        parentFolderId = null,
+                    )
+                },
+            )
+            every { finishFailures } returns emptyFlow()
         }
         // A relaxed ApiClient's cached-API lookup returns the wrong type; covers come from a real ImageApi
         mockkStatic(API_CLIENT_EXTENSIONS)

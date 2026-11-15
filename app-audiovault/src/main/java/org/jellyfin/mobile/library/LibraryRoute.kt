@@ -1,6 +1,7 @@
 package org.jellyfin.mobile.library
 
 import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +73,7 @@ fun LibraryRoute(
             onQueryChange = viewModel::setFilterQuery,
             onSort = viewModel::setSortOption,
             onDownloadedOnly = { viewModel.showDownloadedOnly.value = it },
+            onFinishedOnly = { viewModel.showFinishedOnly.value = it },
             onShowHidden = { viewModel.showHiddenItems.value = it },
             onSettings = { openSettings() },
             onRefresh = { viewModel.refresh(force = true) },
@@ -83,6 +85,11 @@ fun LibraryRoute(
             onStop = playerViewModel::stop,
             coverUrl = cover,
         )
+    }
+    LaunchedEffect(viewModel, context) {
+        viewModel.finishFailures.collect {
+            Toast.makeText(context, R.string.mark_finished_failed, Toast.LENGTH_LONG).show()
+        }
     }
     LibraryScreen(state = libraryState(viewModel, playerViewModel, canGoUp, itemMenu, cover), actions = actions)
 }
@@ -105,6 +112,8 @@ private fun libraryState(
     val hiddenIds by viewModel.hiddenIds.collectAsState()
     val sort by viewModel.sortOption.collectAsState()
     val downloadedOnly by viewModel.showDownloadedOnly.collectAsState()
+    val finishedOnly by viewModel.showFinishedOnly.collectAsState()
+    val continueListening by viewModel.continueListening.collectAsState()
     val showHidden by viewModel.showHiddenItems.collectAsState()
     // The ViewModel's, so it outlives a rotation and empties when a folder change clears it
     val query by viewModel.filterQuery.collectAsState()
@@ -122,7 +131,9 @@ private fun libraryState(
         query = query,
         sort = sort,
         downloadedOnly = downloadedOnly,
+        finishedOnly = finishedOnly,
         showHidden = showHidden,
+        continueListening = continueListening,
         itemMenu = itemMenu,
         nowPlaying = playback.currentTrack?.let { track ->
             NowPlayingBar(track.title, track.id.toUUIDOrNull()?.let(coverUrl), playback.playWhenReady)
@@ -165,7 +176,7 @@ private class ItemOpener(
 
 /**
  * Holding an item: a folder opens; anything playable offers to download (or remove the download
- * of) its tracks, and to hide (or unhide) it.
+ * of) its tracks, to mark it finished (or not), and to hide (or unhide) it.
  */
 private class ItemMenus(
     private val context: Context,
@@ -177,17 +188,18 @@ private class ItemMenus(
     fun open(item: LibraryItem) {
         when (item) {
             is LibraryItem.BrowseFolder -> viewModel.openFolder(item.id, item.displayName)
-            is LibraryItem.AudioFile -> show(item.id, item.displayName, listOf(item.id))
-            is LibraryItem.AudiobookBundle -> show(item.id, item.displayName, item.trackIds)
+            is LibraryItem.AudioFile -> show(item, listOf(item.id))
+            is LibraryItem.AudiobookBundle -> show(item, item.trackIds)
             is LibraryItem.Album -> scope.launch {
                 val trackIds = viewModel.fetchAlbumQueue(item.id)?.ids
-                if (!trackIds.isNullOrEmpty()) show(item.id, item.displayName, trackIds)
+                if (!trackIds.isNullOrEmpty()) show(item, trackIds)
             }
         }
     }
 
-    /** A download toggle (only when [trackIds] isn't empty), then a hide toggle, which is always offered. */
-    private fun show(itemId: UUID, title: String, trackIds: List<UUID>) {
+    /** A download toggle and a finished toggle (only when [trackIds] isn't empty), then a hide toggle, always offered. */
+    private fun show(item: LibraryItem, trackIds: List<UUID>) {
+        val itemId = item.id
         val actions = buildList {
             if (trackIds.isNotEmpty()) {
                 val ids = trackIds.map(UUID::toString)
@@ -196,6 +208,14 @@ private class ItemMenus(
                 } else {
                     add(ItemAction(context.getString(R.string.download_action)) { downloads.download(ids) })
                 }
+                val finished = item.isFinished
+                add(
+                    ItemAction(
+                        context.getString(
+                            if (finished) R.string.mark_unfinished_action else R.string.mark_finished_action,
+                        ),
+                    ) { viewModel.setFinished(trackIds, finished = !finished) },
+                )
             }
             val isHidden = itemId.toString() in viewModel.hiddenIds.value
             add(
@@ -204,7 +224,7 @@ private class ItemMenus(
                 },
             )
         }
-        show(ItemMenu(title, actions))
+        show(ItemMenu(item.displayName, actions))
     }
 }
 

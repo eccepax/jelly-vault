@@ -3,6 +3,7 @@ package org.jellyfin.mobile.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ import org.jellyfin.mobile.player.source.LocalJellyfinMediaSource
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -55,11 +58,8 @@ class LibraryViewModel(
     private val hiddenItemDao: HiddenItemDao,
     /** A track's download, ready to play, or null if it isn't downloaded (see AudiobookDownloads.playable). */
     private val downloadedTrack: suspend (UUID) -> LocalJellyfinMediaSource?,
-    /**
-     * Sends the server listening saved only on the device (see OfflineListeningSync), so resume
-     * points and progress reflect it. Gives up quietly when the server can't be reached.
-     */
-    private val syncListening: suspend () -> Unit,
+    /** Getting listening reported elsewhere to the server before progress is loaded from it. */
+    private val listening: ListeningUpdates,
     /** Tracks whose download waits for Wi-Fi (see AudiobookDownloads.waitingIds). */
     private val waitingTrackIds: Flow<Set<String>> = flowOf(emptySet()),
 ) : ViewModel() {
@@ -77,6 +77,9 @@ class LibraryViewModel(
     val waitingIds: StateFlow<Set<String>> =
         waitingTrackIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
+    /** Only the books listened to the end (see [LibraryItem.isFinished]). */
+    val showFinishedOnly = MutableStateFlow(false)
+
     /** When false (default), items hidden via [toggleHidden] are excluded from [items]. */
     val showHiddenItems = MutableStateFlow(false)
     private val _hiddenIds = MutableStateFlow<Set<String>>(emptySet())
@@ -87,8 +90,9 @@ class LibraryViewModel(
         _downloadedIds,
         showHiddenItems,
         _hiddenIds,
-    ) { downloadedOnly, downloadedIds, showHidden, hiddenIds ->
-        LibraryFilterState(downloadedOnly, downloadedIds, showHidden, hiddenIds)
+        showFinishedOnly,
+    ) { downloadedOnly, downloadedIds, showHidden, hiddenIds, finishedOnly ->
+        LibraryFilterState(downloadedOnly, downloadedIds, showHidden, hiddenIds, finishedOnly)
     }
 
     val items: StateFlow<List<LibraryItem>> = combine(
@@ -123,8 +127,33 @@ class LibraryViewModel(
     // Track setting at last load to detect changes on resume
     private var lastGlobalFlattenState: Boolean = appPreferences.libraryGlobalFlattened
 
+    /** The whole library's books, as last shown (kept while it reloads); empty browsing by folder. */
+    private val shownFlatEntries = MutableStateFlow<List<AudiobookEntryEntity>>(emptyList())
+
     // In-memory flat list cache; avoids re-fetching on sort option change
     private var cachedFlatEntries: List<AudiobookEntryEntity>? = null
+        set(value) {
+            field = value
+            if (value != null) shownFlatEntries.value = value
+        }
+
+    /**
+     * The books to carry on with (see [continueListening]), above the whole library's list. None
+     * while searching or filtering, where the list is just what was asked for.
+     */
+    val continueListening: StateFlow<List<LibraryItem.AudiobookBundle>> = combine(
+        shownFlatEntries,
+        _filterQuery,
+        filterState,
+    ) { entries, query, filter ->
+        val narrowed = query.isNotBlank() || filter.downloadedOnly || filter.finishedOnly
+        if (narrowed) emptyList() else continueListening(entries, filter.hiddenIds)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _finishFailures = Channel<Unit>(Channel.BUFFERED)
+
+    /** A book couldn't be marked finished (or not): the server couldn't be reached. */
+    val finishFailures: Flow<Unit> = _finishFailures.receiveAsFlow()
 
     fun setFilterQuery(query: String) {
         _filterQuery.update { query }
@@ -142,7 +171,7 @@ class LibraryViewModel(
      * a resume position fetched from Jellyfin for the clicked track.
      */
     suspend fun getAudioQueueWithResume(clickedId: UUID): AudioQueue {
-        syncListening()
+        listening.sendSavedOnDevice()
         val audioItems = _rawItems.value.filterIsInstance<LibraryItem.AudioFile>()
         val audioIds = if (audioItems.isEmpty()) listOf(clickedId) else audioItems.map { it.id }
         val audioNames = if (audioItems.isEmpty()) listOf("Unknown") else audioItems.map { it.displayName }
@@ -167,14 +196,17 @@ class LibraryViewModel(
         }
     }
 
-    /** Called by LibraryFragment when the player stops, to refresh stale progress data. */
+    /** A book stopped: the list loads again once where it got to has been reported, to show it. */
     fun onPlaybackStopped() {
-        cachedFlatEntries = null
-        if (appPreferences.libraryGlobalFlattened) {
-            loadGlobalFlat(forceRefresh = true)
-        } else {
-            val current = folderStack.lastOrNull()
-            if (current != null) loadChildren(current.first, current.second)
+        viewModelScope.launch {
+            listening.stoppedBookReported()
+            cachedFlatEntries = null
+            if (appPreferences.libraryGlobalFlattened) {
+                loadGlobalFlat(forceRefresh = true)
+            } else {
+                val current = folderStack.lastOrNull()
+                if (current != null) loadChildren(current.first, current.second)
+            }
         }
     }
 
@@ -199,6 +231,31 @@ class LibraryViewModel(
             } else {
                 hiddenItemDao.insert(HiddenItemEntity(key))
             }
+        }
+    }
+
+    /**
+     * Marks the book of [trackIds] finished, every track played, or not finished, every track
+     * unplayed (so it starts over), then shows the library again with it.
+     */
+    fun setFinished(trackIds: List<UUID>, finished: Boolean) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    trackIds.forEach { id ->
+                        if (finished) {
+                            apiClient.playStateApi.markPlayedItem(itemId = id)
+                        } else {
+                            apiClient.playStateApi.markUnplayedItem(itemId = id)
+                        }
+                    }
+                }
+            } catch (e: ApiClientException) {
+                Timber.w(e, "Couldn't mark a book %s", if (finished) "finished" else "not finished")
+                _finishFailures.send(Unit)
+                return@launch
+            }
+            refresh(force = true)
         }
     }
 
@@ -229,7 +286,7 @@ class LibraryViewModel(
     suspend fun fetchAlbumQueue(albumId: UUID): AudioQueue? {
         _isLoading.update { true }
         return try {
-            syncListening()
+            listening.sendSavedOnDevice()
             albumQueue(albumId)
         } catch (e: ApiClientException) {
             Timber.e(e, "Failed to fetch album tracks for $albumId")
@@ -271,7 +328,7 @@ class LibraryViewModel(
      *   (see [offlineQueue]).
      */
     suspend fun fetchBundleQueue(bundle: LibraryItem.AudiobookBundle): AudioQueue? {
-        syncListening()
+        listening.sendSavedOnDevice()
         if (!bundle.isBundle || bundle.trackIds.size == 1) {
             val trackId = bundle.trackIds.firstOrNull() ?: return null
             val startPosition = fetchSingleTrackPosition(trackId)
@@ -346,6 +403,7 @@ class LibraryViewModel(
             return
         }
 
+        shownFlatEntries.value = emptyList()
         viewModelScope.launch {
             _isLoading.update { true }
             _error.update { null }
@@ -453,7 +511,7 @@ class LibraryViewModel(
 
     /** Fetches every [CollectionType.BOOKS] library's audio files, flattens, and persists them. */
     private suspend fun refreshGlobalFlatFromServer(userId: UUID, serverId: Long?) {
-        syncListening()
+        listening.sendSavedOnDevice()
         val views = withContext(Dispatchers.IO) {
             apiClient.userViewsApi.getUserViews(userId = userId, includeHidden = false).content
         }.items.orEmpty()
@@ -618,12 +676,13 @@ class LibraryViewModel(
     }
 }
 
-/** Bundles the download/hidden filter inputs so [LibraryViewModel.items] only needs a 3-way combine. */
+/** Bundles the download/hidden/finished filter inputs so [LibraryViewModel.items] only needs a 3-way combine. */
 internal data class LibraryFilterState(
     val downloadedOnly: Boolean,
     val downloadedIds: Set<String>,
     val showHidden: Boolean,
     val hiddenIds: Set<String>,
+    val finishedOnly: Boolean = false,
 )
 
 /**
@@ -656,6 +715,7 @@ internal fun filterLibraryItems(
         }
     }
     .filter { item -> filter.showHidden || item.id.toString() !in filter.hiddenIds }
+    .filter { item -> !filter.finishedOnly || item.isFinished }
 
 // ---------------------------------------------------------------------------
 // Entity → LibraryItem helpers
@@ -698,3 +758,17 @@ internal fun AudiobookEntryEntity.toLibraryItem(): LibraryItem.AudiobookBundle {
         parentFolderId = folderUUID,
     )
 }
+
+/** The library's view of listening reported elsewhere, which progress loaded from the server depends on. */
+class ListeningUpdates(
+    /**
+     * Sends the server listening saved only on the device (see OfflineListeningSync), so resume
+     * points and progress reflect it. Gives up quietly when the server can't be reached.
+     */
+    val sendSavedOnDevice: suspend () -> Unit,
+    /**
+     * Waits until a book that stopped has had where it got to reported (see
+     * AudiobookProgressReporter.listeningReported), so the library loaded next shows it.
+     */
+    val stoppedBookReported: suspend () -> Unit = {},
+)
