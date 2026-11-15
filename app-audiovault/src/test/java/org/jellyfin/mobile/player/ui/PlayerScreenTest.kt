@@ -50,6 +50,7 @@ class PlayerScreenTest {
         onSleepTimer = { events += "sleepTimer $it" },
         onTrack = { events += "track $it" },
         onSkipSegment = { events += "skipSegment" },
+        onPlayNextInSeries = { events += "playNext" },
     )
 
     private val playing = PlayerUiState(
@@ -69,6 +70,26 @@ class PlayerScreenTest {
 
     private fun openMenu() =
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+
+    @Test
+    fun `once a book of a series ends, the next one is offered, and plays when asked`() {
+        show(playing.copy(isPlaying = false, nextInSeries = "HP2 - The Chamber of Secrets"))
+
+        composeRule.onNodeWithText(
+            ApplicationProvider.getApplicationContext<Application>()
+                .getString(R.string.next_in_series, "HP2 - The Chamber of Secrets"),
+        ).assertExists()
+        composeRule.onNodeWithText(string(R.string.play_next_in_series)).performClick()
+
+        events shouldBe listOf("playNext")
+    }
+
+    @Test
+    fun `with no next book there's no offer`() {
+        show()
+
+        composeRule.onNodeWithText(string(R.string.play_next_in_series)).assertDoesNotExist()
+    }
 
     @Test
     fun `while casting, it says which device the book is playing on, and offers to stop`() {

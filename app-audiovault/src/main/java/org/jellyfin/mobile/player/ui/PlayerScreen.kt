@@ -30,6 +30,7 @@ import androidx.compose.material.Slider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
@@ -97,6 +98,8 @@ data class PlayerUiState(
     val playbackInfo: String = "",
     /** Whether a skippable segment (an intro, an outro) is playing. */
     val skipSegment: Boolean = false,
+    /** Once a book of a series has ended, the next one's title, offered to play; null otherwise. */
+    val nextInSeries: String? = null,
 )
 
 /** How long the sleep timer can run for. */
@@ -129,6 +132,7 @@ data class PlayerActions(
     val onSleepTimer: (SleepTimerChoice) -> Unit = {},
     val onTrack: (Int) -> Unit = {},
     val onSkipSegment: () -> Unit = {},
+    val onPlayNextInSeries: () -> Unit = {},
 )
 
 /** Test tags for the player's parts that are read rather than tapped. */
@@ -185,6 +189,7 @@ fun PlayerScreen(
                     .padding(horizontal = VaultSpacing.XLarge, vertical = VaultSpacing.Large)
                     .basicMarquee(),
             )
+            state.nextInSeries?.let { NextInSeries(it, actions.onPlayNextInSeries) }
             ChapterSeekBar(state, actions.onSeek)
             PlayerControls(state, actions)
             PlayingOnLabel(
@@ -207,6 +212,23 @@ fun PlayerScreen(
         SleepTimerDialog(state.sleepTimerActive, actions.onSleepTimer) { choosingSleepTimer = false }
     }
     if (choosingTrack) TracklistDialog(state, actions.onTrack) { choosingTrack = false }
+}
+
+/** The next book of the series the one that ended is in, and a button to play it. */
+@Composable
+private fun NextInSeries(title: String, onPlay: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = VaultSpacing.XLarge),
+    ) {
+        Text(
+            text = stringResource(R.string.next_in_series, title),
+            style = MaterialTheme.typography.body2,
+            maxLines = 2,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onPlay) { Text(stringResource(R.string.play_next_in_series)) }
+    }
 }
 
 /** The cover, with what goes over it: buffering progress, playback info, and the skip button. */

@@ -60,6 +60,7 @@ fun PlayerRoute(
     val speed by viewModel.speed.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
+    val nextInSeries by viewModel.nextInSeries.collectAsState()
     val castDevice by casting.castDevice.collectAsState()
     val connectingTo by casting.connectingTo.collectAsState()
     val progress = rememberProgress(viewModel)
@@ -85,23 +86,11 @@ fun PlayerRoute(
         holdToSpeedUp = holdToSpeedUp,
         sleepTimerActive = sleepTimer != SleepTimerState.Off,
         skipSegment = skipSegment != null,
+        nextInSeries = nextInSeries?.title,
     )
     PlayerScreen(
         state,
-        PlayerActions(
-            onBack = leave,
-            onPlayPause = viewModel::togglePlayPause,
-            onRewind = viewModel::rewind,
-            onFastForward = viewModel::fastForward,
-            onHoldSpeedUp = viewModel::holdSpeedUp,
-            onPreviousChapter = viewModel::previousChapter,
-            onNextChapter = viewModel::nextChapter,
-            onSeek = viewModel::seekTo,
-            onSpeed = viewModel::setSpeed,
-            onSleepTimer = { choice -> chooseSleepTimer(context, viewModel, choice) },
-            onTrack = viewModel::skipToTrack,
-            onSkipSegment = viewModel::skipOfferedSegment,
-        ),
+        playerActions(viewModel, leave) { choice -> chooseSleepTimer(context, viewModel, choice) },
         castDevice = castDevice,
         connectingTo = connectingTo,
         onStopCasting = casting::stopCasting,
@@ -227,6 +216,27 @@ internal fun playerUiState(
         playbackInfo = playbackInfo,
     )
 }
+
+/** What the player screen's controls do, through [viewModel]. */
+private fun playerActions(
+    viewModel: AudiobookPlayerViewModel,
+    leave: () -> Unit,
+    onSleepTimer: (SleepTimerChoice) -> Unit,
+) = PlayerActions(
+    onBack = leave,
+    onPlayPause = viewModel::togglePlayPause,
+    onRewind = viewModel::rewind,
+    onFastForward = viewModel::fastForward,
+    onHoldSpeedUp = viewModel::holdSpeedUp,
+    onPreviousChapter = viewModel::previousChapter,
+    onNextChapter = viewModel::nextChapter,
+    onSeek = viewModel::seekTo,
+    onSpeed = viewModel::setSpeed,
+    onSleepTimer = onSleepTimer,
+    onTrack = viewModel::skipToTrack,
+    onSkipSegment = viewModel::skipOfferedSegment,
+    onPlayNextInSeries = viewModel::playNextInSeries,
+)
 
 private fun chooseSleepTimer(context: Context, viewModel: AudiobookPlayerViewModel, choice: SleepTimerChoice) {
     when (choice) {
