@@ -458,11 +458,22 @@ class AudiobookPlayerViewModelTest {
     @Test
     fun `choosing the same speed again does nothing`() = runTest {
         val viewModel = viewModel()
+        controller.state.value = controller.state.value.copy(speed = 1.25f)
 
         viewModel.setSpeed(1.25f)
 
         controller.commands shouldBe emptyList()
         verify(exactly = 0) { preferences.playbackSpeed = any() }
+    }
+
+    @Test
+    fun `choosing the speed shown again sends it when the player isn't playing at it (a cast device dropped it)`() = runTest {
+        val viewModel = viewModel()
+        controller.state.value = controller.state.value.copy(speed = 1f)
+
+        viewModel.setSpeed(1.25f)
+
+        controller.commands shouldBe listOf("speed 1.25")
     }
 
     @Test

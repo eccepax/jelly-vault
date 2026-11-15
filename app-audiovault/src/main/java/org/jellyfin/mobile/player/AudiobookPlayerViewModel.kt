@@ -281,7 +281,8 @@ class AudiobookPlayerViewModel(
 
     /** Plays at [speed], chosen for the book loaded (and where books with none of their own start). */
     fun setSpeed(speed: Float) {
-        if (speed == _speed.value) return
+        // Again, unless the player isn't playing at it: a cast device drops a speed sent while it loads
+        if (speed == _speed.value && playback.state.value.speed == speed) return
         _speed.value = speed
         val book = bookPlaying
         if (book != null) preferences.setSpeedFor(book, speed) else preferences.playbackSpeed = speed
