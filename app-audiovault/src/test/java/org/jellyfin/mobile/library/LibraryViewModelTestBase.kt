@@ -91,6 +91,7 @@ abstract class LibraryViewModelTestBase {
         every { appPreferences.libraryGlobalFlattened } returns false
 
         every { hiddenItemDao.getAll() } returns flowOf(emptyList())
+        every { audiobookEntryDao.separateBooks() } returns flowOf(emptyList())
 
         stubItems(emptyList())
         coEvery { userViewsApi.getUserViews(userId = any(), includeHidden = any()) } returns queryResult(emptyList())

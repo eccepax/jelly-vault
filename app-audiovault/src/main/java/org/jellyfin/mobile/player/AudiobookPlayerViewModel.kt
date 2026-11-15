@@ -9,10 +9,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.mobile.app.AudioVaultAppPreferences
 import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.library.NextBook
 import org.jellyfin.mobile.player.interaction.PlayOptions
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackController
 import org.jellyfin.mobile.player.playback.AudiobookPlaybackState
@@ -40,6 +43,8 @@ class AudiobookPlayerViewModel(
     private val sleepTimerEngine: SleepTimer,
     private val segments: MediaSegmentSkipper,
     private val preferences: AudioVaultAppPreferences,
+    /** The book after the one a track is in, when that's a book of a series (see library.nextInSeries). */
+    private val findNextInSeries: suspend (trackId: String) -> NextBook? = { null },
 ) : ViewModel() {
 
     val state: StateFlow<AudiobookPlaybackState> = playback.state
@@ -157,6 +162,35 @@ class AudiobookPlayerViewModel(
     private fun nextRequest(): Int {
         while (_startFailures.tryReceive().isSuccess) Unit
         return ++request
+    }
+
+    private val _nextInSeries = MutableStateFlow<NextBook?>(null)
+
+    /** Once a book of a series has played to its end, the next one, to offer; null otherwise. */
+    val nextInSeries: StateFlow<NextBook?> = _nextInSeries.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            playback.state.map { state -> state.currentTrack?.id?.takeIf { state.isEnded } }
+                .distinctUntilChanged()
+                .collectLatest { ended -> _nextInSeries.value = ended?.let { findNextInSeries(it) } }
+        }
+    }
+
+    /** Plays the book offered as next in its series, from where it was left. */
+    fun playNextInSeries() {
+        val next = _nextInSeries.value ?: return
+        _nextInSeries.value = null
+        play(
+            PlayOptions(
+                ids = next.trackIds,
+                mediaSourceId = null,
+                startIndex = 0,
+                startPosition = null,
+                playFromDownloads = false,
+                trackNames = listOf(next.title),
+            ),
+        )
     }
 
     fun togglePlayPause() = playback.togglePlayPause()

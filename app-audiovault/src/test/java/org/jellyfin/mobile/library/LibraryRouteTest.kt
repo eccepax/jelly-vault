@@ -99,6 +99,8 @@ class LibraryRouteTest {
         every { libraryViewModel.showFinishedOnly } returns MutableStateFlow(false)
         every { libraryViewModel.continueListening } returns MutableStateFlow(emptyList())
         every { libraryViewModel.finishFailures } returns finishFailures.receiveAsFlow()
+        every { libraryViewModel.groupBy } returns MutableStateFlow(GroupBy.NONE)
+        every { libraryViewModel.canGroup } returns MutableStateFlow(true)
     }
 
     @Composable
@@ -278,6 +280,68 @@ class LibraryRouteTest {
         composeRule.waitForIdle()
 
         ShadowToast.getTextOfLatestToast() shouldBe string(R.string.mark_finished_failed)
+    }
+
+    private fun bundle(name: String, trackIds: List<UUID>, entryId: String = "B:$name", seriesKey: String? = null) =
+        LibraryItem.AudiobookBundle(
+            id = UUID.randomUUID(), displayName = name, description = "", imageItemId = null, imageTag = null,
+            runTimeTicks = null, progressPercent = null, trackIds = trackIds, isBundle = trackIds.size > 1,
+            parentFolderId = null, entryId = entryId, seriesKey = seriesKey,
+        )
+
+    @Test
+    fun `tapping a group opens it, and so does holding it`() {
+        itemsFlow.value = listOf(LibraryItem.Group(UUID.randomUUID(), "Isabel Wilkerson", count = 2, imageItemId = null))
+        show()
+
+        composeRule.onNodeWithText("Isabel Wilkerson").performClick()
+        holdDown("Isabel Wilkerson")
+
+        verify(exactly = 2) { libraryViewModel.openGroup("Isabel Wilkerson") }
+    }
+
+    @Test
+    fun `choosing how to group goes to the library`() {
+        show()
+
+        composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+        composeRule.onNodeWithText(string(R.string.library_group_by)).performClick()
+        composeRule.onNodeWithText(string(R.string.library_group_author)).performClick()
+
+        verify { libraryViewModel.setGroupBy(GroupBy.AUTHOR) }
+    }
+
+    @Test
+    fun `holding a book of several files offers to show it as separate books`() {
+        itemsFlow.value = listOf(bundle("Harry Potter", listOf(UUID.randomUUID(), UUID.randomUUID()), entryId = "B:hp"))
+        show()
+
+        holdDown("Harry Potter")
+        composeRule.onNodeWithText(string(R.string.show_as_one_book)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.show_as_separate_books)).performClick()
+
+        verify { libraryViewModel.showAsSeparateBooks("B:hp") }
+    }
+
+    @Test
+    fun `holding a book of one file doesn't offer separate books`() {
+        itemsFlow.value = listOf(bundle("Caste", listOf(UUID.randomUUID())))
+        show()
+
+        holdDown("Caste")
+
+        composeRule.onNodeWithText(string(R.string.show_as_separate_books)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `holding a book of a series offers to show the series as one book again`() {
+        itemsFlow.value = listOf(bundle("HP1", listOf(UUID.randomUUID()), seriesKey = "B:hp"))
+        show()
+
+        holdDown("HP1")
+        composeRule.onNodeWithText(string(R.string.show_as_one_book)).performClick()
+
+        verify { libraryViewModel.showAsOneBook("B:hp") }
     }
 
     @Test

@@ -4,6 +4,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.UserItemDataDto
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -106,5 +107,22 @@ class LibraryItemTest {
     @Test
     fun `a folder is never finished`() {
         LibraryItem.from(dto(BaseItemKind.COLLECTION_FOLDER, isFolder = true, played = true)).isFinished shouldBe false
+    }
+
+    @Test
+    fun `a book or album's author is its writer (the artist), not the narrator (the album artist)`() {
+        fun narrated(type: BaseItemKind) = BaseItemDto(
+            id = UUID.randomUUID(),
+            type = type,
+            albumArtist = "Stephen Fry",
+            artists = listOf("J.K. Rowling"),
+        )
+        LibraryItem.from(narrated(BaseItemKind.AUDIO_BOOK)).description shouldBe "J.K. Rowling"
+        LibraryItem.from(narrated(BaseItemKind.MUSIC_ALBUM)).description shouldBe "J.K. Rowling"
+    }
+
+    @Test
+    fun `sorting by author sorts by writer`() {
+        SortOption.AUTHOR.sortBy shouldBe ItemSortBy.ARTIST
     }
 }

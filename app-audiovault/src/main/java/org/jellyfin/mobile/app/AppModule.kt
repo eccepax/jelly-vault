@@ -29,6 +29,7 @@ import org.jellyfin.mobile.common.app.AppPreferences
 import org.jellyfin.mobile.common.downloads.DownloadAwareDataSource
 import org.jellyfin.mobile.common.downloads.ItemDownloads
 import org.jellyfin.mobile.common.playback.SleepTimer
+import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.downloads.AudiobookDownloads
@@ -38,6 +39,7 @@ import org.jellyfin.mobile.downloads.audioItemIdOf
 import org.jellyfin.mobile.library.LibraryViewModel
 import org.jellyfin.mobile.library.ListeningUpdates
 import org.jellyfin.mobile.library.jellyfinCoverUrl
+import org.jellyfin.mobile.library.nextInSeries
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
@@ -98,7 +100,13 @@ val applicationModule = module {
             downloads.waitingIds,
         )
     }
-    viewModel { AudiobookPlayerViewModel(get(), get(), get(), get(), get()) }
+    viewModel {
+        val entries = get<AudiobookEntryDao>()
+        val preferences = get<AudioVaultAppPreferences>()
+        AudiobookPlayerViewModel(get(), get(), get(), get(), preferences) { trackId ->
+            preferences.currentServerId?.let { server -> nextInSeries(entries.getAll(server), trackId) }
+        }
+    }
     viewModel {
         val signOut = get<SignOut>()
         SettingsViewModel(get(), get(), get(), signOut = { signOut() }, app = get())

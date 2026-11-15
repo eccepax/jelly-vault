@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
@@ -55,8 +56,6 @@ import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.ScrollToTopOnChange
 import org.jellyfin.mobile.common.ui.VaultTestTags
-import org.jellyfin.mobile.common.ui.components.Choice
-import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.CoverArt
 import org.jellyfin.mobile.common.ui.components.DownloadedMark
 import org.jellyfin.mobile.common.ui.components.EmptyState
@@ -91,6 +90,9 @@ data class LibraryUiState(
     val hiddenIds: Set<String> = emptySet(),
     val query: String = "",
     val sort: SortOption = SortOption.TITLE,
+    /** How the books are grouped, offered only where they can be ([canGroup]: the whole library's). */
+    val groupBy: GroupBy = GroupBy.NONE,
+    val canGroup: Boolean = false,
     val downloadedOnly: Boolean = false,
     val finishedOnly: Boolean = false,
     val showHidden: Boolean = false,
@@ -114,6 +116,7 @@ data class LibraryActions(
     val onUp: () -> Unit = {},
     val onQueryChange: (String) -> Unit = {},
     val onSort: (SortOption) -> Unit = {},
+    val onGroupBy: (GroupBy) -> Unit = {},
     val onDownloadedOnly: (Boolean) -> Unit = {},
     val onFinishedOnly: (Boolean) -> Unit = {},
     val onShowHidden: (Boolean) -> Unit = {},
@@ -200,6 +203,7 @@ private fun LibraryTopBar(
 private fun LibraryMenu(state: LibraryUiState, actions: LibraryActions) {
     var open by remember { mutableStateOf(false) }
     var sorting by rememberSaveable { mutableStateOf(false) }
+    var grouping by rememberSaveable { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
@@ -229,22 +233,18 @@ private fun LibraryMenu(state: LibraryUiState, actions: LibraryActions) {
                     sorting = true
                 },
             ) { Text(stringResource(R.string.library_sort_by)) }
+            if (state.canGroup) {
+                DropdownMenuItem(
+                    onClick = {
+                        open = false
+                        grouping = true
+                    },
+                ) { Text(stringResource(R.string.library_group_by)) }
+            }
         }
     }
-    if (sorting) {
-        ChoiceDialog(
-            title = stringResource(R.string.library_sort_by),
-            choices = listOf(
-                Choice(SortOption.TITLE, stringResource(R.string.library_sort_title)),
-                Choice(SortOption.AUTHOR, stringResource(R.string.library_sort_author)),
-                Choice(SortOption.DATE_ADDED, stringResource(R.string.library_sort_date_added)),
-                Choice(SortOption.LAST_PLAYED, stringResource(R.string.library_sort_last_played)),
-            ),
-            selected = state.sort,
-            onSelect = actions.onSort,
-            onDismiss = { sorting = false },
-        )
-    }
+    if (sorting) SortDialog(state.sort, actions.onSort) { sorting = false }
+    if (grouping) GroupDialog(state.groupBy, actions.onGroupBy) { grouping = false }
 }
 
 /** A menu item that switches something on or off; the item is what toggles, so it says whether it's on. */
@@ -369,6 +369,10 @@ private fun ContinueListeningRow(books: List<LibraryItem>, actions: LibraryActio
 
 @Composable
 private fun LibraryRow(item: LibraryItem, download: RowDownload, hidden: Boolean, actions: LibraryActions) {
+    if (item is LibraryItem.Group) {
+        GroupRow(item, actions)
+        return
+    }
     val progress = item.progressPercent?.takeIf { it > 0f }
     val runtime = item.runTimeTicks?.let { ticks ->
         val length = formatRuntime(ticks)
@@ -400,6 +404,21 @@ private fun LibraryRow(item: LibraryItem, download: RowDownload, hidden: Boolean
             // Shown only with "show hidden items" on, so dimmed to read as hidden-but-visible
             .alpha(if (hidden) HIDDEN_ITEM_ALPHA else 1f)
             .combinedClickable(onClick = { actions.onOpen(item) }, onLongClick = { actions.onLongPress(item) }),
+    )
+}
+
+/** A group of books (an author's, a series'): its name, how many books, and its first book's cover. */
+@Composable
+private fun GroupRow(group: LibraryItem.Group, actions: LibraryActions) {
+    MediaListRow(
+        title = group.displayName.ifBlank { stringResource(R.string.unknown_author) },
+        subtitle = pluralStringResource(R.plurals.books_count, group.count, group.count),
+        cover = {
+            CoverArt(url = group.imageItemId?.let(actions.coverUrl), placeholder = Icons.Filled.Folder)
+        },
+        modifier = Modifier
+            .testTag(VaultTestTags.LIBRARY_ITEM)
+            .combinedClickable(onClick = { actions.onOpen(group) }, onLongClick = { actions.onLongPress(group) }),
     )
 }
 

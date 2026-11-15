@@ -21,6 +21,7 @@ import org.jellyfin.mobile.data.dao.HiddenItemDao
 import org.jellyfin.mobile.data.entity.AudiobookEntryEntity
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.data.entity.HiddenItemEntity
+import org.jellyfin.mobile.data.entity.SeparateBookEntity
 
 @Database(
     entities = [
@@ -29,10 +30,11 @@ import org.jellyfin.mobile.data.entity.HiddenItemEntity
         DownloadEntity::class,
         AudiobookEntryEntity::class,
         HiddenItemEntity::class,
+        SeparateBookEntity::class,
         DownloadGroupEntity::class,
         DownloadGroupItemEntity::class,
     ],
-    version = 8,
+    version = 9,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
@@ -40,6 +42,7 @@ import org.jellyfin.mobile.data.entity.HiddenItemEntity
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8, spec = JellyfinDatabase.SharedDownloads::class),
+        AutoMigration(from = 8, to = 9),
     ],
 )
 abstract class JellyfinDatabase : RoomDatabase() {

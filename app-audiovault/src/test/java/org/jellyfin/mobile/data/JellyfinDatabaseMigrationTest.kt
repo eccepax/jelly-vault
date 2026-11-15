@@ -70,6 +70,24 @@ class JellyfinDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `books gain a series, empty for the books already there`() {
+        appHelper.createDatabase(DB, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO audiobook_entries (id, server_id, parent_id, title, author, image_item_id, image_tag, " +
+                    "runtime_ticks, track_ids, is_bundle, date_added, last_played, played_percentage) " +
+                    "VALUES ('B:dir:book', 1, NULL, 'Book', NULL, NULL, NULL, 100, 't1,t2', 1, '', '', 40)",
+            )
+        }
+
+        appHelper.runMigrationsAndValidate(DB, 9, true).use { db ->
+            db.query("SELECT title, series, series_index, series_key FROM audiobook_entries").use {
+                it.moveToFirst()
+                listOf(it.getString(0), it.getString(1), it.isNull(2), it.getString(3)) shouldBe listOf("Book", null, true, null)
+            }
+        }
+    }
+
     private fun SQLiteConnection.count(table: String): Long =
         prepare("SELECT COUNT(*) FROM $table").use {
             it.step()

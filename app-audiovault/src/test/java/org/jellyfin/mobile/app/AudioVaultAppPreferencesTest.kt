@@ -130,6 +130,15 @@ class AudioVaultAppPreferencesTest {
     // --- librarySortOption / libraryGlobalFlattened / playbackSpeed ----------------------------
 
     @Test
+    fun `the library isn't grouped until it's asked to be, and remembers how`() {
+        preferences.libraryGroupBy shouldBe "NONE"
+
+        preferences.libraryGroupBy = "SERIES"
+
+        AudioVaultAppPreferences(context).libraryGroupBy shouldBe "SERIES"
+    }
+
+    @Test
     fun `librarySortOption defaults to TITLE and round-trips`() {
         preferences.librarySortOption shouldBe "TITLE"
 

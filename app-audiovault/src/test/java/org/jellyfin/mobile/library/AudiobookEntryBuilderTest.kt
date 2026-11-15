@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.library
 
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -183,12 +184,144 @@ class AudiobookEntryBuilderTest {
         entries.single().dateAdded shouldBe early.dateCreated.toString()
     }
 
+    // --- Author: the writer -----------------------------------------------------------------------
+
     @Test
-    fun `bundle author falls back from albumArtist to first artist`() {
-        val items = listOf(
-            item(path = "/books/Dir/a.m4b", album = "Book", albumArtist = null, artists = listOf("Narrator One")),
-            item(path = "/books/Dir/b.m4b", album = "Book"),
+    fun `a book's author is its writer (the artist), not the narrator (the album artist)`() {
+        val solo = item(
+            path = "/books/Caste/caste.m4b",
+            album = "Caste",
+            albumArtist = "Robin Miles",
+            artists = listOf("Isabel Wilkerson"),
         )
-        AudiobookEntryBuilder.build(items, serverId = 1L).single().author shouldBe "Narrator One"
+        val parts = listOf(
+            item(
+                path = "/books/Zinn/1.m4b",
+                album = "History",
+                albumArtist = "Narrator",
+                artists = listOf("Howard Zinn"),
+            ),
+            item(
+                path = "/books/Zinn/2.m4b",
+                album = "History",
+                albumArtist = "Narrator",
+                artists = listOf("Howard Zinn"),
+            ),
+        )
+
+        AudiobookEntryBuilder.build(listOf(solo) + parts, serverId = 1L).map { it.author } shouldContainExactlyInAnyOrder
+            listOf("Isabel Wilkerson", "Howard Zinn")
+    }
+
+    @Test
+    fun `without an artist the author falls back to the album artist`() {
+        val items = listOf(
+            item(path = "/books/Dir/a.m4b", album = "Book", albumArtist = "Someone"),
+            item(path = "/books/Dir/b.m4b", album = "Book", albumArtist = "Someone"),
+        )
+        AudiobookEntryBuilder.build(items, serverId = 1L).single().author shouldBe "Someone"
+    }
+
+    // --- Disc folders ----------------------------------------------------------------------------
+
+    @Test
+    fun `a book in disc folders, each with its own album tag, is one book named without the disc`() {
+        val items = listOf(
+            item(
+                name = "D2 T1",
+                path = "/books/Stevenson/Just Mercy (Disc 2)/01.mp3",
+                album = "Just Mercy (Disc 2)",
+                indexNumber = 1,
+            ),
+            item(
+                name = "D1 T2",
+                path = "/books/Stevenson/Just Mercy (Disc 1)/02.mp3",
+                album = "Just Mercy (Disc 1)",
+                indexNumber = 2,
+            ),
+            item(
+                name = "D1 T1",
+                path = "/books/Stevenson/Just Mercy (Disc 1)/01.mp3",
+                album = "Just Mercy (Disc 1)",
+                indexNumber = 1,
+            ),
+            item(
+                name = "D10 T1",
+                path = "/books/Stevenson/Just Mercy (Disc 10)/01.mp3",
+                album = "Just Mercy (Disc 10)",
+                indexNumber = 1,
+            ),
+        )
+
+        val book = AudiobookEntryBuilder.build(items, serverId = 1L).single()
+
+        book.title shouldBe "Just Mercy"
+        // Disc by disc, by number (10 after 2), then track by track
+        book.trackIds.split(",") shouldBe listOf("D1 T1", "D1 T2", "D2 T1", "D10 T1").map { name ->
+            items.first {
+                it.name == name
+            }.id.toString()
+        }
+    }
+
+    @Test
+    fun `disc folders are recognised however they're written`() {
+        listOf(
+            "Book - CD 1" to "Book - CD 2",
+            "Book Disc1" to "Book Disc2",
+            "Book [Disk 1]" to "Book [Disk 2]",
+        ).forEach { (one, two) ->
+            val items = listOf(
+                item(path = "/books/$one/01.mp3", album = one),
+                item(path = "/books/$two/01.mp3", album = two),
+            )
+            AudiobookEntryBuilder.build(items, serverId = 1L).map { it.title } shouldBe listOf("Book")
+        }
+    }
+
+    @Test
+    fun `books in different folders that only share a name stay apart`() {
+        val items = listOf(
+            item(path = "/books/A/Book (Disc 1)/01.mp3", album = "Book (Disc 1)"),
+            item(path = "/books/B/Book (Disc 2)/01.mp3", album = "Book (Disc 2)"),
+        )
+        AudiobookEntryBuilder.build(items, serverId = 1L) shouldHaveSize 2
+    }
+
+    // --- Shown as separate books (a series) ------------------------------------------------------
+
+    private val potter = listOf(3, 1, 2).map { n ->
+        item(
+            name = "HP$n",
+            path = "/books/Rowling/HP$n.m4b",
+            album = "Harry Potter (Stephen Fry)",
+            indexNumber = n,
+            artists = listOf("J.K. Rowling"),
+        )
+    }
+
+    @Test
+    fun `a book of several files is shown as separate books once asked, a series in the files' order`() {
+        val key = AudiobookEntryBuilder.build(potter, serverId = 1L).single().id
+
+        val books = AudiobookEntryBuilder.build(potter, serverId = 1L, separateBooks = setOf(key))
+
+        books.sortedBy { it.seriesIndex }.map { it.title } shouldBe listOf("HP1", "HP2", "HP3")
+        books.map { it.series }.distinct() shouldBe listOf("Harry Potter (Stephen Fry)")
+        books.map { it.seriesKey }.distinct() shouldBe listOf(key)
+        books.map { it.author }.distinct() shouldBe listOf("J.K. Rowling")
+        books.forEach { it.isBundle shouldBe false }
+    }
+
+    @Test
+    fun `books not asked to be separate stay one book, with no series`() {
+        val book = AudiobookEntryBuilder.build(
+            potter,
+            serverId = 1L,
+            separateBooks = setOf("B:something else"),
+        ).single()
+
+        book.series shouldBe null
+        book.seriesKey shouldBe null
     }
 }

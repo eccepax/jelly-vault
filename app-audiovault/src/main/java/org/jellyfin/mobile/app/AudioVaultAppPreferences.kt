@@ -49,6 +49,11 @@ class AudioVaultAppPreferences(context: Context) : AppPreferences(context) {
         get() = sharedPreferences.getString(Constants.PREF_LIBRARY_SORT_OPTION, null) ?: "TITLE"
         set(value) = sharedPreferences.edit { putString(Constants.PREF_LIBRARY_SORT_OPTION, value) }
 
+    /** How the whole library's books are grouped (a library.GroupBy name). */
+    var libraryGroupBy: String
+        get() = sharedPreferences.getString(Constants.PREF_LIBRARY_GROUP_BY, null) ?: "NONE"
+        set(value) = sharedPreferences.edit { putString(Constants.PREF_LIBRARY_GROUP_BY, value) }
+
     var libraryGlobalFlattened: Boolean
         get() = sharedPreferences.getBoolean(Constants.PREF_LIBRARY_GLOBAL_FLATTEN, true)
         set(value) = sharedPreferences.edit { putBoolean(Constants.PREF_LIBRARY_GLOBAL_FLATTEN, value) }
