@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.common.playback
 
+import android.Manifest
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -8,6 +9,7 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -73,7 +75,8 @@ class AccelerometerShakeSensor(context: Context) : ShakeSensor, SensorEventListe
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 }
 
-/** A short buzz, to say a shake was felt (the app needs the VIBRATE permission); nothing without a vibrator. */
+/** A short buzz, to say a shake was felt; nothing without a vibrator. */
+@RequiresPermission(Manifest.permission.VIBRATE)
 fun buzzOnce(context: Context) {
     val vibrator = context.getSystemService(Vibrator::class.java) ?: return
     vibrator.vibrate(VibrationEffect.createOneShot(BUZZ_MS, VibrationEffect.DEFAULT_AMPLITUDE))
