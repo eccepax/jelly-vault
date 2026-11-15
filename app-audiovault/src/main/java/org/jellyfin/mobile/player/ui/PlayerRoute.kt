@@ -24,6 +24,7 @@ import org.jellyfin.mobile.cast.CastButton
 import org.jellyfin.mobile.cast.Casting
 import org.jellyfin.mobile.cast.NoCasting
 import org.jellyfin.mobile.common.playback.SleepTimerState
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
 import org.jellyfin.mobile.player.AudiobookPlayerViewModel
 import org.jellyfin.mobile.player.PlayerException
 import org.jellyfin.mobile.player.PlayerPresence
@@ -61,6 +62,7 @@ fun PlayerRoute(
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val skipSegment by viewModel.skipSegment.collectAsState()
     val nextInSeries by viewModel.nextInSeries.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
     val castDevice by casting.castDevice.collectAsState()
     val connectingTo by casting.connectingTo.collectAsState()
     val progress = rememberProgress(viewModel)
@@ -87,6 +89,7 @@ fun PlayerRoute(
         sleepTimerActive = sleepTimer != SleepTimerState.Off,
         skipSegment = skipSegment != null,
         nextInSeries = nextInSeries?.title,
+        bookmarks = bookmarks.map { BookmarkUi(it.id, it.label, it.note, it.createdAt) },
     )
     PlayerScreen(
         state,
@@ -236,6 +239,10 @@ private fun playerActions(
     onTrack = viewModel::skipToTrack,
     onSkipSegment = viewModel::skipOfferedSegment,
     onPlayNextInSeries = viewModel::playNextInSeries,
+    onAddBookmark = viewModel::addBookmark,
+    onOpenBookmark = viewModel::openBookmark,
+    onDeleteBookmark = viewModel::deleteBookmark,
+    onEditBookmarkNote = viewModel::editBookmarkNote,
 )
 
 private fun chooseSleepTimer(context: Context, viewModel: AudiobookPlayerViewModel, choice: SleepTimerChoice) {

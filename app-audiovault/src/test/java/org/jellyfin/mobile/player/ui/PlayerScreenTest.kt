@@ -14,11 +14,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import io.kotest.matchers.shouldBe
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
 import org.jellyfin.mobile.common.ui.theme.AppTheme
 import org.jellyfin.mobile.common.ui.theme.VaultBrand
 import org.junit.Rule
@@ -51,6 +53,10 @@ class PlayerScreenTest {
         onTrack = { events += "track $it" },
         onSkipSegment = { events += "skipSegment" },
         onPlayNextInSeries = { events += "playNext" },
+        onAddBookmark = { events += "addBookmark $it" },
+        onOpenBookmark = { events += "openBookmark $it" },
+        onDeleteBookmark = { events += "deleteBookmark $it" },
+        onEditBookmarkNote = { id, note -> events += "note $id $note" },
     )
 
     private val playing = PlayerUiState(
@@ -70,6 +76,31 @@ class PlayerScreenTest {
 
     private fun openMenu() =
         composeRule.onNodeWithContentDescription(string(CommonR.string.vault_more_options)).performClick()
+
+    // --- Bookmarks ------------------------------------------------------------------------------------
+
+    @Test
+    fun `adding a bookmark asks for a note, then saves it`() {
+        show()
+
+        openMenu()
+        composeRule.onNodeWithText(string(CommonR.string.add_bookmark_action)).performClick()
+        composeRule.onNodeWithText(string(CommonR.string.add_bookmark_note_hint)).performTextInput("the twist")
+        composeRule.onNodeWithText(string(CommonR.string.bookmark_save)).performClick()
+
+        events shouldBe listOf("addBookmark the twist")
+    }
+
+    @Test
+    fun `the book's bookmarks are listed, and tapping one goes to it`() {
+        show(playing.copy(bookmarks = listOf(BookmarkUi(7L, "Two · 1:30", "twist", 0L))))
+
+        openMenu()
+        composeRule.onNodeWithText(string(CommonR.string.bookmarks_title)).performClick()
+        composeRule.onNodeWithText("Two · 1:30").performClick()
+
+        events shouldBe listOf("openBookmark 7")
+    }
 
     @Test
     fun `once a book of a series ends, the next one is offered, and plays when asked`() {

@@ -27,6 +27,7 @@ import org.jellyfin.mobile.common.playback.SleepTimer
 import org.jellyfin.mobile.common.server.JellyfinServerPositions
 import org.jellyfin.mobile.common.server.itemDownloadUrl
 import org.jellyfin.mobile.data.JellyfinDatabase
+import org.jellyfin.mobile.data.dao.AudiobookBookmarkDao
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
 import org.jellyfin.mobile.player.playback.AudiobookProgressReporter
@@ -150,6 +151,7 @@ val audioDownloadsModule = module {
             forgetDownloads = {
                 // Listening that couldn't be sent by now is the account's, not the next one's
                 downloads.forgetUnsentListening()
+                get<AudiobookBookmarkDao>().clear()
                 downloadsOnSignOut()
             },
         )

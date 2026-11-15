@@ -15,9 +15,11 @@ import org.jellyfin.mobile.common.data.entity.UserEntity
 import org.jellyfin.mobile.common.downloads.DownloadGroupDao
 import org.jellyfin.mobile.common.downloads.DownloadGroupEntity
 import org.jellyfin.mobile.common.downloads.DownloadGroupItemEntity
+import org.jellyfin.mobile.data.dao.AudiobookBookmarkDao
 import org.jellyfin.mobile.data.dao.AudiobookEntryDao
 import org.jellyfin.mobile.data.dao.DownloadDao
 import org.jellyfin.mobile.data.dao.HiddenItemDao
+import org.jellyfin.mobile.data.entity.AudiobookBookmarkEntity
 import org.jellyfin.mobile.data.entity.AudiobookEntryEntity
 import org.jellyfin.mobile.data.entity.DownloadEntity
 import org.jellyfin.mobile.data.entity.HiddenItemEntity
@@ -31,10 +33,11 @@ import org.jellyfin.mobile.data.entity.SeparateBookEntity
         AudiobookEntryEntity::class,
         HiddenItemEntity::class,
         SeparateBookEntity::class,
+        AudiobookBookmarkEntity::class,
         DownloadGroupEntity::class,
         DownloadGroupItemEntity::class,
     ],
-    version = 9,
+    version = 10,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
@@ -43,6 +46,7 @@ import org.jellyfin.mobile.data.entity.SeparateBookEntity
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8, spec = JellyfinDatabase.SharedDownloads::class),
         AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
     ],
 )
 abstract class JellyfinDatabase : RoomDatabase() {
@@ -51,6 +55,7 @@ abstract class JellyfinDatabase : RoomDatabase() {
     abstract val downloadDao: DownloadDao
     abstract val audiobookEntryDao: AudiobookEntryDao
     abstract val hiddenItemDao: HiddenItemDao
+    abstract val audiobookBookmarkDao: AudiobookBookmarkDao
     abstract val downloadGroupDao: DownloadGroupDao
 
     /**

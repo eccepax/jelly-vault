@@ -64,6 +64,9 @@ import androidx.compose.ui.unit.dp
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.cast.PlayingOnLabel
 import org.jellyfin.mobile.common.ui.VaultTestTags
+import org.jellyfin.mobile.common.ui.components.AddBookmarkDialog
+import org.jellyfin.mobile.common.ui.components.BookmarkUi
+import org.jellyfin.mobile.common.ui.components.BookmarksDialog
 import org.jellyfin.mobile.common.ui.components.Choice
 import org.jellyfin.mobile.common.ui.components.ChoiceDialog
 import org.jellyfin.mobile.common.ui.components.CoverArt
@@ -100,6 +103,8 @@ data class PlayerUiState(
     val skipSegment: Boolean = false,
     /** Once a book of a series has ended, the next one's title, offered to play; null otherwise. */
     val nextInSeries: String? = null,
+    /** The book's bookmarks, the newest first. */
+    val bookmarks: List<BookmarkUi> = emptyList(),
 )
 
 /** How long the sleep timer can run for. */
@@ -133,6 +138,11 @@ data class PlayerActions(
     val onTrack: (Int) -> Unit = {},
     val onSkipSegment: () -> Unit = {},
     val onPlayNextInSeries: () -> Unit = {},
+    /** Bookmarks the place playing, with a note (empty for none). */
+    val onAddBookmark: (note: String) -> Unit = {},
+    val onOpenBookmark: (id: Long) -> Unit = {},
+    val onDeleteBookmark: (id: Long) -> Unit = {},
+    val onEditBookmarkNote: (id: Long, note: String) -> Unit = { _, _ -> },
 )
 
 /** Test tags for the player's parts that are read rather than tapped. */
@@ -158,17 +168,14 @@ fun PlayerScreen(
     castButton: @Composable () -> Unit = {},
 ) {
     var showingInfo by rememberSaveable { mutableStateOf(false) }
-    var choosingSpeed by rememberSaveable { mutableStateOf(false) }
-    var choosingSleepTimer by rememberSaveable { mutableStateOf(false) }
-    var choosingTrack by rememberSaveable { mutableStateOf(false) }
+    var dialog by rememberSaveable { mutableStateOf<PlayerDialog?>(null) }
 
     Surface(color = MaterialTheme.colors.background, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.systemBarsPadding()) {
             PlayerTopBar(
                 state = state,
                 onBack = actions.onBack,
-                onSleepTimer = { choosingSleepTimer = true },
-                onTracklist = { choosingTrack = true },
+                onDialog = { dialog = it },
                 onPlaybackInfo = { showingInfo = !showingInfo },
                 castButton = castButton,
             )
@@ -202,16 +209,57 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = VaultSpacing.Large),
                 contentAlignment = Alignment.Center,
             ) {
-                OutlinedButton(onClick = { choosingSpeed = true }) { Text(speedLabel(state.speed)) }
+                OutlinedButton(onClick = { dialog = PlayerDialog.SPEED }) { Text(speedLabel(state.speed)) }
             }
         }
     }
 
-    if (choosingSpeed) SpeedDialog(state.speed, actions.onSpeed) { choosingSpeed = false }
-    if (choosingSleepTimer) {
-        SleepTimerDialog(state.sleepTimerActive, actions.onSleepTimer) { choosingSleepTimer = false }
+    dialog?.let { PlayerDialogs(it, state, actions) { dialog = null } }
+}
+
+/** The top bar's "more" menu: the tracklist (with more than one track), bookmarks, playback info. */
+@Composable
+private fun PlayerMenu(showTracklist: Boolean, onDialog: (PlayerDialog) -> Unit, onPlaybackInfo: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+
+    @Composable
+    fun item(label: String, onClick: () -> Unit) = DropdownMenuItem(
+        onClick = {
+            menuOpen = false
+            onClick()
+        },
+    ) { Text(label) }
+    Box {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (showTracklist) item(stringResource(R.string.player_tracklist)) { onDialog(PlayerDialog.TRACKS) }
+            item(stringResource(CommonR.string.add_bookmark_action)) { onDialog(PlayerDialog.ADD_BOOKMARK) }
+            item(stringResource(CommonR.string.bookmarks_title)) { onDialog(PlayerDialog.BOOKMARKS) }
+            item(stringResource(R.string.menu_playback_info), onPlaybackInfo)
+        }
     }
-    if (choosingTrack) TracklistDialog(state, actions.onTrack) { choosingTrack = false }
+}
+
+/** The player's dialogs, one open at a time. */
+private enum class PlayerDialog { SPEED, SLEEP_TIMER, TRACKS, ADD_BOOKMARK, BOOKMARKS }
+
+@Composable
+private fun PlayerDialogs(dialog: PlayerDialog, state: PlayerUiState, actions: PlayerActions, onDismiss: () -> Unit) {
+    when (dialog) {
+        PlayerDialog.SPEED -> SpeedDialog(state.speed, actions.onSpeed, onDismiss)
+        PlayerDialog.SLEEP_TIMER -> SleepTimerDialog(state.sleepTimerActive, actions.onSleepTimer, onDismiss)
+        PlayerDialog.TRACKS -> TracklistDialog(state, actions.onTrack, onDismiss)
+        PlayerDialog.ADD_BOOKMARK -> AddBookmarkDialog(onSave = actions.onAddBookmark, onDismiss = onDismiss)
+        PlayerDialog.BOOKMARKS -> BookmarksDialog(
+            bookmarks = state.bookmarks,
+            onOpen = actions.onOpenBookmark,
+            onDelete = actions.onDeleteBookmark,
+            onDismiss = onDismiss,
+            onEditNote = actions.onEditBookmarkNote,
+        )
+    }
 }
 
 /** The next book of the series the one that ended is in, and a button to play it. */
@@ -286,12 +334,10 @@ private fun TracklistDialog(state: PlayerUiState, onTrack: (Int) -> Unit, onDism
 private fun PlayerTopBar(
     state: PlayerUiState,
     onBack: () -> Unit,
-    onSleepTimer: () -> Unit,
-    onTracklist: () -> Unit,
+    onDialog: (PlayerDialog) -> Unit,
     onPlaybackInfo: () -> Unit,
     castButton: @Composable () -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     VaultTopBar(
         title = "",
         navigationIcon = {
@@ -304,7 +350,7 @@ private fun PlayerTopBar(
         },
         actions = {
             castButton()
-            IconButton(onClick = onSleepTimer) {
+            IconButton(onClick = { onDialog(PlayerDialog.SLEEP_TIMER) }) {
                 Icon(
                     Icons.Filled.Bedtime,
                     contentDescription = stringResource(R.string.menu_sleep_timer),
@@ -316,27 +362,7 @@ private fun PlayerTopBar(
                     },
                 )
             }
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(CommonR.string.vault_more_options))
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (state.tracks.size > 1) {
-                        DropdownMenuItem(
-                            onClick = {
-                                menuOpen = false
-                                onTracklist()
-                            },
-                        ) { Text(stringResource(R.string.player_tracklist)) }
-                    }
-                    DropdownMenuItem(
-                        onClick = {
-                            menuOpen = false
-                            onPlaybackInfo()
-                        },
-                    ) { Text(stringResource(R.string.menu_playback_info)) }
-                }
-            }
+            PlayerMenu(showTracklist = state.tracks.size > 1, onDialog = onDialog, onPlaybackInfo = onPlaybackInfo)
         },
     )
 }

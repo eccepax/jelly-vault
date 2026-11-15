@@ -67,4 +67,12 @@
     <string name="sleep_extend">+15 minutes</string>
     <string name="sleep_off">Turn off</string>
     <string name="sleeps_in">Sleeps in %1$s</string>
+    <string name="bookmarks_title">Bookmarks</string>
+    <string name="add_bookmark_title">Add bookmark</string>
+    <string name="add_bookmark_note_hint">Note (optional)</string>
+    <string name="add_bookmark_action">Add bookmark</string>
+    <string name="no_bookmarks_yet">No bookmarks yet</string>
+    <string name="bookmark_save">Save</string>
+    <string name="delete_bookmark">Delete bookmark %1$s</string>
+    <string name="edit_bookmark_note">Change the note of bookmark %1$s</string>
 </resources>

@@ -103,9 +103,17 @@ val applicationModule = module {
     viewModel {
         val entries = get<AudiobookEntryDao>()
         val preferences = get<AudioVaultAppPreferences>()
-        AudiobookPlayerViewModel(get(), get(), get(), get(), preferences) { trackId ->
-            preferences.currentServerId?.let { server -> nextInSeries(entries.getAll(server), trackId) }
-        }
+        AudiobookPlayerViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            preferences,
+            get(),
+            findNextInSeries = { trackId ->
+                preferences.currentServerId?.let { server -> nextInSeries(entries.getAll(server), trackId) }
+            },
+        )
     }
     viewModel {
         val signOut = get<SignOut>()
