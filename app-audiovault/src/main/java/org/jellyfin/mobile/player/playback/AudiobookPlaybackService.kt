@@ -35,6 +35,8 @@ import org.jellyfin.mobile.common.downloads.WakeModeFollowsTrack
 import org.jellyfin.mobile.common.downloads.wakeModeFor
 import org.jellyfin.mobile.player.forAudiobooks
 import org.jellyfin.mobile.player.session.withPlayableUri
+import org.jellyfin.mobile.widget.AudiobookWidget
+import org.jellyfin.mobile.widget.NowPlayingOnWidget
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -59,6 +61,7 @@ class AudiobookPlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private var exoPlayer: ExoPlayer? = null
     private var sessionCasting: SessionCasting? = null
+    private val widget by lazy { NowPlayingOnWidget(applicationContext, scope) }
 
     override fun onCreate() {
         super.onCreate()
@@ -83,7 +86,9 @@ class AudiobookPlaybackService : MediaSessionService() {
 
         // Transcode seeking is this device's: a cast device seeks in what it's sent itself
         val local = TranscodeSeekingPlayer(exoPlayer)
-        return MediaSession.Builder(this, AudiobookPlayer(local))
+        val player = AudiobookPlayer(local)
+        widget.follow(player, ::isSessionPlayer)
+        return MediaSession.Builder(this, player)
             .setCallback(AudiobookSessionCallback(exoPlayer, voiceSearch::bookFor, audiobooks::streamUrl, scope))
             .setMediaButtonPreferences(mediaButtons())
             .setSessionActivity(
@@ -102,7 +107,7 @@ class AudiobookPlaybackService : MediaSessionService() {
                     local,
                     casting,
                     // Chapters wherever it plays
-                    wrap = ::AudiobookPlayer,
+                    wrap = { cast -> AudiobookPlayer(cast).also { widget.follow(it, ::isSessionPlayer) } },
                     castStream = ::castStream,
                     // Only for an item with no track id: this device's stream may have restarted part way
                     castUri = { audiobooks.castUri(TranscodeSeekingPlayer.fromTrackStart(it)) },
@@ -167,7 +172,12 @@ class AudiobookPlaybackService : MediaSessionService() {
         }
     }
 
+    /** Whether [player] is the one the session plays on now (this device's, or a cast device's). */
+    private fun isSessionPlayer(player: Player): Boolean = session?.player === player
+
     override fun onDestroy() {
+        // The book is gone with the service: the widget says nothing plays (past this scope, ending here)
+        CoroutineScope(Dispatchers.Default).launch { AudiobookWidget.show(applicationContext, null) }
         scope.cancel()
         releaseSession()
         super.onDestroy()
