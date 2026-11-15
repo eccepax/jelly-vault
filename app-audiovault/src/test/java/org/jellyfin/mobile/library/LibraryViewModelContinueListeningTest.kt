@@ -108,8 +108,12 @@ class LibraryViewModelContinueListeningTest : LibraryViewModelTestBase() {
         viewModel.setFinished(tracks, finished = true)
         viewModel.awaitSettled()
 
-        tracks.forEach { coVerify { playStateApi.markPlayedItem(itemId = it, userId = any(), datePlayed = any()) } }
-        coVerify(atLeast = 2) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
+        tracks.forEach {
+            coVerify(
+                timeout = SETTLE_MS,
+            ) { playStateApi.markPlayedItem(itemId = it, userId = any(), datePlayed = any()) }
+        }
+        coVerify(atLeast = 2, timeout = SETTLE_MS) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
     }
 
     @Test
@@ -121,7 +125,7 @@ class LibraryViewModelContinueListeningTest : LibraryViewModelTestBase() {
         viewModel.setFinished(listOf(track), finished = false)
         viewModel.awaitSettled()
 
-        coVerify { playStateApi.markUnplayedItem(itemId = track, userId = any()) }
+        coVerify(timeout = SETTLE_MS) { playStateApi.markUnplayedItem(itemId = track, userId = any()) }
     }
 
     @Test
@@ -154,7 +158,11 @@ class LibraryViewModelContinueListeningTest : LibraryViewModelTestBase() {
         coVerify(exactly = 1) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
 
         reported.complete(Unit)
-        viewModel.awaitSettled()
-        coVerify(exactly = 2) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
+        coVerify(exactly = 2, timeout = SETTLE_MS) { userViewsApi.getUserViews(userId = any(), includeHidden = any()) }
+    }
+
+    private companion object {
+        /** How long a load started on the IO thread may take to be seen. */
+        const val SETTLE_MS = 5_000L
     }
 }
