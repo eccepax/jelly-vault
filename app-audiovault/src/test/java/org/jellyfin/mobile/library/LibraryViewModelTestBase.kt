@@ -1,5 +1,6 @@
 package org.jellyfin.mobile.library
 
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -13,8 +14,11 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.cancelAndJoin
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
